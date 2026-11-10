@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DigitalProductProject, StageId } from './types/project.ts';
 import { DEMO_PROJECT, BLANK_PROJECT } from './data/demoProject.ts';
 import { Header } from './components/Header.tsx';
@@ -40,6 +40,29 @@ export default function App() {
   const [lang, setLang] = useState<Language>('en');
   const [activeView, setActiveView] = useState<NavigationItem>('dashboard');
   const [isAutopilotRunning, setIsAutopilotRunning] = useState<boolean>(false);
+
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const navigationTrigger = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!navigationOpen) return;
+    const sidebar = document.getElementById('workspace-navigation');
+    navigationTrigger.current = document.activeElement as HTMLElement;
+    sidebar?.querySelector<HTMLElement>('button, input')?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNavigationOpen(false);
+      if (event.key === 'Tab') {
+        const items = Array.from(sidebar?.querySelectorAll<HTMLElement>('button, input, a[href]') || []).filter(el => el.getClientRects().length && !el.hasAttribute('disabled'));
+        const first = items[0], last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = () => { if (desktop.matches) setNavigationOpen(false); };
+    document.addEventListener('keydown', handleKey);
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => { document.removeEventListener('keydown', handleKey); desktop.removeEventListener('change', closeOnDesktop); navigationTrigger.current?.focus(); };
+  }, [navigationOpen]);
 
   const progressPercent = calculateOverallProgress(project);
 
@@ -502,9 +525,13 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
+    <div className="workspace-shell flex h-dvh bg-slate-50 text-slate-900 overflow-hidden font-sans">
+      <a href="#main-content" className="skip-link">{lang === 'en' ? 'Skip to content' : '跳至內容'}</a>
+      {navigationOpen && <button tabIndex={-1} className="navigation-backdrop" aria-label="Close navigation" onClick={() => setNavigationOpen(false)} />}
       {/* 260px SaaS Sidebar */}
       <Sidebar
+        isOpen={navigationOpen}
+        onClose={() => setNavigationOpen(false)}
         project={project}
         activeView={activeView}
         setActiveView={setActiveView}
@@ -513,9 +540,11 @@ export default function App() {
       />
 
       {/* Main Viewport Container */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div inert={navigationOpen} className="workspace-body flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header with 3 zones & language toggle */}
         <Header
+          navigationOpen={navigationOpen}
+          onToggleNavigation={() => setNavigationOpen(v => !v)}
           project={project}
           activeView={activeView}
           setActiveView={setActiveView}
@@ -528,7 +557,7 @@ export default function App() {
         />
 
         {/* Scrollable Main Content */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/50">
+        <main id="main-content" tabIndex={-1} className="workspace-main flex-1 min-w-0 overflow-y-auto p-4 md:p-7 xl:p-9">
           {renderActiveView()}
         </main>
       </div>

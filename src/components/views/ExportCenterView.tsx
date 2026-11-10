@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Download, FileText, Code, CheckCircle2, ShieldCheck, Layers, FileCode, Check, Archive, Loader2 } from 'lucide-react';
 import JSZip from 'jszip';
 import { DigitalProductProject } from '../../types/project.ts';
@@ -9,6 +9,7 @@ import {
   compileLaunchAssetsMarkdown,
   compileStyledHtml,
 } from '../../utils/markdownCompiler.ts';
+import { auditChapter } from '../../utils/styledBook.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface ExportCenterViewProps {
@@ -26,6 +27,11 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
   const [downloadedItems, setDownloadedItems] = useState<Record<string, boolean>>({});
   const [isZipping, setIsZipping] = useState<boolean>(false);
   const [zipSuccess, setZipSuccess] = useState<boolean>(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const evidence = useMemo(() => project.outline.map(chapter => ({ chapter, audit: auditChapter(chapter, project.referenceLibrary.cards) })), [project]);
+  const reviewCount = evidence.reduce((sum, item) => sum + item.audit.needsReview, 0);
+  const previewHtml = useMemo(() => showPreview ? compileStyledHtml(project) : '', [showPreview, project]);
 
   const downloadFile = (content: string, filename: string, mimeType: string, key: string) => {
     const blob = new Blob([content], { type: mimeType });
@@ -63,8 +69,8 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
       filename: `reference-library-${project.projectId}.md`,
       mime: 'text/markdown;charset=utf-8',
       desc: lang === 'en'
-        ? 'Complete compilation of 20 verified 7-part knowledge reference cards in pure English.'
-        : '收錄 20 篇符合 V4.0 ARCE 七部分研究卡標準之完整文獻檔案。',
+        ? `Export all ${project.referenceLibrary.cards.length} source records, including their recorded verification status.`
+        : `收錄 ${project.referenceLibrary.cards.length} 篇文獻紀錄與各自的驗證狀態。`,
       getContent: () => compileReferenceLibraryMarkdown(project),
       icon: FileText,
       badge: 'Markdown',
@@ -111,8 +117,8 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
       filename: `ebook-${project.projectId}.html`,
       mime: 'text/html;charset=utf-8',
       desc: lang === 'en'
-        ? 'Executive publishing-grade layout with Playfair typography, drop caps, action tables, and print-to-PDF formatting.'
-        : '出版級排版 CSS 之獨立電子書網頁，可直接於瀏覽器開啟並使用「列印成 PDF」輸出精裝書。',
+        ? 'Formatted chapters, contextual figures, linked numbered citations, a reference list, and print-to-PDF styling.'
+        : '包含章節圖解、段落編號引用、文末參考文獻，可於瀏覽器列印成 PDF。',
       getContent: () => compileStyledHtml(project),
       icon: FileText,
       badge: 'HTML / PDF Ready',
@@ -121,6 +127,7 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
 
   // One-click simultaneous download as a single complete .zip archive
   const handleDownloadZip = async () => {
+    setExportError('');
     setIsZipping(true);
     try {
       const zip = new JSZip();
@@ -184,7 +191,7 @@ For customer support or updates, refer to the author charter in the project meta
       setZipSuccess(true);
       setTimeout(() => setZipSuccess(false), 3000);
     } catch (err) {
-      console.error('ZIP generation failed:', err);
+      setExportError(lang === 'en' ? 'Package creation failed. Please try downloading the files individually.' : '建立壓縮包失敗，請嘗試逐一下載檔案。');
     } finally {
       setIsZipping(false);
     }
@@ -249,6 +256,24 @@ For customer support or updates, refer to the author charter in the project meta
         </div>
       </div>
 
+      {exportError && <p role="alert" className="p-4 bg-red-50 text-red-800 rounded-lg">{exportError}</p>}
+      <section className="export-review space-y-4" aria-label={lang === 'en' ? 'E-book evidence review' : '電子書證據審查'}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2 max-w-2xl">
+            <h2 className="text-base font-semibold text-slate-900">{lang === 'en' ? 'Review the research edition' : '研究版電子書審查'}</h2>
+            <p className="text-sm text-slate-700">{lang === 'en' ? `${reviewCount} passages need citation or source review. Library verification labels do not independently validate a claim. Review the highlighted passages before publication.` : `${reviewCount} 個段落需要引用或來源審查。文獻庫的驗證標籤不代表已獨立查核論點，出版前請審查標記段落。`}</p>
+            <p className="text-xs text-slate-600">{lang === 'en' ? 'Place [REF-01] next to the claim in Content Studio. Concept diagrams summarize the manuscript; data charts require an explicitly cited numeric table.' : '在內容工作室的論點旁加入 [REF-01]。概念圖彙整稿件內容；數據圖表必須有明確引用的數值表格。'}</p>
+          </div>
+          <button onClick={() => setShowPreview(v => !v)} aria-expanded={showPreview} aria-controls="ebook-preview" className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-md text-sm font-medium">{showPreview ? (lang === 'en' ? 'Close preview' : '關閉預覽') : (lang === 'en' ? 'Preview e-book' : '預覽電子書')}</button>
+        </div>
+        <details className="text-sm text-slate-700">
+          <summary className="cursor-pointer font-medium">{lang === 'en' ? 'Chapter citation coverage' : '章節引用涵蓋率'}</summary>
+          <ul className="mt-3 space-y-2">{evidence.map(({chapter, audit}) => <li key={chapter.id} className="flex flex-wrap justify-between gap-2 border-b border-slate-300 pb-2"><span>{chapter.title}</span><span className="font-mono text-xs">{audit.cited}/{audit.passages} {lang === 'en' ? 'passages cited to full-text records' : '段落引用完整文獻紀錄'}</span></li>)}</ul>
+          <button onClick={() => setActiveView('content_studio')} className="mt-3 text-indigo-700 underline">{lang === 'en' ? 'Edit manuscript and citations' : '編輯稿件與引用'}</button>
+        </details>
+        {showPreview && <iframe id="ebook-preview" title={lang === 'en' ? 'Executive e-book preview' : '精裝電子書預覽'} className="export-preview" sandbox="allow-scripts allow-modals" srcDoc={previewHtml} />}
+      </section>
+
       {/* Export Files Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {exportFiles.map((file) => {
@@ -261,8 +286,8 @@ For customer support or updates, refer to the author charter in the project meta
               className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 transition-all flex flex-col justify-between shadow-2xs space-y-3"
             >
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Icon className="w-4 h-4 text-indigo-600" />
                     <span className="text-xs font-bold text-slate-900">{file.title}</span>
                   </div>

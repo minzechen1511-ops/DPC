@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Feather,
   CheckCircle2,
@@ -44,6 +44,7 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   const [showBibleModal, setShowBibleModal] = useState<boolean>(false);
 
   const currentChapter = chapters.find((c) => c.id === selectedChapterId) || chapters[0];
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const [contentDraft, setContentDraft] = useState<string>(currentChapter?.contentMarkdown || '');
 
   // When chapter changes, update local draft
@@ -73,14 +74,19 @@ Output Language: You MUST write the complete chapter text entirely in ${outputLa
 Requirements:
 1. Provide deep, substantive prose (Introduction, Core Framework, Step-by-Step Practical Blueprint, Scenario Walkthrough, Common Mistakes & Fixes, and Actionable Deliverable / Exercise).
 2. Never output superficial placeholders, empty bullet lists, or generic fluff.
-3. Write in clean Markdown format with structured headings, tables, and callouts.`;
+3. Write in clean Markdown format with structured headings, tables, and callouts.
+4. Cite every factual claim, quantitative statement, and evidence-based recommendation immediately in its paragraph or bullet with [REF-01] syntax, using ONLY the provided source IDs. Never attach a citation unless its supplied supporting claims or research summary substantiate that point. Do not invent sources, measurements, page numbers, or verification.
+5. If evidence is missing or only metadata/partial text is supplied, explicitly mark [SOURCE NEEDED] and qualify the claim. Distinguish editorial advice and illustrative scenarios from measured findings.
+6. Include relevant process lists for conceptual diagrams. Where the supplied source material contains comparable numeric values, include a Markdown data table, with consistent units in the column heading and a [REF-ID] citation in each data row. Do not invent numerical charts or data. The export illustrates cited tables automatically.`;
 
       const userPrompt = `Please write the full comprehensive content for Chapter ${currentChapter.order}:
 Title: ${currentChapter.title}
 Objective: ${currentChapter.objective}
 Planned Subtopics: ${currentChapter.subtopics.join(', ')}
 Practical Deliverable: ${currentChapter.practicalDeliverable}
-Mapped Reference IDs: ${currentChapter.mappedReferenceIds.join(', ')}`;
+Mapped Reference IDs: ${currentChapter.mappedReferenceIds.join(', ')}
+Source material (library records, not new independent verification):
+${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedReferenceIds.includes(card.id)).map(card => ({ id: card.id, title: card.sourceTitle, url: card.sourceURL, status: card.status, supportedClaims: card.supportedClaims, researchSummary: card.researchSummary, verificationNotes: card.editorialNotes.verificationNotes })), null, 2)}`;
 
       const res = await generateTextWithAi({
         provider: aiSettings.provider,
@@ -212,7 +218,27 @@ Mapped Reference IDs: ${currentChapter.mappedReferenceIds.join(', ')}`;
 
           {/* Markdown Content Area */}
           <div className="space-y-2">
+            <details className="rounded-lg border border-slate-200 p-4 bg-white">
+              <summary className="text-sm font-semibold cursor-pointer">{lang === 'en' ? 'Insert a source citation' : '插入來源引用'}</summary>
+              <p className="my-3 text-xs text-slate-600">{lang === 'en' ? 'Review the supporting claims, place the cursor beside the relevant sentence, then insert its source. A library status alone does not establish claim support.' : '先審查來源支持的論點，將游標置於相關句子旁再插入引用。文獻狀態本身不代表來源支持該論點。'}</p>
+              <div className="space-y-3">{referenceLibrary.cards.filter(card => currentChapter?.mappedReferenceIds.includes(card.id)).map(card => <article key={card.id} className="border-t border-slate-200 pt-3 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-medium">{card.sourceTitle}</h3><span className="text-xs font-mono text-slate-600">{card.status}</span></div>
+                <ul className="text-xs text-slate-600 list-disc pl-4 space-y-1">{card.supportedClaims.map((claim,i) => <li key={i}>{claim}</li>)}</ul>
+                <div className="flex flex-wrap items-center gap-4">
+                  {/^https?:\/\//i.test(card.sourceURL) && <a href={card.sourceURL} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-700 underline">{lang === 'en' ? 'Open original source' : '開啟原始來源'}</a>}
+                  <button className="text-xs px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md" onClick={() => {
+                    const position = editorRef.current?.selectionEnd ?? contentDraft.length;
+                    const citation = ` [${card.id}]`;
+                    setContentDraft(contentDraft.slice(0, position) + citation + contentDraft.slice(position));
+                    requestAnimationFrame(() => { editorRef.current?.focus(); editorRef.current?.setSelectionRange(position + citation.length, position + citation.length); });
+                  }}>{lang === 'en' ? 'Insert' : '插入'} [{card.id}]</button>
+                </div>
+              </article>)}</div>
+              {!referenceLibrary.cards.some(card => currentChapter?.mappedReferenceIds.includes(card.id)) && <p className="text-xs text-slate-600">{lang === 'en' ? 'Map sources to this chapter in Outline & Structure first.' : '請先在章節結構中為本章配置來源。'}</p>}
+            </details>
             <textarea
+              ref={editorRef}
+              aria-label={lang === 'en' ? 'Chapter manuscript' : '章節稿件'}
               rows={18}
               value={contentDraft}
               onChange={(e) => setContentDraft(e.target.value)}

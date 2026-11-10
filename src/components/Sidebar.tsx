@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LayoutDashboard,
   PlusCircle,
@@ -22,6 +22,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
+  Search,
+  X,
 } from 'lucide-react';
 import { DigitalProductProject, StageId } from '../types/project.ts';
 import { Language, translations } from '../utils/i18n.ts';
@@ -35,6 +37,8 @@ export type NavigationItem =
   | 'automation_settings';
 
 interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
   project: DigitalProductProject;
   activeView: NavigationItem;
   setActiveView: (view: NavigationItem) => void;
@@ -55,6 +59,8 @@ interface NavGroup {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  isOpen,
+  onClose,
   project,
   activeView,
   setActiveView,
@@ -62,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   lang = 'en',
 }) => {
   const t = translations[lang];
+  const [query, setQuery] = useState('');
 
   const getStageStatusIcon = (stageId: StageId) => {
     const status = project.workflow.stageStatuses[stageId];
@@ -135,7 +142,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const wordCount = project.qualityReport?.actualWordCount || 0;
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 select-none">
+    <aside id="workspace-navigation" aria-label={lang === 'en' ? 'Workspace navigation' : '工作區導覽'} className={`workspace-sidebar ${isOpen ? 'is-open' : ''} w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800`}>
+      <div className="sidebar-brand"><span>Digital Product Studio</span><button onClick={onClose} className="navigation-toggle p-2" aria-label={lang === 'en' ? 'Close navigation' : '關閉導覽'}><X size={20} /></button></div>
+      <label className="navigation-search"><Search size={16} aria-hidden="true" /><span className="sr-only">{lang === 'en' ? 'Find a workspace' : '搜尋工作區'}</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder={lang === 'en' ? 'Find a workspace…' : '搜尋工作區…'} /></label>
       {/* Overall Progress Widget */}
       <div className="p-4 border-b border-slate-800/80 bg-slate-950/40">
         <div className="flex items-center justify-between text-xs mb-1.5">
@@ -159,19 +168,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Groups */}
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
-        {navGroups.map((group) => (
+        {navGroups.filter(group => group.items.some(item => item.label.toLowerCase().includes(query.toLowerCase()))).map((group) => (
           <div key={group.group}>
             <div className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
               {group.group}
             </div>
             <div className="space-y-0.5">
-              {group.items.map((item) => {
+              {group.items.filter(item => item.label.toLowerCase().includes(query.toLowerCase())).map((item) => {
                 const Icon = item.icon;
                 const isActive = activeView === item.id;
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActiveView(item.id as NavigationItem)}
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => { setActiveView(item.id as NavigationItem); onClose(); }}
                     className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                       isActive
                         ? 'bg-indigo-600 text-white shadow-xs'
@@ -189,12 +199,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
         ))}
+        {query && !navGroups.some(group => group.items.some(item => item.label.toLowerCase().includes(query.toLowerCase()))) && <p className="px-2 text-sm text-slate-300">{lang === 'en' ? 'No matching workspace.' : '找不到相符的工作區。'}</p>}
       </nav>
 
       {/* Footer Info */}
       <div className="p-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
         <span>V4.0 Autopilot</span>
-        <span className="font-mono text-emerald-400">{t.openrouterReady}</span>
+        <span className="font-mono text-emerald-400">{project.aiSettings.provider.toUpperCase()}</span>
       </div>
     </aside>
   );

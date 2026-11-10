@@ -1,10 +1,12 @@
 import React from 'react';
-import { Download, Play, Settings2, Globe, Sparkles } from 'lucide-react';
+import { Download, Play, Settings2, Globe, Sparkles, Menu } from 'lucide-react';
 import { DigitalProductProject, StageId } from '../types/project.ts';
 import { STAGE_METADATA, getStageMetadata } from '../utils/workflowEngine.ts';
 import { Language, translations } from '../utils/i18n.ts';
 
 interface HeaderProps {
+  onToggleNavigation: () => void;
+  navigationOpen: boolean;
   project: DigitalProductProject;
   activeView: StageId | 'dashboard' | 'new_project' | 'my_projects' | 'ai_settings' | 'automation_settings';
   setActiveView: (view: any) => void;
@@ -17,6 +19,8 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
+  onToggleNavigation,
+  navigationOpen,
   project,
   activeView,
   setActiveView,
@@ -44,17 +48,18 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-16 px-6 bg-white border-b border-slate-200 flex items-center justify-between gap-6 shrink-0 select-none">
+    <header className="workspace-header px-4 lg:px-6 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
       {/* Zone 1: Brand Wordmark (Single text element) & Project Context */}
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-3 min-w-0">
+        <button className="navigation-toggle p-2" onClick={onToggleNavigation} aria-label={lang === 'en' ? 'Toggle navigation' : '切換導覽'} aria-expanded={navigationOpen} aria-controls="workspace-navigation"><Menu size={20} /></button>
         <button
           onClick={() => setActiveView('dashboard')}
-          className="text-lg font-bold tracking-tight text-slate-900 hover:text-indigo-600 transition-colors whitespace-nowrap"
+          className="text-sm xl:text-base font-bold tracking-tight text-slate-900 hover:text-indigo-600 transition-colors whitespace-nowrap"
         >
           {t.appName}
         </button>
-        <span className="text-xs text-slate-400">/</span>
-        <span className="text-xs font-medium text-slate-600 whitespace-nowrap truncate max-w-[220px]">
+        <span className="hidden xl:inline text-xs text-slate-400">/</span>
+        <span className="hidden xl:inline text-xs font-medium text-slate-600 whitespace-nowrap truncate max-w-[180px]">
           {project.charter?.productTitle || project.name || t.untitledProject}
         </span>
         {project.isBlankProject && (
@@ -65,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Zone 2: Contextual Stage Title & Active Model */}
-      <div className="hidden lg:flex items-center gap-3 text-xs text-slate-500 truncate">
+      <div className="hidden 2xl:flex items-center gap-3 text-xs text-slate-500 truncate">
         <span className="font-semibold text-slate-800">{currentStageMeta.title}</span>
         <span aria-hidden="true" className="text-slate-300">·</span>
         <span className="text-slate-500">{currentStageMeta.subtitle}</span>
@@ -76,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Zone 3: Primary Action & Controls */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      <div className="header-actions flex items-center gap-2 shrink-0">
         {/* Sample Demo Quick Load Button if on blank or accessible */}
         {project.isBlankProject && onLoadDemoProject && (
           <button
@@ -96,6 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
             className={`px-2 py-1 rounded font-semibold transition-colors ${
               lang === 'en' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
             }`}
+            aria-pressed={lang === 'en'}
             title="Switch UI to English"
           >
             EN
@@ -105,6 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
             className={`px-2 py-1 rounded font-semibold transition-colors ${
               lang === 'zh' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
             }`}
+            aria-pressed={lang === 'zh'}
             title="切換介面為繁體中文"
           >
             繁中
@@ -116,17 +123,19 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => setActiveView('ai_settings')}
           className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
           title={t.aiSettings}
+          aria-label={t.aiSettings}
         >
           <Settings2 className="w-4 h-4" />
         </button>
 
         {/* Export Center Button */}
         <button
+          aria-label={t.exportProduct}
           onClick={() => setActiveView('export_center')}
           className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
         >
           <Download className="w-3.5 h-3.5" />
-          <span>{t.exportProduct}</span>
+          <span className="hidden sm:inline">{t.exportProduct}</span>
         </button>
 
         {/* Run Autopilot Primary CTA */}
