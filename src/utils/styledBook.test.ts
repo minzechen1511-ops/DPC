@@ -1,3 +1,4 @@
+import { retrievedCardFixture, reviewsFixture } from '../../tests/evidenceFixtures.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileStyledHtml, auditChapter } from './styledBook.ts';
@@ -5,7 +6,9 @@ import { DEMO_PROJECT } from '../data/demoProject.ts';
 
 function projectWith(content: string) {
   const project = structuredClone(DEMO_PROJECT);
+  project.referenceLibrary.cards[0] = retrievedCardFixture('REF-01');
   project.outline = [{ ...project.outline[0], mappedReferenceIds: ['REF-01'], contentMarkdown: content }];
+  project.outline[0].citationReviews=reviewsFixture(project.outline[0],project.referenceLibrary.cards);
   return project;
 }
 

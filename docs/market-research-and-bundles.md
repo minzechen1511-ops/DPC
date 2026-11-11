@@ -19,8 +19,8 @@ Gate A accepts only supported source provenance and rankings captured within 48 
 Selecting a different niche initializes an empty topic-specific manuscript plan; it does not invent research, author credentials, references, manuscripts, sales results or gate approvals. Export the previous project's backup before switching niches.
 
 A: select a niche with current source-linked ranking evidence.
-B: approve A, complete charter objectives and add topic research with an exact supporting excerpt, locator and author confirmation. Research source entry is in Reference Library.
-C: approve B, complete substantive cited chapters, map reviewed references, remove unresolved claims, supply usable companion resources, and document image rights and paragraph placement. Recheck before approval. Marketplace evidence can expire, invalidating readiness even after a prior approval.
+B: approve A, define chapter objectives, retrieve original source text, retain exact excerpts and matching bibliography, explain relevance for each chapter, then explicitly approve the charter after a server source check. See [reference research and support](reference-research-and-support.md).
+C: approve B, complete substantive chapters and companions, review support for each cited passage against the retrieved excerpt, remove unresolved claims, and document image rights and paragraph placement. Source checks are repeated at approval and buyer export. Recheck before approval. Marketplace evidence can expire, invalidating readiness even after a prior approval.
 
 Upstream research and strategy changes revoke downstream approvals. Manuscript, illustration and resource changes revoke C. Existing imported/sample approvals cannot bypass the current policy at approval or bundle review time. These checks establish review completeness, not independent scientific or legal certification.
 

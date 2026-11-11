@@ -1,3 +1,5 @@
+import { CitationReviewPanel } from '../CitationReviewPanel.tsx';
+import { resourceEvidenceDocument } from '../../utils/citationEvidence.ts';
 import React, { useState } from 'react';
 import { Layers, Download, CheckCircle2, Copy, FileText, ArrowRight } from 'lucide-react';
 import { DigitalProductProject, ResourceAsset } from '../../types/project.ts';
@@ -118,6 +120,7 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
               </button>
             </div>
 
+            <CitationReviewPanel document={resourceEvidenceDocument(currentResource)} cards={project.referenceLibrary.cards} onChange={citationReviews=>onSaveResource({...currentResource,citationReviews})}/>
             <div className="space-y-3 text-xs text-slate-700">
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
                 <strong>Purpose:</strong>

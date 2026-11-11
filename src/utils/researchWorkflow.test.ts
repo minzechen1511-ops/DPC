@@ -1,3 +1,5 @@
+import { retrievedCardFixture, reviewsFixture, relevanceFixture, sourceCheckFixture } from '../../tests/evidenceFixtures.ts';
+import { resourceEvidenceDocument } from './citationEvidence.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -11,7 +13,7 @@ const now = () => new Date().toISOString();
 export function chartFixture(id='1',category='Food & Cooking',rank=3): MarketplaceObservation {
  return {id:`apple-${id}`,marketplace:'Apple Books',category,productTitle:`Test fixture ${category}`,sellerOrAuthor:'Fixture author',productURL:`https://books.apple.com/us/book/id${id}`,currentPrice:0,priceKnown:false,currency:'USD',observedRank:rank,rankScope:'US overall paid chart',productFormat:'Ebook',observedAt:now(),evidenceLevel:'VERIFIED_RANKING',dataLimitations:'Test fixture, not real marketplace data.',collector:'apple-chart-v1',sourceURL:'https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json',evidenceExcerpt:`Position ${rank}`};
 }
-const reviewedSource = (): ReferenceCard => ({...structuredClone(DEMO_PROJECT.referenceLibrary.cards[0]),id:'REF-test',verificationQuote:'An exact supporting excerpt retained as a test fixture.',verificationLocator:'Test section, paragraph 1',verifiedAt:now()});
+const reviewedSource = () => retrievedCardFixture();
 function topicProject() {
  const project=structuredClone(BLANK_PROJECT);
  project.marketResearch.platformEvidence=[chartFixture()];
@@ -20,10 +22,12 @@ function topicProject() {
 }
 function completeProject() {
  let project=approveGate(topicProject(),'gateA');
- project.referenceLibrary.cards=[reviewedSource()];
+ project.referenceLibrary.cards=[relevanceFixture(reviewedSource(),project.outline)];
+ for(const chapter of project.outline)chapter.mappedReferenceIds=['REF-test'];
  project=approveGate(project,'gateB');
- for(const chapter of project.outline){chapter.targetWordCount=200;chapter.contentMarkdown=`## Test learning section\n\n${'Documented fixture discussion '.repeat(55)} [REF-test]`;chapter.isCompleted=true;chapter.mappedReferenceIds=['REF-test'];}
+ for(const chapter of project.outline){chapter.targetWordCount=200;chapter.contentMarkdown=`## Test learning section\n\n${'Documented fixture discussion '.repeat(55)} [REF-test]`;chapter.isCompleted=true;chapter.mappedReferenceIds=['REF-test'];chapter.citationReviews=reviewsFixture(chapter,project.referenceLibrary.cards);}
  project.resources=[{id:'resource-test',title:'Practice worksheet',category:'WORKSHEET',purpose:'Apply a chapter method',instructions:'Read the chapter and record your work.',fieldsOrColumns:[],sampleEntries:[],completionCriteria:'Compare the result to the chapter goal.',contentMarkdown:'## Practice\n'+ 'Record inputs and evaluate your result. '.repeat(12)}];
+ project.resources[0].citationReviews=reviewsFixture(resourceEvidenceDocument(project.resources[0]),project.referenceLibrary.cards,true);
  return project;
 }
 test('only supported, current source provenance can qualify; search pages and stale records cannot',()=>{
@@ -52,7 +56,7 @@ test('A → B → C enforces evidence, substantive chapters and resources; editi
  let project=topicProject();
  assert.equal(approveGate(project,'gateB').workflow.gates.gateB.isApproved,false);
  project=approveGate(project,'gateA');assert.equal(project.workflow.gates.gateA.isApproved,true);
- assert.ok(gateIssues(project,'gateB').some(issue=>issue.includes('supporting excerpt')));
+ assert.ok(gateIssues(project,'gateB').some(issue=>issue.includes('manual verification checkbox')));
  project=completeProject();assert.deepEqual(gateIssues(project,'gateC'),[]);
  project=approveGate(project,'gateC');assert.equal(project.workflow.gates.gateC.isApproved,true);
  const edited=revokeApprovals(project,'gateC');assert.equal(edited.workflow.gates.gateA.isApproved,true);assert.equal(edited.workflow.gates.gateB.isApproved,true);assert.equal(edited.workflow.gates.gateC.isApproved,false);
@@ -69,7 +73,8 @@ test('stale evidence blocks a previously approved buyer bundle and incomplete im
 test('offline bundle includes chapter readers, usable worksheets, companions and correct integrity hashes',async()=>{
  const project=approveGate(completeProject(),'gateC');
  project.outline[0].title='=HYPERLINK("https://example.com")';
- const {zip,manifest}=await buildLearningBundle(project);
+ relevanceFixture(project.referenceLibrary.cards[0],project.outline);
+ const {zip,manifest}=await buildLearningBundle(project,sourceCheckFixture(project.referenceLibrary.cards));
  for(const path of ['START-HERE.html','book/executive-ebook.html','chapters/chapter-1.html','resources/worksheet-1.html','resources/companion-1.html','resources/learning-progress.csv','research/reading-room.html','research/marketplace-evidence.json','publisher/project-backup.json','review/publication-review.json','manifest.json'])assert.ok(zip.file(path),path);
  assert.equal(JSON.parse(await zip.file('review/publication-review.json')!.async('string')).reviewed,true);
  for(const entry of manifest){const bytes=await zip.file(entry.path)!.async('uint8array');assert.equal(bytes.length,entry.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),entry.sha256);}
@@ -81,7 +86,7 @@ test('licensed pictures are embedded beside matching text, cited, credited and i
  const image={id:'image-test',dataUri:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=',alt:'Test pixel for layout fixture',caption:'Original test figure',paragraphAnchor:'Documented fixture',sourceReferenceIds:['REF-test'],credit:'Test author',license:'Owned by the author'};
  project.outline[0].illustrations=[image];
  const html=compileStyledHtml(project);assert.match(html,/class="reading-section"/);assert.match(html,/class="supporting-image"/);assert.match(html,/Original test figure/);assert.match(html,/Rights: Owned by the author/);
- const {zip}=await buildLearningBundle(project);assert.ok(zip.file('figures/chapter-1-image-1.png'));
+ const {zip}=await buildLearningBundle(project,sourceCheckFixture(project.referenceLibrary.cards));assert.ok(zip.file('figures/chapter-1-image-1.png'));
  project.outline[0].illustrations[0].dataUri='data:image/svg+xml;base64,PHN2Zz4=';assert.ok(!compileStyledHtml(project).includes('data:image/svg+xml'));
  assert.ok(gateIssues(project,'gateC').some(issue=>issue.includes('picture rights')));
 });
@@ -90,4 +95,10 @@ test('substantial Chinese manuscripts are counted as word-like segments rather t
  const {countManuscriptWords}=await import('./textMetrics.ts');
  assert.ok(countManuscriptWords('這是有明確學習目標和引用來源的中文段落。')>5);
  assert.equal(countManuscriptWords('A clear practical learning guide.'),5);
+});
+
+test('a buyer bundle requires current source preflight coverage, not only local gate flags',async()=>{
+ const project=approveGate(completeProject(),'gateC');
+ const withoutCheck=await buildLearningBundle(project);assert.equal(JSON.parse(await withoutCheck.zip.file('review/publication-review.json')!.async('string')).reviewed,false);
+ const report=sourceCheckFixture(project.referenceLibrary.cards);report.checkedAt=new Date(Date.now()-10*60_000).toISOString();const stale=await buildLearningBundle(project,report);assert.equal(JSON.parse(await stale.zip.file('review/publication-review.json')!.async('string')).reviewed,false);
 });

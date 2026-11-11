@@ -1,3 +1,4 @@
+import { isRetrievedSource } from '../utils/sourceEvidence.ts';
 import React, { useState } from 'react';
 import {
   LayoutDashboard,
@@ -136,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  const verifiedRefCount = (project.referenceLibrary?.cards || []).filter(card => card.status === 'VERIFIED_FULL_TEXT').length;
+  const verifiedRefCount = (project.referenceLibrary?.cards || []).filter(isRetrievedSource).length;
   const completedChapterCount = (project.outline || []).filter((c) => c.isCompleted).length;
   const totalChapterCount = (project.outline || []).length;
   const wordCount = project.qualityReport?.actualWordCount || 0;
@@ -204,7 +205,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer Info */}
       <div className="p-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
-        <span>V4.0 Autopilot</span>
+        <span>{lang === 'en' ? 'Stage-by-stage review' : '逐階段審查'}</span>
         <span className="font-mono text-emerald-400">{project.aiSettings.provider.toUpperCase()}</span>
       </div>
     </aside>

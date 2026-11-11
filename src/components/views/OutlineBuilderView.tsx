@@ -51,6 +51,17 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
       <div className="space-y-3">
         {chapters.map((ch, idx) => (
           <div key={ch.id} className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 transition-all space-y-3 shadow-2xs">
+            <details className="text-sm border-b border-slate-200 pb-3">
+              <summary className="font-medium cursor-pointer">Edit this chapter research plan</summary>
+              <form className="mt-3 space-y-3" onSubmit={event=>{event.preventDefault();const values=new FormData(event.currentTarget);onUpdateOutline(chapters.map(item=>item.id===ch.id?{...item,title:String(values.get('title')).trim(),objective:String(values.get('objective')).trim(),subtopics:String(values.get('subtopics')).split('\n').map(text=>text.trim()).filter(Boolean),targetWordCount:Number(values.get('targetWordCount'))}:item));}}>
+                <label className="block">Chapter title<input required name="title" defaultValue={ch.title} className="block w-full border rounded p-2 mt-1"/></label>
+                <label className="block">Learning objective<textarea required name="objective" defaultValue={ch.objective} className="block w-full border rounded p-2 mt-1"/></label>
+                <label className="block">Subtopics (one per line)<textarea required name="subtopics" defaultValue={ch.subtopics.join('\n')} className="block w-full border rounded p-2 mt-1"/></label>
+                <label className="block">Target length<input required type="number" min={100} max={20000} name="targetWordCount" defaultValue={ch.targetWordCount} className="block border rounded p-2 mt-1"/></label>
+                <p className="text-xs text-slate-600">Changing the title, objective or subtopics requires a new Gate B relevance review. Changing target length requires Gate C review.</p>
+                <button className="px-3 py-2 rounded bg-indigo-700 text-white">Save chapter plan</button>
+              </form>
+            </details>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded">

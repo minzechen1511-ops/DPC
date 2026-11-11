@@ -4,9 +4,7 @@ export const translations = {
   en: {
     // Header
     appName: 'Digital Product Studio',
-    subtitle: 'V4.0 Full Autopilot & Multi-LLM Edition',
-    runAutopilot: 'Run Autopilot',
-    autopilotRunning: 'Autopilot Running...',
+    subtitle: 'Stage-by-stage research, authoring and review',
     exportProduct: 'Export Product',
     aiSettings: 'AI Model & API Keys',
     activeProject: 'Active Project',
@@ -32,7 +30,7 @@ export const translations = {
     navProjectBrief: 'Project Setup (13 Fields)',
     navUvz: 'Unique Value Zone (UVZ)',
     navTransformationMap: 'Transformation Map',
-    navReferenceLibrary: 'Reference Library (ARCE)',
+    navReferenceLibrary: 'Reference Research (Gate B)',
     navProductCharter: 'Product Charter (Gate B)',
     navOutlineBuilder: 'Outline & Structure',
     navContentStudio: 'Full Content Studio',
@@ -43,7 +41,7 @@ export const translations = {
     navExportCenter: 'Export & Download Center',
     navMyProjects: 'My Projects Repository',
     navAiSettings: 'AI Model & API Settings',
-    navAutomationSettings: 'Automation & Gate Settings',
+    navAutomationSettings: 'Workflow & Review Settings',
 
     // Statuses
     statusNotStarted: 'Not Started',
@@ -152,9 +150,9 @@ export const translations = {
     approveMapCta: 'Confirm Map & Enter Reference Library →',
 
     // Reference Library (ARCE)
-    refTitle: 'Automated Reference & Citation Engine (ARCE)',
+    refTitle: 'Reference Research & Evidence Review',
     refSubtitle: 'Topic source records with explicit claims, supporting excerpts and chapter mappings',
-    verifiedCardsCount: 'Verified Knowledge Cards',
+    verifiedCardsCount: 'Retrieved and reviewed source records',
     sevenPartStandard: 'Mandatory 7-Part Structure: Title, Description, Outline, Framework, Summary, Notes, Guidelines',
     searchRefPlaceholder: 'Search references by pillar, topic, or keyword...',
     allPillars: 'All Pillars',
@@ -208,9 +206,7 @@ export const translations = {
   zh: {
     // Header
     appName: 'Digital Product Studio',
-    subtitle: 'V4.0 全自動多模型版',
-    runAutopilot: '全自動推進 (Autopilot)',
-    autopilotRunning: 'Autopilot 執行中...',
+    subtitle: '逐階段研究、撰寫與審查',
     exportProduct: '匯出產品',
     aiSettings: 'AI 模型與 API 金鑰',
     activeProject: '目前專案',
@@ -236,7 +232,7 @@ export const translations = {
     navProjectBrief: '13項專案設定',
     navUvz: '獨特價值區 UVZ',
     navTransformationMap: '客戶轉變地圖',
-    navReferenceLibrary: '自動文獻庫 (20篇)',
+    navReferenceLibrary: '來源研究 (Gate B)',
     navProductCharter: '產品憲章 (Gate B)',
     navOutlineBuilder: '章節大綱規劃',
     navContentStudio: '長篇內容工廠',
@@ -247,7 +243,7 @@ export const translations = {
     navExportCenter: '匯出下載中心',
     navMyProjects: '我的專案庫',
     navAiSettings: 'AI 模型與 API 設定',
-    navAutomationSettings: '自動化門檻設定',
+    navAutomationSettings: '工作流程與審查設定',
 
     // Statuses
     statusNotStarted: '未開始',
@@ -356,9 +352,9 @@ export const translations = {
     approveMapCta: '確認轉變地圖並進入自動文獻庫 →',
 
     // Reference Library (ARCE)
-    refTitle: '自動文獻庫與七部分知識卡 (ARCE)',
+    refTitle: '來源研究與證據審查',
     refSubtitle: '具有論點、支持摘錄及章節配置的主題文獻紀錄',
-    verifiedCardsCount: '已驗證文獻卡片',
+    verifiedCardsCount: '已取回並審查的來源紀錄',
     sevenPartStandard: '嚴格 7 部分標準：標題、簡介、大綱、實作框架、文獻摘要、編輯指引、品牌規範',
     searchRefPlaceholder: '依支柱、標題或關鍵字搜尋文獻...',
     allPillars: '全部支柱',

@@ -7,7 +7,8 @@ import { Language, translations } from '../../utils/i18n.ts';
 interface ProductCharterViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
-  onApproveGateB: () => void;
+  onApproveGateB: () => Promise<boolean>;
+  checkingReferences?: boolean;
   lang?: Language;
 }
 
@@ -15,6 +16,7 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
   project,
   setActiveView,
   onApproveGateB,
+  checkingReferences = false,
   lang = 'en',
 }) => {
   const t = translations[lang];
@@ -36,12 +38,11 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
         </div>
 
         <button
-          disabled={blockers.length > 0}
+          disabled={blockers.length > 0 || checkingReferences}
           title={blockers.join(" ")}
-          onClick={() => {
+          onClick={async () => {
             if (blockers.length) return;
-            onApproveGateB();
-            setActiveView('outline_builder');
+            if(await onApproveGateB()) setActiveView('outline_builder');
           }}
           className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap ${
             workflow?.gates?.gateB?.isApproved

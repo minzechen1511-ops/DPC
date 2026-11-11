@@ -1,3 +1,6 @@
+import type { ReferenceVerificationReport } from '../../types/research.ts';
+import { verifyProjectReferences } from '../../services/referenceVerification.ts';
+import { revokeApprovals } from '../../utils/gatePolicy.ts';
 import React, { useState, useMemo } from 'react';
 import { Download, FileText, Code, CheckCircle2, ShieldCheck, Layers, FileCode, Check, Archive, Loader2 } from 'lucide-react';
 import { buildLearningBundle } from '../../utils/learningBundle.ts';
@@ -14,12 +17,14 @@ import { auditChapter } from '../../utils/styledBook.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface ExportCenterViewProps {
+  onSourceCheckFailed: (message: string) => void;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   lang?: Language;
 }
 
 export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
+  onSourceCheckFailed,
   project,
   setActiveView,
   lang = 'en',
@@ -68,7 +73,7 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
     },
     {
       id: 'reference_md',
-      title: lang === 'en' ? 'Verified Reference Library (ARCE)' : '自動研究文獻庫 (Reference Library MD)',
+      title: lang === 'en' ? 'Source Research Library & Evidence Notes' : '來源研究與證據筆記 (Reference Library MD)',
       filename: `reference-library-${project.projectId}.md`,
       mime: 'text/markdown;charset=utf-8',
       desc: lang === 'en'
@@ -133,8 +138,15 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
     setExportError('');
     setIsZipping(true);
     try {
-      const currentBuyerReady = !gateIssues(project, 'gateC').length && project.workflow.gates.gateC.isApproved;
-      const { zip } = await buildLearningBundle(project);
+      let currentBuyerReady = !gateIssues(project, 'gateC').length && project.workflow.gates.gateC.isApproved;
+      let exportProject = project;
+      let sourceCheck: ReferenceVerificationReport | undefined;
+      if (currentBuyerReady) {
+        const check = await verifyProjectReferences(project);
+        sourceCheck = check.report;
+        if (!check.valid) { currentBuyerReady=false; exportProject=revokeApprovals(project,'gateC'); onSourceCheckFailed(check.message); setExportError('Source check could not validate the buyer edition. Downloaded an author-review bundle instead. ' + check.message); }
+      }
+      const { zip } = await buildLearningBundle(exportProject,sourceCheck);
 
       // Generate blob
       const zipBlob = await zip.generateAsync({
@@ -233,14 +245,14 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2 max-w-2xl">
             <h2 className="text-base font-semibold text-slate-900">{lang === 'en' ? 'Review the research edition' : '研究版電子書審查'}</h2>
-            <p className="text-sm text-slate-700">{lang === 'en' ? `${reviewCount} passages need citation or source review. Library verification labels do not independently validate a claim. Review the highlighted passages before publication.` : `${reviewCount} 個段落需要引用或來源審查。文獻庫的驗證標籤不代表已獨立查核論點，出版前請審查標記段落。`}</p>
-            <p className="text-xs text-slate-600">{lang === 'en' ? 'Place [REF-01] next to the claim in Content Studio. Concept diagrams summarize the manuscript; data charts require an explicitly cited numeric table.' : '在內容工作室的論點旁加入 [REF-01]。概念圖彙整稿件內容；數據圖表必須有明確引用的數值表格。'}</p>
+            <p className="text-sm text-slate-700">{lang === 'en' ? `${reviewCount} passages need citation or source review. Source retrieval alone does not validate a claim; each passage needs an explicit support decision. Review the highlighted passages before publication.` : `${reviewCount} 個段落需要引用或來源審查。文獻庫的驗證標籤不代表已獨立查核論點，出版前請審查標記段落。`}</p>
+            <p className="text-xs text-slate-600">{lang === 'en' ? 'Place [REF-01] beside the factual claim, save, then review its support against the retrieved excerpt in Content Studio. References are not automatically assigned or validated. The ZIP includes a passage-by-passage evidence matrix.' : '在內容工作室的論點旁加入 [REF-01]。概念圖彙整稿件內容；數據圖表必須有明確引用的數值表格。'}</p>
           </div>
           <button onClick={() => setShowPreview(v => !v)} aria-expanded={showPreview} aria-controls="ebook-preview" className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-md text-sm font-medium">{showPreview ? (lang === 'en' ? 'Close preview' : '關閉預覽') : (lang === 'en' ? 'Preview e-book' : '預覽電子書')}</button>
         </div>
         <details className="text-sm text-slate-700">
           <summary className="cursor-pointer font-medium">{lang === 'en' ? 'Chapter citation coverage' : '章節引用涵蓋率'}</summary>
-          <ul className="mt-3 space-y-2">{evidence.map(({chapter, audit}) => <li key={chapter.id} className="flex flex-wrap justify-between gap-2 border-b border-slate-300 pb-2"><span>{chapter.title}</span><span className="font-mono text-xs">{audit.cited}/{audit.passages} {lang === 'en' ? 'passages cited to full-text records' : '段落引用完整文獻紀錄'}</span></li>)}</ul>
+          <ul className="mt-3 space-y-2">{evidence.map(({chapter, audit}) => <li key={chapter.id} className="flex flex-wrap justify-between gap-2 border-b border-slate-300 pb-2"><span>{chapter.title}</span><span className="font-mono text-xs">{audit.cited}/{audit.passages} {lang === 'en' ? 'passages with reviewed source support' : '段落已審查來源支持'}</span></li>)}</ul>
           <button onClick={() => setActiveView('content_studio')} className="mt-3 text-indigo-700 underline">{lang === 'en' ? 'Edit manuscript and citations' : '編輯稿件與引用'}</button>
         </details>
         {showPreview && <iframe id="ebook-preview" title={lang === 'en' ? 'Executive e-book preview' : '精裝電子書預覽'} className="export-preview" sandbox="allow-scripts allow-modals" srcDoc={previewHtml} />}

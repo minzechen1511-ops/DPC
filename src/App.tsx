@@ -1,7 +1,9 @@
+import { verifyProjectReferences } from './services/referenceVerification.ts';
+import { chapterResearchFingerprint, isRetrievedSource } from './utils/sourceEvidence.ts';
 import React, { useState, useEffect, useRef } from 'react';
 import { DigitalProductProject, StageId } from './types/project.ts';
 import { DEMO_PROJECT, BLANK_PROJECT } from './data/demoProject.ts';
-import { approveGate, revokeApprovals } from './utils/gatePolicy.ts';
+import { approveGate, revokeApprovals, gateIssues } from './utils/gatePolicy.ts';
 import { Header } from './components/Header.tsx';
 import { Sidebar, NavigationItem } from './components/Sidebar.tsx';
 import { calculateOverallProgress } from './utils/workflowEngine.ts';
@@ -40,7 +42,6 @@ export default function App() {
   // Default UI language is English ('en') as requested by user
   const [lang, setLang] = useState<Language>('en');
   const [activeView, setActiveView] = useState<NavigationItem>('dashboard');
-  const [isAutopilotRunning, setIsAutopilotRunning] = useState<boolean>(false);
 
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationTrigger = useRef<HTMLElement | null>(null);
@@ -98,16 +99,24 @@ export default function App() {
     setActiveView('topic_selection');
   };
   const handleSelectTopic = (topicId: string) => setProject(prev => propagateTopicToDownstream(prev, topicId, lang));
-  const handleRunAutopilot = async () => {
-    setIsAutopilotRunning(true);
-    try {
-      if (!project.marketResearch.topicCandidates.length) await handleRunMarketDiscovery();
-      setActiveView(!project.workflow.gates.gateA.isApproved ? 'topic_selection' : !project.workflow.gates.gateB.isApproved ? 'product_charter' : !project.workflow.gates.gateC.isApproved ? 'quality_assurance' : 'export_center');
-    } finally { setIsAutopilotRunning(false); }
-  };
   const handleApproveGateA = () => setProject(prev => approveGate(prev, 'gateA'));
-  const handleApproveGateB = () => setProject(prev => approveGate(prev, 'gateB'));
-  const handleApproveGateC = () => setProject(prev => approveGate(prev, 'gateC'));
+  const currentProjectRef = useRef(project);
+  useEffect(()=>{currentProjectRef.current=project;},[project]);
+  const [checkingReferences,setCheckingReferences] = useState(false);
+  const [workflowError,setWorkflowError] = useState('');
+  const approveWithSourceCheck = async (gate: 'gateB'|'gateC'): Promise<boolean> => {
+    if(checkingReferences || gateIssues(project,gate).length) return false;
+    setCheckingReferences(true);setWorkflowError('');
+    try {
+      const result=await verifyProjectReferences(project);
+      if(!result.valid){setWorkflowError(result.message);return false;}
+      if(currentProjectRef.current!==project){setWorkflowError('The project changed during source checking. Review the current state and approve again.');return false;}
+      setProject(prev=>prev===project?approveGate(prev,gate):prev);
+      return true;
+    } finally {setCheckingReferences(false);}
+  };
+  const handleApproveGateB = () => approveWithSourceCheck('gateB');
+  const handleApproveGateC = () => approveWithSourceCheck('gateC');
 
   const handleUpdateIntake = (updatedIntake: any) => {
     setProject((prev) => ({
@@ -229,8 +238,6 @@ export default function App() {
           <DashboardView
             project={project}
             setActiveView={setActiveView}
-            onRunAutopilot={handleRunAutopilot}
-            isAutopilotRunning={isAutopilotRunning}
             progressPercent={progressPercent}
             lang={lang}
             onLoadDemoProject={handleLoadDemoProject}
@@ -299,7 +306,7 @@ export default function App() {
       case 'reference_library':
         return (
           <ReferenceLibraryView
-          onAddSource={(source, chapterIds) => setProject(prev => revokeApprovals({ ...prev, referenceLibrary: { ...prev.referenceLibrary, cards: [...prev.referenceLibrary.cards, source], verifiedCount: prev.referenceLibrary.cards.filter(c => c.status === 'VERIFIED_FULL_TEXT').length + Number(source.status === 'VERIFIED_FULL_TEXT') }, outline: prev.outline.map(ch => chapterIds.includes(ch.id) ? { ...ch, mappedReferenceIds: [...new Set([...ch.mappedReferenceIds, source.id])] } : ch) }, 'gateB'))}
+          onAddSource={(source, chapterIds) => setProject(prev => revokeApprovals({ ...prev, referenceLibrary: { ...prev.referenceLibrary, cards: [...prev.referenceLibrary.cards, source], verifiedCount: prev.referenceLibrary.cards.filter(isRetrievedSource).length + Number(isRetrievedSource(source)) }, outline: prev.outline.map(ch => chapterIds.includes(ch.id) ? { ...ch, mappedReferenceIds: [...new Set([...ch.mappedReferenceIds, source.id])] } : ch) }, 'gateB'))}
             project={project}
             setActiveView={setActiveView}
             lang={lang}
@@ -310,6 +317,7 @@ export default function App() {
           <ProductCharterView
             project={project}
             setActiveView={setActiveView}
+            checkingReferences={checkingReferences}
             onApproveGateB={handleApproveGateB}
             lang={lang}
           />
@@ -319,19 +327,18 @@ export default function App() {
           <OutlineBuilderView
             project={project}
             setActiveView={setActiveView}
-            onUpdateOutline={(out) => setProject((prev) => revokeApprovals({ ...prev, outline: out }, 'gateC'))}
+            onUpdateOutline={(out) => setProject(prev => revokeApprovals({...prev,outline:out},out.length!==prev.outline.length||out.some(ch=>{const old=prev.outline.find(item=>item.id===ch.id);return !old||chapterResearchFingerprint(old)!==chapterResearchFingerprint(ch);})?'gateB':'gateC'))}
             lang={lang}
           />
         );
       case 'content_studio':
         return (
           <ContentStudioView
+            onReviewCitations={(chapterId,citationReviews)=>setProject(prev=>revokeApprovals({...prev,outline:prev.outline.map(ch=>ch.id===chapterId?{...ch,citationReviews}:ch)},'gateC'))}
             onUpdateIllustrations={(chapterId, illustrations) => setProject(prev => revokeApprovals({ ...prev, outline: prev.outline.map(ch => ch.id === chapterId ? { ...ch, illustrations } : ch) }, 'gateC'))}
             project={project}
             setActiveView={setActiveView}
             onUpdateChapter={handleUpdateChapter}
-            onRunAutopilot={handleRunAutopilot}
-            isAutopilotRunning={isAutopilotRunning}
             lang={lang}
           />
         );
@@ -349,6 +356,7 @@ export default function App() {
           <QualityAssuranceView
             project={project}
             setActiveView={setActiveView}
+            checkingReferences={checkingReferences}
             onApproveGateC={handleApproveGateC}
             lang={lang}
           />
@@ -372,6 +380,7 @@ export default function App() {
       case 'export_center':
         return (
           <ExportCenterView
+            onSourceCheckFailed={message=>{setWorkflowError(message);setProject(prev=>revokeApprovals(prev,'gateC'));}}
             project={project}
             setActiveView={setActiveView}
             lang={lang}
@@ -381,7 +390,7 @@ export default function App() {
         return (
           <MyProjectsView
             currentProject={project}
-            onLoadProject={(proj) => setProject(revokeApprovals(proj, 'gateA'))}
+            onLoadProject={(proj) => setProject(revokeApprovals({ ...proj, preferences: { ...proj.preferences, automationMode: 'manual_review', autoApproveNonCritical: false } }, 'gateA'))}
             setActiveView={setActiveView}
             lang={lang}
           />
@@ -398,7 +407,7 @@ export default function App() {
         return (
           <AutomationSettingsView
             project={project}
-            onSavePreferences={(prefs) => setProject((prev) => ({ ...prev, preferences: prefs }))}
+            onSavePreferences={(prefs) => setProject((prev) => ({ ...prev, preferences: { ...prefs, automationMode: 'manual_review', autoApproveNonCritical: false } }))}
             lang={lang}
           />
         );
@@ -407,8 +416,6 @@ export default function App() {
           <DashboardView
             project={project}
             setActiveView={setActiveView}
-            onRunAutopilot={handleRunAutopilot}
-            isAutopilotRunning={isAutopilotRunning}
             progressPercent={progressPercent}
             lang={lang}
             onLoadDemoProject={handleLoadDemoProject}
@@ -441,8 +448,6 @@ export default function App() {
           project={project}
           activeView={activeView}
           setActiveView={setActiveView}
-          onRunAutopilot={handleRunAutopilot}
-          isAutopilotRunning={isAutopilotRunning}
           progressPercent={progressPercent}
           lang={lang}
           setLang={setLang}
@@ -451,6 +456,8 @@ export default function App() {
 
         {/* Scrollable Main Content */}
         <main id="main-content" tabIndex={-1} className="workspace-main flex-1 min-w-0 overflow-y-auto p-4 md:p-7 xl:p-9">
+          {checkingReferences && <p role="status" className="mb-4 p-3 bg-indigo-50 text-indigo-900 rounded-lg text-sm">Checking original source records and retained excerpts. Approval remains pending.</p>}
+          {workflowError && <p role="alert" className="mb-4 p-3 bg-amber-50 text-amber-950 rounded-lg text-sm">{workflowError}</p>}
           {renderActiveView()}
         </main>
       </div>

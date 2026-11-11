@@ -1,3 +1,6 @@
+import { ReferenceSearchPanel } from '../ReferenceSearchPanel.tsx';
+import type { RetrievedSourceEvidence } from '../../types/research.ts';
+import { isRetrievedSource, chapterResearchFingerprint } from '../../utils/sourceEvidence.ts';
 import React, { useState } from 'react';
 import { BookOpen, Search, Download, ExternalLink, ShieldCheck, CheckCircle2, Filter, Layers, ChevronDown, ChevronUp } from 'lucide-react';
 import { DigitalProductProject, ReferenceCard } from '../../types/project.ts';
@@ -25,15 +28,19 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
   const [selectedPillar, setSelectedPillar] = useState('ALL');
   const [expandedCardId, setExpandedCardId] = useState<string | null>(cards[0]?.id || null);
 
-  const [source, setSource] = useState({ title: '', publisher: '', url: '', summary: '', claim: '', quote: '', locator: '', confirmed: false });
+  const emptySource = { title: '', author: '', publisher: '', date: '', doi: '', url: '', summary: '', claim: '', quote: '', locator: '', relevance: '', confirmed: false };
+  const [source, setSource] = useState(emptySource);
+  const [retrieval, setRetrieval] = useState<RetrievedSourceEvidence | undefined>();
+  const [sourceFormOpen, setSourceFormOpen] = useState(false);
   const [sourceChapters, setSourceChapters] = useState<string[]>([]);
   const [sourceMessage, setSourceMessage] = useState('');
   const addSource = (event: React.FormEvent) => {
     event.preventDefault();
     const id = `REF-${Date.now()}`;
-    const card: ReferenceCard = { id, title: source.title, sourceTitle: source.title, publisherOrOrg: source.publisher, sourceURL: source.url, retrievedAt: new Date().toISOString(), status: source.confirmed ? 'VERIFIED_FULL_TEXT' : 'NEEDS_REVIEW', qualityScore: 0, description: source.summary, researchSummary: source.summary, contentOutline: [source.claim], supportedClaims: [source.claim], verificationQuote: source.quote, verificationLocator: source.locator, verifiedAt: source.confirmed ? new Date().toISOString() : undefined, practicalFramework: { name: 'Editorial application', editorialOrigin: 'Author synthesis; review against the quoted source.', actionSteps: [] }, editorialNotes: { targetChapters: sourceChapters, exerciseSuggestions: [], worksheetIntegration: '', verificationNotes: `${source.locator}: ${source.quote}` }, brandGuidelines: { toneApplication: 'Accurate attribution and qualified claims', visualDirection: 'Cited tables and original diagrams', audienceFraming: project.charter.targetAudience }, pillars: [], rightsNotes: 'Link and brief attributed quotation only; source copyright remains with its owner.' };
+    const card: ReferenceCard = { id, author: source.author || undefined, publicationDate: source.date || undefined, doi: source.doi || undefined, retrieval, chapterRelevance: sourceChapters.map(chapterId => ({ chapterId, rationale: source.relevance, reviewedAt: new Date().toISOString(), chapterFingerprint: chapterResearchFingerprint(project.outline.find(ch => ch.id === chapterId)!) })), title: source.title, sourceTitle: source.title, publisherOrOrg: source.publisher, sourceURL: source.url, retrievedAt: new Date().toISOString(), status: source.confirmed && retrieval ? 'VERIFIED_FULL_TEXT' : 'NEEDS_REVIEW', qualityScore: 0, description: source.summary, researchSummary: source.summary, contentOutline: [source.claim], supportedClaims: [source.claim], verificationQuote: source.quote, verificationLocator: source.locator, verifiedAt: source.confirmed ? new Date().toISOString() : undefined, practicalFramework: { name: 'Editorial application', editorialOrigin: 'Author synthesis; review against the quoted source.', actionSteps: [] }, editorialNotes: { targetChapters: sourceChapters, exerciseSuggestions: [], worksheetIntegration: '', verificationNotes: `${source.locator}: ${source.quote}` }, brandGuidelines: { toneApplication: 'Accurate attribution and qualified claims', visualDirection: 'Cited tables and original diagrams', audienceFraming: project.charter.targetAudience }, pillars: [], rightsNotes: 'Link and brief attributed quotation only; source copyright remains with its owner.' };
+    if (card.status === 'VERIFIED_FULL_TEXT' && !isRetrievedSource(card)) { setSourceMessage('The quote or bibliography does not match the retrieved text. Correct it or save an unverified note.'); return; }
     onAddSource(card, sourceChapters); setSourceMessage(`Saved ${id}; downstream approvals require review.`);
-    setSource({ title: '', publisher: '', url: '', summary: '', claim: '', quote: '', locator: '', confirmed: false });
+    setSource(emptySource); setRetrieval(undefined);
   };
   const pillars = ['ALL', ...Object.keys(referenceLibrary?.coveragePillars || {})];
 
@@ -72,13 +79,20 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      <details className="p-5 bg-white border border-slate-200 rounded-lg">
-        <summary className="font-semibold cursor-pointer">{lang === 'en' ? 'Add a researched source and map it to chapters' : '新增已研究的來源並配置章節'}</summary>
+      <ReferenceSearchPanel project={project} onSelect={(document, paragraph) => {
+        const { paragraphs, license, ...metadata } = document;
+        setRetrieval({ ...metadata, excerpt: paragraph.text, locator: paragraph.locator });
+        setSource({ ...emptySource, title: document.title, author: document.authors.join(', '), publisher: document.publisher, date: document.publicationDate || '', doi: document.doi || '', url: document.canonicalUrl, quote: paragraph.text.slice(0,1200), locator: paragraph.locator });
+        setSourceFormOpen(true); setSourceMessage('Source text retrieved. Explain the supported claim and chapter relevance before saving.');
+      }} />
+      <details open={sourceFormOpen} onToggle={e=>setSourceFormOpen(e.currentTarget.open)} className="p-5 bg-white border border-slate-200 rounded-lg">
+        <summary className="font-semibold cursor-pointer">{lang === 'en' ? 'Review source evidence and map chapter relevance' : '審查來源證據並配置章節關聯'}</summary>
+        <p className="text-sm text-slate-600 mt-3">{retrieval ? 'Bibliography is supplied by the retrieved document. Keep the quote verbatim and explain what it supports.' : 'No source text retrieved. You may save research notes, but a checkbox cannot validate them or unlock Gate B.'}</p>
         <form onSubmit={addSource} className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
-          {([['title','Source title'],['publisher','Author / publisher'],['url','Original source URL'],['locator','Page / section / paragraph locator']] as const).map(([key,label]) => <label key={key} className="space-y-1">{label}<input required type={key === 'url' ? 'url' : 'text'} pattern={key === 'url' ? 'https?://.*' : undefined} value={source[key]} onChange={e => setSource({...source,[key]:e.target.value})} className="block w-full border p-2 rounded" /></label>)}
-          {([['summary','Substantive research summary'],['claim','Specific supported claim'],['quote','Exact supporting excerpt']] as const).map(([key,label]) => <label key={key} className="space-y-1 md:col-span-2">{label}<textarea required minLength={key === 'summary' ? 50 : 20} rows={3} value={source[key]} onChange={e => setSource({...source,[key]:e.target.value})} className="block w-full border p-2 rounded" /></label>)}
+          {([['title','Source title'],['author','Author (as supplied)'],['publisher','Publisher / journal'],['date','Publication date (as supplied)'],['doi','DOI (if supplied)'],['url','Original source URL'],['locator','Page / section / paragraph locator']] as const).map(([key,label]) => <label key={key} className="space-y-1">{label}<input required={['title','publisher','url','locator'].includes(key)} readOnly={Boolean(retrieval)} type={key === 'url' ? 'url' : 'text'} pattern={key === 'url' ? 'https?://.*' : undefined} value={source[key]} onChange={e => setSource({...source,[key]:e.target.value})} className="block w-full border p-2 rounded" /></label>)}
+          {([['summary','Substantive research summary'],['claim','Specific supported claim'],['quote','Exact supporting excerpt'],['relevance','Why this source is relevant to the selected chapter objectives']] as const).map(([key,label]) => <label key={key} className="space-y-1 md:col-span-2">{label}<textarea required minLength={key === 'summary' ? 50 : 20} rows={3} value={source[key]} onChange={e => setSource({...source,[key]:e.target.value})} className="block w-full border p-2 rounded" /></label>)}
           <fieldset className="md:col-span-2 flex flex-wrap gap-3"><legend className="mb-2">Map to relevant chapters</legend>{project.outline.map(ch => <label key={ch.id} className="flex gap-2 items-center"><input type="checkbox" checked={sourceChapters.includes(ch.id)} onChange={e => setSourceChapters(e.target.checked ? [...sourceChapters,ch.id] : sourceChapters.filter(id => id !== ch.id))} />{ch.title}</label>)}</fieldset>
-          <label className="md:col-span-2 flex gap-2 items-start"><input type="checkbox" checked={source.confirmed} onChange={e => setSource({...source,confirmed:e.target.checked})} />I read the full source and checked that this excerpt and locator support the stated claim. Otherwise save for review.</label>
+          <label className="md:col-span-2 flex gap-2 items-start"><input type="checkbox" checked={source.confirmed} onChange={e => setSource({...source,confirmed:e.target.checked})} />I inspected the retrieved source and checked this exact excerpt and its relevance. Per-passage support decisions are reviewed later in Content Studio. Without retrieved text this remains an unverified note.</label>
           <button className="px-4 py-2 bg-indigo-700 text-white rounded-lg" type="submit">Save source</button><p role="status">{sourceMessage}</p>
         </form>
       </details>
@@ -88,7 +102,7 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 mb-1">
               <BookOpen className="w-3.5 h-3.5" />
-              <span>ARCE — Automated Reference Collection Engine</span>
+              <span>Gate B — Source Research & Evidence Review</span>
             </div>
             <h1 className="text-xl font-bold text-slate-900">{t.refTitle}</h1>
             <p className="text-xs text-slate-500 mt-0.5">{t.refSubtitle}</p>
@@ -121,7 +135,7 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100 text-xs">
           <div className="flex items-center gap-4 text-slate-600">
             <span>
-              {t.verifiedCardsCount}: <strong className="font-mono text-emerald-600">{referenceLibrary?.verifiedCount || cards.length} / {referenceLibrary?.targetCount || 20}</strong>
+              {t.verifiedCardsCount}: <strong className="font-mono text-emerald-600">{cards.filter(isRetrievedSource).length} / {referenceLibrary?.targetCount || 20}</strong>
             </span>
             <span aria-hidden="true">·</span>
             <span>{t.sevenPartStandard}</span>
@@ -181,7 +195,7 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
                       {card.id}
                     </span>
                     <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      {card.status}
+                      {isRetrievedSource(card) ? 'Retrieved text and bibliography reviewed' : 'Unverified notes / retrieval review needed'}
                     </span>
                     <span className="text-xs text-slate-400">·</span>
                     <span className="text-xs text-slate-500 font-medium">{card.publisherOrOrg}</span>
@@ -190,7 +204,7 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs font-mono text-slate-400">Score: {card.qualityScore}/100</span>
+                  <span className="text-xs text-slate-500">Claim support is reviewed per passage</span>
                   <div className="text-indigo-600 text-xs font-semibold flex items-center gap-1">
                     <span>{isExpanded ? (lang === 'en' ? 'Collapse' : '收合') : (lang === 'en' ? 'Inspect 7 Parts' : '檢視 7 大結構')}</span>
                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -201,6 +215,15 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
               {/* 7-Part Detailed Content */}
               {isExpanded && (
                 <div className="px-5 pb-5 pt-2 border-t border-slate-100 space-y-4 text-xs text-slate-700 bg-slate-50/30">
+                  <section className="bg-white border border-slate-200 rounded-lg p-3 space-y-2">
+                    <h4 className="font-semibold">Retrieved source evidence</h4>
+                    <p>{card.author || 'Author not supplied'} · {card.publicationDate || 'Date not supplied'} · {card.doi || 'DOI not supplied'}</p>
+                    <blockquote className="whitespace-pre-wrap">{card.verificationQuote || 'No retrieved supporting excerpt.'}</blockquote>
+                    <p>Locator: {card.verificationLocator || 'not supplied'}</p>
+                    <p>Retrieval: {card.retrieval?.kind || 'not retrieved'} · {card.retrieval?.retrievedAt || 'not available'}</p>
+                    {card.chapterRelevance?.map(link=><p key={link.chapterId}><strong>{project.outline.find(ch=>ch.id===link.chapterId)?.title || link.chapterId}:</strong> {link.rationale}</p>)}
+                    <p className="text-slate-500">Source availability and author relevance review do not validate an unrelated claim. Review each use of this reference in the manuscript.</p>
+                  </section>
                   {/* Part A & B */}
                   <div className="space-y-1">
                     <strong className="text-slate-900 block font-semibold">B. {lang === 'en' ? 'Description & Core Context' : '描述與脈絡'}:</strong>

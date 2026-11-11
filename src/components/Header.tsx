@@ -10,8 +10,6 @@ interface HeaderProps {
   project: DigitalProductProject;
   activeView: StageId | 'dashboard' | 'new_project' | 'my_projects' | 'ai_settings' | 'automation_settings';
   setActiveView: (view: any) => void;
-  onRunAutopilot: () => void;
-  isAutopilotRunning: boolean;
   progressPercent: number;
   lang: Language;
   setLang: (lang: Language) => void;
@@ -24,8 +22,6 @@ export const Header: React.FC<HeaderProps> = ({
   project,
   activeView,
   setActiveView,
-  onRunAutopilot,
-  isAutopilotRunning,
   progressPercent,
   lang,
   setLang,
@@ -138,28 +134,7 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden sm:inline">{t.exportProduct}</span>
         </button>
 
-        {/* Run Autopilot Primary CTA */}
-        <button
-          onClick={onRunAutopilot}
-          disabled={isAutopilotRunning}
-          className={`px-4 py-2 text-xs font-semibold text-white rounded-lg transition-all flex items-center gap-2 whitespace-nowrap shadow-sm ${
-            isAutopilotRunning
-              ? 'bg-amber-600 cursor-not-allowed opacity-90'
-              : 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98]'
-          }`}
-        >
-          {isAutopilotRunning ? (
-            <>
-              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-              <span>{t.autopilotRunning}</span>
-            </>
-          ) : (
-            <>
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>{t.runAutopilot}</span>
-            </>
-          )}
-        </button>
+
       </div>
     </header>
   );

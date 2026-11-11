@@ -1,3 +1,4 @@
+import { searchReferences, retrieveReference, verifyReferenceRecords } from './server/referenceResearch.ts';
 import { collectMarketResearch } from './server/marketResearch.ts';
 import express, { Request, Response } from 'express';
 import path from 'path';
@@ -18,6 +19,26 @@ app.use(express.json({ limit: '10mb' }));
 app.get('/api/market/research', async (_req: Request, res: Response) => {
   try { res.json(await collectMarketResearch()); }
   catch { res.status(502).json({ error: 'Market research failed. Retry after checking source access.' }); }
+});
+
+app.get('/api/references/search', async (req: Request, res: Response) => {
+  const query = typeof req.query.q === 'string' ? req.query.q : '';
+  if (query.trim().length < 3 || query.length > 250) return res.status(400).json({ error: 'Use a research query between 3 and 250 characters.' });
+  try { res.json(await searchReferences(query)); }
+  catch { res.status(502).json({ error: 'Reference search failed; no validated source records were created.' }); }
+});
+app.post('/api/references/retrieve', async (req: Request, res: Response) => {
+  const { pmcid, url } = req.body || {};
+  if ((typeof pmcid !== 'string' && typeof url !== 'string') || (url?.length || 0) > 2000) return res.status(400).json({ error: 'Provide a supported source URL or PMC identifier.' });
+  try { res.json(await retrieveReference({ pmcid, url })); }
+  catch (error) { res.status(422).json({ error: error instanceof Error && error.message !== 'fetch failed' ? error.message : 'Could not retrieve the source text. Check network access; metadata is not validated full text.' }); }
+});
+
+app.post('/api/references/verify', async (req: Request, res: Response) => {
+  const cards = req.body?.cards;
+  if (!Array.isArray(cards) || !cards.length || cards.length > 50) return res.status(400).json({ error: 'Provide 1–50 source records for checking.' });
+  try { res.json(await verifyReferenceRecords(cards)); }
+  catch { res.status(422).json({ error: 'Source records could not be checked; no source validation was granted.' }); }
 });
 
 // Health check endpoint

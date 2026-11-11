@@ -1,3 +1,5 @@
+import { isRetrievedSource, bibliographicKey, referenceYear } from './sourceEvidence.ts';
+import { citationIds } from './citationEvidence.ts';
 import { DigitalProductProject } from '../types/project.ts';
 
 export function compileManuscriptMarkdown(project: DigitalProductProject): string {
@@ -7,7 +9,7 @@ export function compileManuscriptMarkdown(project: DigitalProductProject): strin
     md += `## ${charter.subtitle}\n\n`;
   }
   md += `**Author / Brand:** ${intake.creatorName || brand.profileName || 'Digital Product Studio'}\n`;
-  md += `**Edition:** Official Digital Edition 1.0 (V4.0 Autopilot Architecture)\n`;
+  md += `**Edition:** Author working manuscript — publication readiness is recorded in the bundle review report\n`;
   md += `**Delivery Format:** ${charter.deliveryFormat || 'Ebook + Companion Toolkit Bundle'}\n\n`;
   md += `---\n\n`;
 
@@ -58,6 +60,15 @@ export function compileManuscriptMarkdown(project: DigitalProductProject): strin
     md += `\n---\n`;
   }
 
+  const cited = new Set(outline.flatMap(ch => citationIds(ch.contentMarkdown || '')));
+  md += `\n## References cited in this manuscript\n\n`;
+  const citedCards = project.referenceLibrary.cards.filter(card => cited.has(card.id));
+  for (const card of citedCards.filter((item,index)=>citedCards.findIndex(other=>bibliographicKey(other)===bibliographicKey(item))===index)) {
+    md += `- [${citedCards.filter(other=>bibliographicKey(other)===bibliographicKey(card)).map(other=>other.id).join(', ')}] ${card.author || card.publisherOrOrg}. (${referenceYear(card)}). ${card.sourceTitle}. ${card.publisherOrOrg}. ${card.doi ? 'DOI: ' + card.doi + '. ' : ''}${card.sourceURL}\n`;
+    md += `  - Retrieved text: ${card.retrieval?.kind || 'not retrieved'}; locator: ${card.verificationLocator || 'not supplied'}. A citation still requires an explicit claim-to-source review.\n`;
+  }
+  if (!cited.size) md += `No claim-level source citations have been supplied.\n`;
+
   return md;
 }
 
@@ -65,7 +76,7 @@ export function compileReferenceLibraryMarkdown(project: DigitalProductProject):
   const { referenceLibrary } = project;
   let md = `# Source Reference Library (ARCE)\n\n`;
   md += `**Total Documented Sources:** ${referenceLibrary.cards.length} references\n`;
-  md += `**Full-Text Verified Sources:** ${referenceLibrary.verifiedCount} references\n\n`;
+  md += `**Retrieved text and bibliography reviewed:** ${referenceLibrary.cards.filter(isRetrievedSource).length} references\n\n`;
   md += `This document compiles author-supplied research records. Inspect each source, verification status and supporting excerpt; a saved record is not independent validation.\n\n`;
   md += `---\n\n`;
 
@@ -74,7 +85,11 @@ export function compileReferenceLibraryMarkdown(project: DigitalProductProject):
     md += `**Source Title:** ${card.sourceTitle}\n`;
     md += `**Publisher / Organization:** ${card.publisherOrOrg} ${card.author ? `(${card.author})` : ''}\n`;
     md += `**Original URL:** ${card.sourceURL}\n`;
-    md += `**Retrieved Date:** ${card.retrievedAt} | **Verification Status:** \`${card.status}\` | **Quality Score:** ${card.qualityScore}/100\n\n`;
+    md += `**Author / date / DOI:** ${card.author || 'Not supplied'} | ${card.publicationDate || 'Not supplied'} | ${card.doi || 'Not supplied'}\n`;
+    md += `**Text retrieval:** ${card.retrieval?.kind || 'No source text retrieved'} | SHA-256: ${card.retrieval?.contentHash || 'not available'}\n`;
+    md += `**Exact supporting excerpt:** ${card.verificationQuote || 'No retrieved supporting excerpt.'}\n`;
+    md += `**Exact source locator:** ${card.verificationLocator || 'Not supplied'}\n\n`;
+    md += `**Retrieved Date:** ${card.retrievedAt} | **Verification Status:** \`${card.status}\`\n\n`;
 
     md += `### A. Title\n${card.title}\n\n`;
     md += `### B. Description & Core Project Value\n${card.description}\n\n`;

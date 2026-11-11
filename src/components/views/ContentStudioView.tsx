@@ -1,3 +1,6 @@
+import { gateIssues } from '../../utils/gatePolicy.ts';
+import { CitationReviewPanel } from '../CitationReviewPanel.tsx';
+import { isRetrievedSource } from '../../utils/sourceEvidence.ts';
 import { countManuscriptWords } from '../../utils/textMetrics.ts';
 import React, { useState, useRef } from 'react';
 import {
@@ -16,27 +19,25 @@ import {
   Maximize2,
   FileCheck,
 } from 'lucide-react';
-import { DigitalProductProject, ChapterOutlineItem, ChapterIllustration } from '../../types/project.ts';
+import { DigitalProductProject, ChapterOutlineItem, ChapterIllustration, CitationReview } from '../../types/project.ts';
 import { generateTextWithAi } from '../../services/aiService.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface ContentStudioViewProps {
   onUpdateIllustrations: (chapterId: string, illustrations: ChapterIllustration[]) => void;
+  onReviewCitations: (chapterId: string, reviews: CitationReview[]) => void;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onUpdateChapter: (chapterId: string, content: string, wordCount: number) => void;
-  onRunAutopilot: () => void;
-  isAutopilotRunning: boolean;
   lang?: Language;
 }
 
 export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
+  onReviewCitations,
   onUpdateIllustrations,
   project,
   setActiveView,
   onUpdateChapter,
-  onRunAutopilot,
-  isAutopilotRunning,
   lang = 'en',
 }) => {
   const t = translations[lang];
@@ -46,6 +47,7 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [showBibleModal, setShowBibleModal] = useState<boolean>(false);
 
+  const canGenerate = project.workflow.gates.gateB.isApproved && !gateIssues(project, 'gateB').length;
   const currentChapter = chapters.find((c) => c.id === selectedChapterId) || chapters[0];
   const [imageDraft, setImageDraft] = useState({ dataUri: '', alt: '', caption: '', paragraphAnchor: '', credit: '', license: '', referenceId: '' });
   const [imageError, setImageError] = useState('');
@@ -65,13 +67,13 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   };
 
   const handleGenerateCurrentChapter = async () => {
-    if (!currentChapter) return;
+    if (!currentChapter || !canGenerate) return;
     setIsGenerating(true);
 
     try {
       const outputLanguage = lang === 'en' ? 'English' : 'Traditional Chinese (繁體中文)';
       const systemPrompt = `You are the lead author and principal researcher for Digital Product Studio.
-You are writing a publication-grade, high-depth digital guide chapter for "${charter?.productTitle}".
+You are drafting one chapter for manual evidence review, not certifying a publication-grade manuscript for "${charter?.productTitle}".
 Target Audience: ${charter?.targetAudience}
 Brand Tone: ${charter?.brandVoiceSummary}
 Core Promise: ${charter?.centralPromise}
@@ -80,18 +82,18 @@ Requirements:
 1. Provide deep, substantive prose (Introduction, Core Framework, Step-by-Step Practical Blueprint, Scenario Walkthrough, Common Mistakes & Fixes, and Actionable Deliverable / Exercise).
 2. Never output superficial placeholders, empty bullet lists, or generic fluff.
 3. Write in clean Markdown format with structured headings, tables, and callouts.
-4. Cite every factual claim, quantitative statement, and evidence-based recommendation immediately in its paragraph or bullet with [REF-01] syntax, using ONLY the provided source IDs. Never attach a citation unless its supplied supporting claims or research summary substantiate that point. Do not invent sources, measurements, page numbers, or verification.
+4. Cite every factual claim, quantitative statement, and evidence-based recommendation immediately in its paragraph or bullet with [REF-01] syntax, using ONLY the permitted retrieved source IDs. Base factual statements on the supplied exact excerpts, not the broader title or research summary. Never attach a citation unless its supplied supporting claims or research summary substantiate that point. Do not invent sources, measurements, page numbers, or verification.
 5. If evidence is missing or only metadata/partial text is supplied, explicitly mark [SOURCE NEEDED] and qualify the claim. Distinguish editorial advice and illustrative scenarios from measured findings.
-6. Include relevant process lists for conceptual diagrams. Where the supplied source material contains comparable numeric values, include a Markdown data table, with consistent units in the column heading and a [REF-ID] citation in each data row. Do not invent numerical charts or data. The export illustrates cited tables automatically.`;
+6. Include relevant process lists for conceptual diagrams. Where the supplied source material contains comparable numeric values, include a Markdown data table, with consistent units in the column heading and a [REF-ID] citation in each data row. Do not invent numerical charts or data. A person must review all citation support decisions; never claim you or the export has validated the evidence.`;
 
       const userPrompt = `Please write the full comprehensive content for Chapter ${currentChapter.order}:
 Title: ${currentChapter.title}
 Objective: ${currentChapter.objective}
 Planned Subtopics: ${currentChapter.subtopics.join(', ')}
 Practical Deliverable: ${currentChapter.practicalDeliverable}
-Mapped Reference IDs: ${currentChapter.mappedReferenceIds.join(', ')}
+Permitted retrieved reference IDs: ${referenceLibrary.cards.filter(card => currentChapter.mappedReferenceIds.includes(card.id) && isRetrievedSource(card)).map(card => card.id).join(', ')}
 Source material (library records, not new independent verification):
-${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedReferenceIds.includes(card.id)).map(card => ({ id: card.id, title: card.sourceTitle, url: card.sourceURL, status: card.status, supportedClaims: card.supportedClaims, researchSummary: card.researchSummary, verificationNotes: card.editorialNotes.verificationNotes })), null, 2)}`;
+${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedReferenceIds.includes(card.id) && isRetrievedSource(card)).map(card => ({ id: card.id, title: card.sourceTitle, url: card.sourceURL, status: card.status, supportedClaims: card.supportedClaims, researchSummary: card.researchSummary, exactRetrievedQuote: card.verificationQuote, exactLocator: card.verificationLocator, retrievedDocument: card.retrieval, verificationNotes: card.editorialNotes.verificationNotes })), null, 2)}`;
 
       const res = await generateTextWithAi({
         provider: aiSettings.provider,
@@ -212,7 +214,7 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
 
               <button
                 onClick={handleGenerateCurrentChapter}
-                disabled={isGenerating}
+                disabled={isGenerating || !canGenerate} title={canGenerate ? 'Draft this chapter using retrieved source excerpts' : 'Complete source research and explicitly approve Gate B before generating chapter prose'}
                 className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-xs flex items-center gap-1.5"
               >
                 <Sparkles className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
@@ -225,7 +227,7 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
           <div className="space-y-2">
             <details className="rounded-lg border border-slate-200 p-4 bg-white">
               <summary className="text-sm font-semibold cursor-pointer">{lang === 'en' ? 'Insert a source citation' : '插入來源引用'}</summary>
-              <p className="my-3 text-xs text-slate-600">{lang === 'en' ? 'Review the supporting claims, place the cursor beside the relevant sentence, then insert its source. A library status alone does not establish claim support.' : '先審查來源支持的論點，將游標置於相關句子旁再插入引用。文獻狀態本身不代表來源支持該論點。'}</p>
+              <p className="my-3 text-xs text-slate-600">{lang === 'en' ? 'Review the supporting claims, place the cursor beside the relevant sentence, then insert its source. A library status alone does not establish claim support. After saving the manuscript, review the exact excerpt for each cited passage below.' : '先審查來源支持的論點，將游標置於相關句子旁再插入引用。文獻狀態本身不代表來源支持該論點。'}</p>
               <div className="space-y-3">{referenceLibrary.cards.filter(card => currentChapter?.mappedReferenceIds.includes(card.id)).map(card => <article key={card.id} className="border-t border-slate-200 pt-3 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-medium">{card.sourceTitle}</h3><span className="text-xs font-mono text-slate-600">{card.status}</span></div>
                 <ul className="text-xs text-slate-600 list-disc pl-4 space-y-1">{card.supportedClaims.map((claim,i) => <li key={i}>{claim}</li>)}</ul>
@@ -262,6 +264,7 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
               {imageError && <p role="alert" className="text-sm text-red-800 mt-3">{imageError}</p>}
               <ul className="mt-3 space-y-2 text-sm">{currentChapter?.illustrations?.map(image => <li key={image.id} className="flex gap-3 justify-between"><span>{image.caption}</span><button className="text-red-700 underline" onClick={() => onUpdateIllustrations(currentChapter.id,currentChapter.illustrations!.filter(item => item.id !== image.id))}>Remove picture</button></li>)}</ul>
             </details>
+            {currentChapter && <CitationReviewPanel document={currentChapter} cards={referenceLibrary.cards} disabled={contentDraft !== (currentChapter.contentMarkdown || '')} onChange={reviews=>onReviewCitations(currentChapter.id,reviews)} />}
             <textarea
               ref={editorRef}
               aria-label={lang === 'en' ? 'Chapter manuscript' : '章節稿件'}

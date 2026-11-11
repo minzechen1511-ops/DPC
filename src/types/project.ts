@@ -1,3 +1,4 @@
+import type { RetrievedSourceEvidence } from './research.ts';
 /**
  * Digital Product Studio (V4.0 Full Autopilot & OpenRouter Edition)
  * Core Data Models & Schemas
@@ -214,6 +215,9 @@ export type ReferenceVerificationStatus =
   | 'NEEDS_REVIEW';
 
 export interface ReferenceCard {
+  doi?: string;
+  retrieval?: RetrievedSourceEvidence;
+  chapterRelevance?: Array<{ chapterId: string; rationale: string; reviewedAt: string; chapterFingerprint: string }>;
   verificationQuote?: string;
   verificationLocator?: string;
   verifiedAt?: string;
@@ -286,7 +290,16 @@ export interface ChapterIllustration {
   credit: string;
   license: string;
 }
+export interface CitationReview {
+  passageKey: string;
+  referenceId?: string;
+  relationship: 'supports' | 'qualifies' | 'unsupported' | 'editorial';
+  rationale: string;
+  reviewedAt: string;
+  sourceFingerprint?: string;
+}
 export interface ChapterOutlineItem {
+  citationReviews?: CitationReview[];
   illustrations?: ChapterIllustration[];
   id: string;
   order: number;
@@ -321,6 +334,7 @@ export interface ProductBible {
 }
 
 export interface ResourceAsset {
+  citationReviews?: CitationReview[];
   id: string;
   title: string;
   category: 'WORKSHEET' | 'CHECKLIST' | 'TRACKER' | 'CALENDAR' | 'TEMPLATE' | 'GUIDE';

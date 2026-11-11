@@ -1,6 +1,6 @@
 {
   "name": "Digital Product Studio",
-  "description": "AI-Powered Digital Product Research, Creation & Launch Factory (V4.0 Full Autopilot & OpenRouter Edition)",
+  "description": "AI-Powered Digital Product Research, Creation & Launch Factory (Stage-by-stage research and review)",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

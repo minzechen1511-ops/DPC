@@ -1,3 +1,4 @@
+import { isRetrievedSource } from '../../utils/sourceEvidence.ts';
 import { gateIssues } from '../../utils/gatePolicy.ts';
 import React from 'react';
 import {
@@ -23,8 +24,6 @@ import { Language, translations } from '../../utils/i18n.ts';
 interface DashboardViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
-  onRunAutopilot: () => void;
-  isAutopilotRunning: boolean;
   progressPercent: number;
   lang?: Language;
   onLoadDemoProject?: () => void;
@@ -33,8 +32,6 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   project,
   setActiveView,
-  onRunAutopilot,
-  isAutopilotRunning,
   progressPercent,
   lang = 'en',
   onLoadDemoProject,
@@ -44,7 +41,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const chaptersDone = (outline || []).filter((c) => c.isCompleted).length;
   const totalChapters = (outline || []).length;
-  const verifiedRefs = (referenceLibrary?.cards || []).filter(card => card.status === 'VERIFIED_FULL_TEXT').length;
+  const verifiedRefs = (referenceLibrary?.cards || []).filter(isRetrievedSource).length;
   const targetRefs = referenceLibrary?.targetCount || 20;
 
   return (
@@ -125,27 +122,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             >
               {lang === 'en' ? 'New Project' : '建立新專案'}
             </button>
-            <button
-              onClick={onRunAutopilot}
-              disabled={isAutopilotRunning}
-              className={`px-4 py-2 text-xs font-semibold text-white rounded-lg transition-all flex items-center gap-2 shadow-sm whitespace-nowrap ${
-                isAutopilotRunning
-                  ? 'bg-amber-600 cursor-not-allowed opacity-90'
-                  : 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98]'
-              }`}
-            >
-              {isAutopilotRunning ? (
-                <>
-                  <Clock className="w-3.5 h-3.5 animate-spin" />
-                  <span>{t.autopilotRunning}</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>{t.runAutopilot}</span>
-                </>
-              )}
-            </button>
+
           </div>
         </div>
 
