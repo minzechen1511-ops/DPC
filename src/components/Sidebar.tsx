@@ -136,7 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  const verifiedRefCount = project.referenceLibrary?.verifiedCount || (project.referenceLibrary?.cards?.length || 0);
+  const verifiedRefCount = (project.referenceLibrary?.cards || []).filter(card => card.status === 'VERIFIED_FULL_TEXT').length;
   const completedChapterCount = (project.outline || []).filter((c) => c.isCompleted).length;
   const totalChapterCount = (project.outline || []).length;
   const wordCount = project.qualityReport?.actualWordCount || 0;
@@ -160,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         </div>
         <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
-          <span>{t.sources}: <strong className="text-slate-200">{verifiedRefCount}/20</strong></span>
+          <span>{t.sources}: <strong className="text-slate-200">{verifiedRefCount}/{project.referenceLibrary.targetCount}</strong></span>
           <span>{t.chapters}: <strong className="text-slate-200">{completedChapterCount}/{totalChapterCount}</strong></span>
           <span>{t.words}: <strong className="text-slate-200">{wordCount.toLocaleString()}</strong></span>
         </div>

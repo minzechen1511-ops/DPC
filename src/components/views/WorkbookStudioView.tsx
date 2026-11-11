@@ -4,17 +4,21 @@ import { DigitalProductProject, ResourceAsset } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface WorkbookStudioViewProps {
+  onSaveResource: (resource: ResourceAsset) => void;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   lang?: Language;
 }
 
 export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
+  onSaveResource,
   project,
   setActiveView,
   lang = 'en',
 }) => {
   const t = translations[lang];
+  const [draft, setDraft] = useState({ id: '', title: '', purpose: '', instructions: '', contentMarkdown: '', completionCriteria: '', associatedChapterId: '' });
+  const [saveMessage, setSaveMessage] = useState('');
   const { resources } = project;
   const items = resources || [];
   const [selectedResourceId, setSelectedResourceId] = useState<string>(items[0]?.id || 'RES-01');
@@ -30,6 +34,16 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      <details className="p-5 bg-white border border-slate-200 rounded-xl">
+        <summary className="font-semibold cursor-pointer">{lang === 'en' ? 'Create or edit a practical learning resource' : '新增或編輯實作學習資源'}</summary>
+        <form className="mt-4 space-y-3 text-sm" onSubmit={e => { e.preventDefault(); onSaveResource({...draft,id:draft.id || `RESOURCE-${Date.now()}`,category:'WORKSHEET',fieldsOrColumns:[],sampleEntries:[]}); setSaveMessage('Learning resource saved; Gate C requires a new review.'); }}>
+          <label className="block">Existing resource<select className="block w-full border rounded p-2" value={draft.id} onChange={e => { const resource=items.find(r=>r.id===e.target.value); setDraft(resource ? {...resource,associatedChapterId:resource.associatedChapterId || ''} : {id:'',title:'',purpose:'',instructions:'',contentMarkdown:'',completionCriteria:'',associatedChapterId:''}); }}><option value="">New resource</option>{items.map(r=><option key={r.id} value={r.id}>{r.title}</option>)}</select></label>
+          {(['title','purpose','instructions','completionCriteria'] as const).map(key=><label key={key} className="block">{key}<input required className="w-full block border rounded p-2 mt-1" value={draft[key]} onChange={e=>setDraft({...draft,[key]:e.target.value})}/></label>)}
+          <label className="block">Related chapter<select className="block w-full border rounded p-2" value={draft.associatedChapterId} onChange={e=>setDraft({...draft,associatedChapterId:e.target.value})}><option value="">Whole book</option>{project.outline.map(ch=><option key={ch.id} value={ch.id}>{ch.title}</option>)}</select></label>
+          <label className="block">Resource content (Markdown)<textarea required minLength={150} rows={9} className="block border rounded p-3 w-full font-mono text-xs" value={draft.contentMarkdown} onChange={e=>setDraft({...draft,contentMarkdown:e.target.value})}/></label>
+          <button className="px-4 py-2 rounded bg-indigo-700 text-white">Save learning resource</button><p role="status">{saveMessage}</p>
+        </form>
+      </details>
       {/* Top Banner */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

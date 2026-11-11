@@ -80,7 +80,7 @@ export const translations = {
 
     // Market Research (MTRE)
     mtreTitle: 'Marketplace Intelligence & Sales Observation (MTRE)',
-    mtreSubtitle: 'Continuous monitoring across Amazon Kindle, Gumroad, Etsy, Apple Books, and Payhip',
+    mtreSubtitle: 'On-demand public source checks across Amazon Kindle, Gumroad, Etsy, Apple Books, and Payhip',
     allPlatforms: 'All Platforms',
     searchMarketplacePlaceholder: 'Search by product title, author, or category...',
     priceLabel: 'Price',
@@ -97,7 +97,7 @@ export const translations = {
     prioritizeSignalBtn: 'Synthesize as #1 Gate A Topic',
     prioritizedSignalBadge: 'Prioritized from Market Signal',
     synchronizedFromMtreBadge: 'Synchronized from Market Intelligence (MTRE)',
-    syncStatsSummary: 'Live Synchronized: Scores & Best Overall are mathematically computed from observed review velocity, pricing tiers, and marketplace demand signals.',
+    syncStatsSummary: 'Linked chart snapshot: inspect the source, chart scope and capture time. Scores reflect observed rank only, not sales velocity or revenue.',
     mtreSynthesisTitle: 'Market Intelligence Synthesis & Opportunity Matrix',
     detectedMarketLeader: 'Top Market Signal Velocity Leader',
     linkedMarketSignal: 'Linked Market Signal',
@@ -105,7 +105,7 @@ export const translations = {
 
     // Topic Recommendations (Gate A)
     topicTitle: 'Recommended Digital Product Niches (Gate A)',
-    topicSubtitle: 'Heuristic opportunity scoring across 8 market criteria (Demand, Urgency, Competition, Differentiation)',
+    topicSubtitle: 'Current chart evidence informs original niche concepts; unmeasured criteria remain unscored',
     runMarketDiscoveryCta: 'Run Multi-Platform AI Market Analysis',
     opportunityScoreLabel: 'Opportunity Score',
     scoreBreakdownLabel: 'Score Breakdown',
@@ -119,7 +119,7 @@ export const translations = {
     bundleTier: 'Bundle',
     differentiationLabel: 'Differentiation Angle',
     companionAssetsLabel: 'Companion Toolkits & Deliverables',
-    selectAndPropagateBtn: 'Select Topic & Auto-Generate Downstream Strategy',
+    selectAndPropagateBtn: 'Select Niche & Initialize a New Research Plan',
     topicSelectedBadge: 'Selected Topic',
     approveGateACta: 'Approve Gate A & Proceed to 13 Fields →',
     gateAApprovedBadge: 'Gate A Approved',
@@ -153,7 +153,7 @@ export const translations = {
 
     // Reference Library (ARCE)
     refTitle: 'Automated Reference & Citation Engine (ARCE)',
-    refSubtitle: '20 verified 7-part knowledge cards mapped to structural manuscript pillars',
+    refSubtitle: 'Topic source records with explicit claims, supporting excerpts and chapter mappings',
     verifiedCardsCount: 'Verified Knowledge Cards',
     sevenPartStandard: 'Mandatory 7-Part Structure: Title, Description, Outline, Framework, Summary, Notes, Guidelines',
     searchRefPlaceholder: 'Search references by pillar, topic, or keyword...',
@@ -301,7 +301,7 @@ export const translations = {
     prioritizeSignalBtn: '以此市場信號為 #1 優先推薦',
     prioritizedSignalBadge: '來自市場信號優先對應',
     synchronizedFromMtreBadge: '已同步自市場情報引擎 (MTRE)',
-    syncStatsSummary: '即時同步啟動中：各題材商機總分與「綜合最佳」乃即時依據所觀測之評價成長率、排名層級與定價強度動態演算。',
+    syncStatsSummary: '已連結排行榜快照：請審查原站、排行範圍與擷取時間。評分僅依觀測排名，不代表銷售速度或營收。',
     mtreSynthesisTitle: '市場情報綜合判讀與商機矩陣',
     detectedMarketLeader: '市場信號增長冠軍',
     linkedMarketSignal: '對應市場觀測信號',
@@ -309,7 +309,7 @@ export const translations = {
 
     // Topic Recommendations (Gate A)
     topicTitle: 'AI 推薦數位產品題材與商機評分 (Gate A)',
-    topicSubtitle: '依據 8 項目標市場評估準則（需求強度、急迫性、競爭可切入度、差異化等）嚴謹啟發式評分',
+    topicSubtitle: '根據目前排行榜證據提出原創題材；尚未觀測的指標不予評分',
     runMarketDiscoveryCta: '自動搜尋並統計暢銷題材方向',
     opportunityScoreLabel: '商機總分',
     scoreBreakdownLabel: '評分細項拆解',
@@ -323,7 +323,7 @@ export const translations = {
     bundleTier: '套件旗艦價',
     differentiationLabel: '獨特切入差異化',
     companionAssetsLabel: '規劃伴隨工具與交付物',
-    selectAndPropagateBtn: '選定此題材並自動連貫生成後續策略',
+    selectAndPropagateBtn: '選定題材並初始化新的研究計畫',
     topicSelectedBadge: '已選定題材',
     approveGateACta: '核准選定題材並進入 13 欄位 (Gate A) →',
     gateAApprovedBadge: 'Gate A 題材已核准',
@@ -357,7 +357,7 @@ export const translations = {
 
     // Reference Library (ARCE)
     refTitle: '自動文獻庫與七部分知識卡 (ARCE)',
-    refSubtitle: '20 篇高公信力研究卡片，全數對應核心章節支柱與實作工具',
+    refSubtitle: '具有論點、支持摘錄及章節配置的主題文獻紀錄',
     verifiedCardsCount: '已驗證文獻卡片',
     sevenPartStandard: '嚴格 7 部分標準：標題、簡介、大綱、實作框架、文獻摘要、編輯指引、品牌規範',
     searchRefPlaceholder: '依支柱、標題或關鍵字搜尋文獻...',

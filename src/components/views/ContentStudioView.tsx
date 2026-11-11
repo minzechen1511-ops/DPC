@@ -1,3 +1,4 @@
+import { countManuscriptWords } from '../../utils/textMetrics.ts';
 import React, { useState, useRef } from 'react';
 import {
   Feather,
@@ -15,11 +16,12 @@ import {
   Maximize2,
   FileCheck,
 } from 'lucide-react';
-import { DigitalProductProject, ChapterOutlineItem } from '../../types/project.ts';
+import { DigitalProductProject, ChapterOutlineItem, ChapterIllustration } from '../../types/project.ts';
 import { generateTextWithAi } from '../../services/aiService.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface ContentStudioViewProps {
+  onUpdateIllustrations: (chapterId: string, illustrations: ChapterIllustration[]) => void;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onUpdateChapter: (chapterId: string, content: string, wordCount: number) => void;
@@ -29,6 +31,7 @@ interface ContentStudioViewProps {
 }
 
 export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
+  onUpdateIllustrations,
   project,
   setActiveView,
   onUpdateChapter,
@@ -44,6 +47,8 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   const [showBibleModal, setShowBibleModal] = useState<boolean>(false);
 
   const currentChapter = chapters.find((c) => c.id === selectedChapterId) || chapters[0];
+  const [imageDraft, setImageDraft] = useState({ dataUri: '', alt: '', caption: '', paragraphAnchor: '', credit: '', license: '', referenceId: '' });
+  const [imageError, setImageError] = useState('');
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [contentDraft, setContentDraft] = useState<string>(currentChapter?.contentMarkdown || '');
 
@@ -55,7 +60,7 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   };
 
   const handleSaveDraft = () => {
-    const words = contentDraft.trim().split(/\s+/).filter(Boolean).length;
+    const words = countManuscriptWords(contentDraft);
     onUpdateChapter(selectedChapterId, contentDraft, words);
   };
 
@@ -98,7 +103,7 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
 
       if (res && res.content) {
         setContentDraft(res.content);
-        const words = res.content.trim().split(/\s+/).filter(Boolean).length;
+        const words = countManuscriptWords(res.content);
         onUpdateChapter(selectedChapterId, res.content, words);
       }
     } catch (err: any) {
@@ -109,7 +114,7 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
     }
   };
 
-  const wordCount = contentDraft.trim().split(/\s+/).filter(Boolean).length;
+  const wordCount = countManuscriptWords(contentDraft);
   const currentChapterIndex = chapters.findIndex((c) => c.id === selectedChapterId);
 
   return (
@@ -235,6 +240,27 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
                 </div>
               </article>)}</div>
               {!referenceLibrary.cards.some(card => currentChapter?.mappedReferenceIds.includes(card.id)) && <p className="text-xs text-slate-600">{lang === 'en' ? 'Map sources to this chapter in Outline & Structure first.' : '請先在章節結構中為本章配置來源。'}</p>}
+            </details>
+            <details className="p-4 bg-white border border-slate-200 rounded-lg">
+              <summary className="text-sm font-semibold cursor-pointer">{lang === 'en' ? 'Add an original or licensed supporting picture' : '新增原創或授權的支持性圖片'}</summary>
+              <p className="text-xs text-slate-600 my-3">Use an original or licensed image that explains this chapter. The export embeds it beside the matching paragraph with credit, rights and a source citation.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <label>Picture (PNG, JPEG, WebP, up to 4 MB)<input type="file" accept="image/png,image/jpeg,image/webp" className="block w-full mt-1" onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  if (file.size > 4 * 1024 * 1024 || !['image/png','image/jpeg','image/webp'].includes(file.type)) { setImageError('Choose a PNG, JPEG or WebP image up to 4 MB.'); return; }
+                  const dataUri = await new Promise<string>((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); });
+                  setImageDraft(prev => ({...prev,dataUri})); setImageError('');
+                }} /></label>
+                {(['alt','caption','paragraphAnchor','credit','license'] as const).map(key => <label key={key}>{({alt:'Alternative text',caption:'Figure caption',paragraphAnchor:'Exact text from the related paragraph',credit:'Creator / original source credit',license:'License or ownership and permission'})[key]}<input className="block w-full border p-2 rounded mt-1" value={imageDraft[key]} onChange={e => setImageDraft({...imageDraft,[key]:e.target.value})} /></label>)}
+                <label>Supporting reference<select className="block w-full border p-2 rounded mt-1" value={imageDraft.referenceId} onChange={e => setImageDraft({...imageDraft,referenceId:e.target.value})}><option value="">Choose source</option>{referenceLibrary.cards.filter(card => currentChapter?.mappedReferenceIds.includes(card.id)).map(card => <option key={card.id} value={card.id}>{card.id}: {card.sourceTitle}</option>)}</select></label>
+                <button className="px-3 py-2 rounded bg-indigo-700 text-white" onClick={() => {
+                  if (!currentChapter || Object.values(imageDraft).some(value => !value.trim()) || !contentDraft.includes(imageDraft.paragraphAnchor)) { setImageError('Complete all image fields and use exact paragraph text from this chapter.'); return; }
+                  onUpdateIllustrations(currentChapter.id,[...(currentChapter.illustrations || []),{...imageDraft,id:`FIG-${Date.now()}`,sourceReferenceIds:[imageDraft.referenceId]}]);
+                  setImageError(''); setImageDraft({ dataUri:'',alt:'',caption:'',paragraphAnchor:'',credit:'',license:'',referenceId:'' });
+                }}>Add supporting picture</button>
+              </div>
+              {imageError && <p role="alert" className="text-sm text-red-800 mt-3">{imageError}</p>}
+              <ul className="mt-3 space-y-2 text-sm">{currentChapter?.illustrations?.map(image => <li key={image.id} className="flex gap-3 justify-between"><span>{image.caption}</span><button className="text-red-700 underline" onClick={() => onUpdateIllustrations(currentChapter.id,currentChapter.illustrations!.filter(item => item.id !== image.id))}>Remove picture</button></li>)}</ul>
             </details>
             <textarea
               ref={editorRef}

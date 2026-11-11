@@ -177,26 +177,7 @@ test('analyzeReferenceLibrary correctly computes verified counts', () => {
   assert.equal(analysis.isTargetReached, false);
 });
 
-test('deriveSynchronizedCandidates dynamically evaluates market signals instead of static default', () => {
-  const candidates = deriveSynchronizedCandidates(SAMPLE_OBSERVATIONS);
-  assert.equal(candidates.length, 5);
-
-  const bestOverall = candidates.find((c) => c.badge === 'BEST_OVERALL');
-  assert.ok(bestOverall, 'Should have a BEST_OVERALL candidate');
-
-  // Verify that BEST_OVERALL is determined by market evidence (e.g. Burnout Recovery or Solo Creator Notion OS)
-  // and is NOT forced to TOPIC-01 (28-Day Budget Family Meal Plan)
-  assert.notEqual(bestOverall.id, 'TOPIC-01', 'Default sample meal plan should not be forced as BEST_OVERALL');
+test('sample and empty marketplace observations never produce live recommendations', () => {
+  assert.deepEqual(deriveSynchronizedCandidates(SAMPLE_OBSERVATIONS), []);
+  assert.deepEqual(deriveSynchronizedCandidates([]), []);
 });
-
-test('deriveSynchronizedCandidates prioritizes specific market observation when requested', () => {
-  // If user explicitly prioritizes OBS-02 (The Solo Founder OS on Gumroad)
-  const candidates = deriveSynchronizedCandidates(SAMPLE_OBSERVATIONS, {
-    prioritizedObservationId: 'OBS-02',
-  });
-  const bestOverall = candidates.find((c) => c.badge === 'BEST_OVERALL');
-  assert.ok(bestOverall);
-  assert.equal(bestOverall.id, 'TOPIC-02');
-  assert.ok(bestOverall.recommendationReason.includes('DIRECTLY SYNCHRONIZED'));
-});
-

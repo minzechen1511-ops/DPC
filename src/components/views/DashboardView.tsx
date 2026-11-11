@@ -1,3 +1,4 @@
+import { gateIssues } from '../../utils/gatePolicy.ts';
 import React from 'react';
 import {
   Sparkles,
@@ -43,7 +44,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const chaptersDone = (outline || []).filter((c) => c.isCompleted).length;
   const totalChapters = (outline || []).length;
-  const verifiedRefs = referenceLibrary?.verifiedCount || (referenceLibrary?.cards || []).length || 0;
+  const verifiedRefs = (referenceLibrary?.cards || []).filter(card => card.status === 'VERIFIED_FULL_TEXT').length;
   const targetRefs = referenceLibrary?.targetCount || 20;
 
   return (
@@ -154,14 +155,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div
             onClick={() => setActiveView('topic_selection')}
             className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-              workflow?.gates?.gateA?.isApproved
+              (workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length)
                 ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
                 : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold text-slate-800">{t.gateA}</span>
-              {workflow?.gates?.gateA?.isApproved ? (
+              {(workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length) ? (
                 <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {t.approved}
                 </span>
@@ -179,14 +180,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div
             onClick={() => setActiveView('product_charter')}
             className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-              workflow?.gates?.gateB?.isApproved
+              (workflow?.gates?.gateB?.isApproved && !gateIssues(project, 'gateB').length)
                 ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
                 : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold text-slate-800">{t.gateB}</span>
-              {workflow?.gates?.gateB?.isApproved ? (
+              {(workflow?.gates?.gateB?.isApproved && !gateIssues(project, 'gateB').length) ? (
                 <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {t.approved}
                 </span>
@@ -203,14 +204,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div
             onClick={() => setActiveView('quality_assurance')}
             className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-              workflow?.gates?.gateC?.isApproved
+              (workflow?.gates?.gateC?.isApproved && !gateIssues(project, 'gateC').length)
                 ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
                 : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold text-slate-800">{t.gateC}</span>
-              {workflow?.gates?.gateC?.isApproved ? (
+              {(workflow?.gates?.gateC?.isApproved && !gateIssues(project, 'gateC').length) ? (
                 <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {lang === 'en' ? 'Ready' : '已就緒'}
                 </span>
@@ -221,7 +222,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
             </div>
             <p className="text-xs text-slate-600 line-clamp-1">
-              {lang === 'en' ? 'QA Score' : '品質評分'}: {qualityReport?.overallScore || 0}/100 · {lang === 'en' ? 'Unresolved' : '待修復'}: {(qualityReport?.issues || []).filter((i) => !i.isResolved).length}
+              {lang === 'en' ? 'Publication requirements to review' : '待審查出版要求'}: {gateIssues(project, 'gateC').length}
             </p>
           </div>
         </div>

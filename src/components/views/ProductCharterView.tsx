@@ -1,3 +1,4 @@
+import { gateIssues } from '../../utils/gatePolicy.ts';
 import React from 'react';
 import { Compass, CheckCircle2, ShieldCheck, Award, ArrowRight, AlertTriangle } from 'lucide-react';
 import { DigitalProductProject } from '../../types/project.ts';
@@ -17,10 +18,12 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
   lang = 'en',
 }) => {
   const t = translations[lang];
+  const blockers = gateIssues(project, 'gateB');
   const { charter, workflow } = project;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {blockers.length > 0 && <details open className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-950"><summary className="font-semibold cursor-pointer">{lang === 'en' ? 'Review requirements before approval' : '核准前請完成審查要求'}</summary><ul className="list-disc pl-5 mt-2 space-y-1">{blockers.map(item => <li key={item}>{item}</li>)}</ul></details>}
       {/* Top Banner */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -33,7 +36,10 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
         </div>
 
         <button
+          disabled={blockers.length > 0}
+          title={blockers.join(" ")}
           onClick={() => {
+            if (blockers.length) return;
             onApproveGateB();
             setActiveView('outline_builder');
           }}

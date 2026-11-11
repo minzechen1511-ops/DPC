@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Download, FileText, Code, CheckCircle2, ShieldCheck, Layers, FileCode, Check, Archive, Loader2 } from 'lucide-react';
-import JSZip from 'jszip';
+import { buildLearningBundle } from '../../utils/learningBundle.ts';
+import { gateIssues } from '../../utils/gatePolicy.ts';
 import { DigitalProductProject } from '../../types/project.ts';
 import {
   compileManuscriptMarkdown,
@@ -30,6 +31,8 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
   const [showPreview, setShowPreview] = useState(false);
   const [exportError, setExportError] = useState('');
   const evidence = useMemo(() => project.outline.map(chapter => ({ chapter, audit: auditChapter(chapter, project.referenceLibrary.cards) })), [project]);
+  const publicationIssues = gateIssues(project, 'gateC');
+  const buyerReady = !publicationIssues.length && project.workflow.gates.gateC.isApproved;
   const reviewCount = evidence.reduce((sum, item) => sum + item.audit.needsReview, 0);
   const previewHtml = useMemo(() => showPreview ? compileStyledHtml(project) : '', [showPreview, project]);
 
@@ -130,45 +133,8 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
     setExportError('');
     setIsZipping(true);
     try {
-      const zip = new JSZip();
-
-      // Add README.txt
-      const readmeText = `========================================================================
-Digital Product Studio — COMPLETE ASSET PACKAGE
-Project Name: ${project.intake?.projectName || project.marketResearch?.topicCandidates?.[0]?.title || 'Digital Product Package'}
-Target Audience: ${project.intake?.targetAudience || 'General Audience'}
-Generated At: ${new Date().toISOString()}
-Standard: V4.0 Full Autopilot Architecture
-========================================================================
-
-CONTENTS OF THIS PACKAGE:
-1. manuscript-${project.projectId}.md
-   - Complete manuscript with all structured chapters, chapter deliverables tables, and key takeaway bullet points.
-   - 100% English formatting.
-
-2. reference-library-${project.projectId}.md
-   - 20 verified 7-part reference cards (ARCE standard).
-
-3. companion-toolkits-${project.projectId}.md
-   - Fillable companion toolkits, calculation spreadsheets, checklists, and templates.
-
-4. sales-assets-${project.projectId}.md
-   - 3-tier pricing ladder, sales page headlines, bullet points, FAQ, and 30-day launch roadmap.
-
-5. ebook-${project.projectId}.html
-   - Publication-grade styled e-book HTML. Open in Chrome or Safari and select File -> Print -> Save as PDF.
-
-6. project-backup-${project.projectId}.json
-   - Full lossless structured schema backup.
-
-For customer support or updates, refer to the author charter in the project metadata.
-`;
-      zip.file('README.txt', readmeText);
-
-      // Add each export file into zip
-      for (const item of exportFiles) {
-        zip.file(item.filename, item.getContent());
-      }
+      const currentBuyerReady = !gateIssues(project, 'gateC').length && project.workflow.gates.gateC.isApproved;
+      const { zip } = await buildLearningBundle(project);
 
       // Generate blob
       const zipBlob = await zip.generateAsync({
@@ -178,7 +144,7 @@ For customer support or updates, refer to the author charter in the project meta
       });
 
       // Trigger download
-      const zipFilename = `${(project.intake?.projectName || 'digital-product').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-package.zip`;
+      const zipFilename = `${(project.intake?.projectName || 'digital-product').toLowerCase().replace(/[^a-z0-9]+/g, '-')}${currentBuyerReady ? '-learning-bundle' : '-author-review'}.zip`;
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
@@ -241,7 +207,7 @@ For customer support or updates, refer to the author charter in the project meta
                 ? (lang === 'en' ? 'Archiving Package (.ZIP)...' : '正在壓縮打包 (.ZIP)...')
                 : zipSuccess
                 ? (lang === 'en' ? 'ZIP Package Downloaded!' : 'ZIP 壓縮包已下載！')
-                : (lang === 'en' ? 'Download All as ZIP Archive (.zip)' : '一鍵下載全部檔案 (.ZIP 壓縮包)')}
+                : (lang === 'en' ? (buyerReady ? 'Download Buyer Learning Bundle (.zip)' : 'Download Author Review Bundle (.zip)') : (buyerReady ? '下載買家學習套件 (.zip)' : '下載作者審查套件 (.zip)'))}
             </span>
           </button>
 
@@ -256,6 +222,12 @@ For customer support or updates, refer to the author charter in the project meta
         </div>
       </div>
 
+      <section className="p-5 bg-white border border-slate-200 rounded-lg space-y-3">
+        <h2 className="text-lg font-semibold">{lang === 'en' ? 'An organized learning collection' : '結構化學習套件'}</h2>
+        <p className="text-sm text-slate-600">{lang === 'en' ? 'The ZIP opens with START-HERE.html and includes the complete illustrated book, individual chapter readers, chapter practice worksheets, progress CSV, authored companions, topic reading room, reference and marketplace evidence, project backup, and a SHA-256 file manifest.' : 'ZIP 包含 START-HERE.html 學習入口、圖解專書、各章閱讀器、練習工作表、進度 CSV、伴隨工具、主題文獻閱讀室、市場證據、專案備份與 SHA-256 檔案清單。'}</p>
+        <p className="text-sm font-semibold text-amber-900">{buyerReady ? 'Gates A, B and C currently pass.' : 'Author review edition: buyer delivery remains blocked until all gates and evidence checks pass.'}</p>
+        {!buyerReady && <details className="text-sm text-slate-700"><summary className="cursor-pointer">Review publication requirements ({publicationIssues.length})</summary><ul className="mt-2 list-disc pl-5">{publicationIssues.map(item => <li key={item}>{item}</li>)}{!project.workflow.gates.gateC.isApproved && <li>Approve Gate C after resolving review requirements.</li>}</ul></details>}
+      </section>
       {exportError && <p role="alert" className="p-4 bg-red-50 text-red-800 rounded-lg">{exportError}</p>}
       <section className="export-review space-y-4" aria-label={lang === 'en' ? 'E-book evidence review' : '電子書證據審查'}>
         <div className="flex flex-wrap items-start justify-between gap-4">

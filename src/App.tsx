@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DigitalProductProject, StageId } from './types/project.ts';
 import { DEMO_PROJECT, BLANK_PROJECT } from './data/demoProject.ts';
+import { approveGate, revokeApprovals } from './utils/gatePolicy.ts';
 import { Header } from './components/Header.tsx';
 import { Sidebar, NavigationItem } from './components/Sidebar.tsx';
 import { calculateOverallProgress } from './utils/workflowEngine.ts';
@@ -68,7 +69,7 @@ export default function App() {
 
   // Switch to the master reference sample
   const handleLoadDemoProject = () => {
-    setProject(DEMO_PROJECT);
+    setProject(revokeApprovals({ ...structuredClone(DEMO_PROJECT), marketResearch: { ...DEMO_PROJECT.marketResearch, platformEvidence: DEMO_PROJECT.marketResearch.platformEvidence.map(obs => ({ ...obs, isSample: true })) } }, 'gateA'));
   };
 
   // Reset to clean blank project
@@ -81,166 +82,47 @@ export default function App() {
     });
   };
 
-  // Automated Market Discovery & Dynamic Synchronization for Gate A
-  const handleRunMarketDiscovery = (options?: MarketSyncOptions) => {
-    const { observations, candidates } = runAutomatedMarketDiscovery(options);
-    setProject((prev) => ({
-      ...prev,
-      marketResearch: {
-        ...prev.marketResearch,
-        platformEvidence: observations,
-        topicCandidates: candidates,
-        selectedTopicId: candidates[0]?.id || null,
-      },
-      workflow: {
-        ...prev.workflow,
-        stageStatuses: {
-          ...prev.workflow.stageStatuses,
-          market_research: 'COMPLETED',
-          topic_selection: 'READY',
-        },
-      },
-    }));
+  const [researchBusy, setResearchBusy] = useState(false);
+  const [researchError, setResearchError] = useState('');
+  const handleRunMarketDiscovery = async (options?: MarketSyncOptions) => {
+    if (researchBusy) return;
+    setResearchBusy(true); setResearchError('');
+    try {
+      const result = await runAutomatedMarketDiscovery(options);
+      setProject(prev => revokeApprovals({ ...prev, marketResearch: { ...prev.marketResearch, platformEvidence: result.observations, topicCandidates: result.candidates, selectedTopicId: result.candidates.some(c => c.id === prev.marketResearch.selectedTopicId) ? prev.marketResearch.selectedTopicId : null, sourceReports: result.sources, researchDate: result.checkedAt, confidence: result.observations.length ? 'MEDIUM' : 'LIMITED' }, workflow: { ...prev.workflow, stageStatuses: { ...prev.workflow.stageStatuses, market_research: result.observations.length ? 'COMPLETED' : 'BLOCKED', topic_selection: 'NEEDS_REVIEW' } } }, 'gateA'));
+    } catch (error) { setResearchError(error instanceof Error ? error.message : 'Research failed.'); }
+    finally { setResearchBusy(false); }
   };
-
-  // Synchronize Market Intelligence Stage signals into Gate A Top Recommendations
   const handleSynchronizeMarketToGateA = (options?: MarketSyncOptions) => {
-    const observations =
-      project.marketResearch.platformEvidence.length > 0
-        ? project.marketResearch.platformEvidence
-        : runAutomatedMarketDiscovery().observations;
-    const candidates = deriveSynchronizedCandidates(observations, options);
-    const topWinnerId = candidates[0]?.id || 'TOPIC-03';
-
-    setProject((prev) => ({
-      ...prev,
-      marketResearch: {
-        ...prev.marketResearch,
-        platformEvidence: observations,
-        topicCandidates: candidates,
-        selectedTopicId: topWinnerId,
-      },
-      workflow: {
-        ...prev.workflow,
-        stageStatuses: {
-          ...prev.workflow.stageStatuses,
-          market_research: 'COMPLETED',
-          topic_selection: 'READY',
-        },
-      },
-    }));
+    setProject(prev => revokeApprovals({ ...prev, marketResearch: { ...prev.marketResearch, topicCandidates: deriveSynchronizedCandidates(prev.marketResearch.platformEvidence, options) } }, 'gateA'));
     setActiveView('topic_selection');
   };
-
-  // Handle Gate A Topic Selection with full downstream cascading continuity
-  const handleSelectTopic = (topicId: string) => {
-    const updated = propagateTopicToDownstream(project, topicId, lang);
-    setProject(updated);
-  };
-
-  // Handle Autopilot Trigger
-  const handleRunAutopilot = () => {
+  const handleSelectTopic = (topicId: string) => setProject(prev => propagateTopicToDownstream(prev, topicId, lang));
+  const handleRunAutopilot = async () => {
     setIsAutopilotRunning(true);
-    // If on a blank project, first trigger market discovery and topic propagation
-    if (project.marketResearch.topicCandidates.length === 0) {
-      const { observations, candidates } = runAutomatedMarketDiscovery();
-      const firstId = candidates[0].id;
-      const initialWithResearch: DigitalProductProject = {
-        ...project,
-        marketResearch: {
-          ...project.marketResearch,
-          platformEvidence: observations,
-          topicCandidates: candidates,
-          selectedTopicId: firstId,
-        },
-      };
-      const propagated = propagateTopicToDownstream(initialWithResearch, firstId, lang);
-      setProject(propagated);
-    }
-
-    setTimeout(() => {
-      setIsAutopilotRunning(false);
-      if (!project.workflow.gates.gateA.isApproved) {
-        setActiveView('topic_selection');
-      } else if (!project.workflow.gates.gateB.isApproved) {
-        setActiveView('product_charter');
-      } else if (!project.workflow.gates.gateC.isApproved) {
-        setActiveView('quality_assurance');
-      } else {
-        setActiveView('export_center');
-      }
-    }, 1200);
+    try {
+      if (!project.marketResearch.topicCandidates.length) await handleRunMarketDiscovery();
+      setActiveView(!project.workflow.gates.gateA.isApproved ? 'topic_selection' : !project.workflow.gates.gateB.isApproved ? 'product_charter' : !project.workflow.gates.gateC.isApproved ? 'quality_assurance' : 'export_center');
+    } finally { setIsAutopilotRunning(false); }
   };
-
-  const handleApproveGateA = () => {
-    // If no candidate is selected yet, make sure one is populated
-    if (project.marketResearch.topicCandidates.length === 0) {
-      handleRunMarketDiscovery();
-    }
-    const targetTopicId = project.marketResearch.selectedTopicId || 'TOPIC-01';
-    const updated = propagateTopicToDownstream(project, targetTopicId, lang);
-    setProject(updated);
-  };
-
-  const handleApproveGateB = () => {
-    setProject((prev) => ({
-      ...prev,
-      workflow: {
-        ...prev.workflow,
-        stageStatuses: {
-          ...prev.workflow.stageStatuses,
-          product_charter: 'COMPLETED',
-          outline_builder: 'COMPLETED',
-        },
-        gates: {
-          ...prev.workflow.gates,
-          gateB: {
-            ...prev.workflow.gates.gateB,
-            isApproved: true,
-            approvedAt: new Date().toISOString(),
-          },
-        },
-      },
-      charter: {
-        ...prev.charter,
-        isApproved: true,
-        approvedAt: new Date().toISOString(),
-      },
-    }));
-  };
-
-  const handleApproveGateC = () => {
-    setProject((prev) => ({
-      ...prev,
-      workflow: {
-        ...prev.workflow,
-        stageStatuses: {
-          ...prev.workflow.stageStatuses,
-          quality_assurance: 'COMPLETED',
-          export_center: 'READY',
-        },
-        gates: {
-          ...prev.workflow.gates,
-          gateC: {
-            ...prev.workflow.gates.gateC,
-            isApproved: true,
-            approvedAt: new Date().toISOString(),
-          },
-        },
-      },
-    }));
-  };
+  const handleApproveGateA = () => setProject(prev => approveGate(prev, 'gateA'));
+  const handleApproveGateB = () => setProject(prev => approveGate(prev, 'gateB'));
+  const handleApproveGateC = () => setProject(prev => approveGate(prev, 'gateC'));
 
   const handleUpdateIntake = (updatedIntake: any) => {
     setProject((prev) => ({
       ...prev,
       intake: updatedIntake,
+      charter: { ...prev.charter, isApproved: false, approvedAt: undefined },
+      workflow: revokeApprovals(prev, 'gateB').workflow,
     }));
   };
 
   const handleSelectUVZOption = (optionId: string) => {
     setProject((prev) => ({
       ...prev,
+      workflow: revokeApprovals(prev, 'gateB').workflow,
+      charter: { ...prev.charter, isApproved: false },
       uvz: {
         ...prev.uvz,
         selectedOptionId: optionId,
@@ -252,6 +134,7 @@ export default function App() {
     const selected = project.transformationMap.titleOptions.find((t) => t.id === titleId);
     setProject((prev) => ({
       ...prev,
+      workflow: revokeApprovals(prev, 'gateB').workflow,
       transformationMap: {
         ...prev.transformationMap,
         selectedTitleId: titleId,
@@ -261,6 +144,8 @@ export default function App() {
             ...prev.charter,
             productTitle: selected.title,
             subtitle: selected.subtitle,
+            isApproved: false,
+            approvedAt: undefined,
           }
         : prev.charter,
     }));
@@ -269,6 +154,7 @@ export default function App() {
   const handleUpdateChapter = (chapterId: string, content: string, wordCount: number) => {
     setProject((prev) => ({
       ...prev,
+      workflow: { ...revokeApprovals(prev, 'gateC').workflow, stageStatuses: { ...revokeApprovals(prev, 'gateC').workflow.stageStatuses, content_studio: prev.outline.every(ch => ch.id === chapterId || ch.isCompleted) ? 'COMPLETED' : 'PARTIAL' } },
       outline: prev.outline.map((ch) =>
         ch.id === chapterId
           ? {
@@ -363,6 +249,8 @@ export default function App() {
           <MarketIntelligenceView
             project={project}
             setActiveView={setActiveView}
+            researchBusy={researchBusy}
+            researchError={researchError}
             onRefreshResearch={handleRunMarketDiscovery}
             onSynchronizeToGateA={handleSynchronizeMarketToGateA}
             lang={lang}
@@ -375,6 +263,8 @@ export default function App() {
             setActiveView={setActiveView}
             onSelectTopic={handleSelectTopic}
             onApproveGateA={handleApproveGateA}
+            researchBusy={researchBusy}
+            researchError={researchError}
             onRunMarketDiscovery={handleRunMarketDiscovery}
             lang={lang}
           />
@@ -409,6 +299,7 @@ export default function App() {
       case 'reference_library':
         return (
           <ReferenceLibraryView
+          onAddSource={(source, chapterIds) => setProject(prev => revokeApprovals({ ...prev, referenceLibrary: { ...prev.referenceLibrary, cards: [...prev.referenceLibrary.cards, source], verifiedCount: prev.referenceLibrary.cards.filter(c => c.status === 'VERIFIED_FULL_TEXT').length + Number(source.status === 'VERIFIED_FULL_TEXT') }, outline: prev.outline.map(ch => chapterIds.includes(ch.id) ? { ...ch, mappedReferenceIds: [...new Set([...ch.mappedReferenceIds, source.id])] } : ch) }, 'gateB'))}
             project={project}
             setActiveView={setActiveView}
             lang={lang}
@@ -428,13 +319,14 @@ export default function App() {
           <OutlineBuilderView
             project={project}
             setActiveView={setActiveView}
-            onUpdateOutline={(out) => setProject((prev) => ({ ...prev, outline: out }))}
+            onUpdateOutline={(out) => setProject((prev) => revokeApprovals({ ...prev, outline: out }, 'gateC'))}
             lang={lang}
           />
         );
       case 'content_studio':
         return (
           <ContentStudioView
+            onUpdateIllustrations={(chapterId, illustrations) => setProject(prev => revokeApprovals({ ...prev, outline: prev.outline.map(ch => ch.id === chapterId ? { ...ch, illustrations } : ch) }, 'gateC'))}
             project={project}
             setActiveView={setActiveView}
             onUpdateChapter={handleUpdateChapter}
@@ -446,6 +338,7 @@ export default function App() {
       case 'workbook_studio':
         return (
           <WorkbookStudioView
+            onSaveResource={resource => setProject(prev => revokeApprovals({ ...prev, resources: [...prev.resources.filter(item => item.id !== resource.id), resource] }, 'gateC'))}
             project={project}
             setActiveView={setActiveView}
             lang={lang}
@@ -488,7 +381,7 @@ export default function App() {
         return (
           <MyProjectsView
             currentProject={project}
-            onLoadProject={(proj) => setProject(proj)}
+            onLoadProject={(proj) => setProject(revokeApprovals(proj, 'gateA'))}
             setActiveView={setActiveView}
             lang={lang}
           />

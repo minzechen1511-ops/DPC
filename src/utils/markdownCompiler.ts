@@ -63,10 +63,10 @@ export function compileManuscriptMarkdown(project: DigitalProductProject): strin
 
 export function compileReferenceLibraryMarkdown(project: DigitalProductProject): string {
   const { referenceLibrary } = project;
-  let md = `# Verified Reference Knowledge Library (ARCE)\n\n`;
+  let md = `# Source Reference Library (ARCE)\n\n`;
   md += `**Total Documented Sources:** ${referenceLibrary.cards.length} references\n`;
   md += `**Full-Text Verified Sources:** ${referenceLibrary.verifiedCount} references\n\n`;
-  md += `This document compiles peer-reviewed, governmental, and empirical research cards adhering to the V4.0 ARCE 7-part knowledge standard.\n\n`;
+  md += `This document compiles author-supplied research records. Inspect each source, verification status and supporting excerpt; a saved record is not independent validation.\n\n`;
   md += `---\n\n`;
 
   for (const card of referenceLibrary.cards) {

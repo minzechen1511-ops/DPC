@@ -5,12 +5,14 @@ import { compileReferenceLibraryMarkdown } from '../../utils/markdownCompiler.ts
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface ReferenceLibraryViewProps {
+  onAddSource: (source: ReferenceCard, chapterIds: string[]) => void;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   lang?: Language;
 }
 
 export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
+  onAddSource,
   project,
   setActiveView,
   lang = 'en',
@@ -23,6 +25,16 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
   const [selectedPillar, setSelectedPillar] = useState('ALL');
   const [expandedCardId, setExpandedCardId] = useState<string | null>(cards[0]?.id || null);
 
+  const [source, setSource] = useState({ title: '', publisher: '', url: '', summary: '', claim: '', quote: '', locator: '', confirmed: false });
+  const [sourceChapters, setSourceChapters] = useState<string[]>([]);
+  const [sourceMessage, setSourceMessage] = useState('');
+  const addSource = (event: React.FormEvent) => {
+    event.preventDefault();
+    const id = `REF-${Date.now()}`;
+    const card: ReferenceCard = { id, title: source.title, sourceTitle: source.title, publisherOrOrg: source.publisher, sourceURL: source.url, retrievedAt: new Date().toISOString(), status: source.confirmed ? 'VERIFIED_FULL_TEXT' : 'NEEDS_REVIEW', qualityScore: 0, description: source.summary, researchSummary: source.summary, contentOutline: [source.claim], supportedClaims: [source.claim], verificationQuote: source.quote, verificationLocator: source.locator, verifiedAt: source.confirmed ? new Date().toISOString() : undefined, practicalFramework: { name: 'Editorial application', editorialOrigin: 'Author synthesis; review against the quoted source.', actionSteps: [] }, editorialNotes: { targetChapters: sourceChapters, exerciseSuggestions: [], worksheetIntegration: '', verificationNotes: `${source.locator}: ${source.quote}` }, brandGuidelines: { toneApplication: 'Accurate attribution and qualified claims', visualDirection: 'Cited tables and original diagrams', audienceFraming: project.charter.targetAudience }, pillars: [], rightsNotes: 'Link and brief attributed quotation only; source copyright remains with its owner.' };
+    onAddSource(card, sourceChapters); setSourceMessage(`Saved ${id}; downstream approvals require review.`);
+    setSource({ title: '', publisher: '', url: '', summary: '', claim: '', quote: '', locator: '', confirmed: false });
+  };
   const pillars = ['ALL', ...Object.keys(referenceLibrary?.coveragePillars || {})];
 
   const filteredCards = cards.filter((c) => {
@@ -60,6 +72,16 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      <details className="p-5 bg-white border border-slate-200 rounded-lg">
+        <summary className="font-semibold cursor-pointer">{lang === 'en' ? 'Add a researched source and map it to chapters' : '新增已研究的來源並配置章節'}</summary>
+        <form onSubmit={addSource} className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
+          {([['title','Source title'],['publisher','Author / publisher'],['url','Original source URL'],['locator','Page / section / paragraph locator']] as const).map(([key,label]) => <label key={key} className="space-y-1">{label}<input required type={key === 'url' ? 'url' : 'text'} pattern={key === 'url' ? 'https?://.*' : undefined} value={source[key]} onChange={e => setSource({...source,[key]:e.target.value})} className="block w-full border p-2 rounded" /></label>)}
+          {([['summary','Substantive research summary'],['claim','Specific supported claim'],['quote','Exact supporting excerpt']] as const).map(([key,label]) => <label key={key} className="space-y-1 md:col-span-2">{label}<textarea required minLength={key === 'summary' ? 50 : 20} rows={3} value={source[key]} onChange={e => setSource({...source,[key]:e.target.value})} className="block w-full border p-2 rounded" /></label>)}
+          <fieldset className="md:col-span-2 flex flex-wrap gap-3"><legend className="mb-2">Map to relevant chapters</legend>{project.outline.map(ch => <label key={ch.id} className="flex gap-2 items-center"><input type="checkbox" checked={sourceChapters.includes(ch.id)} onChange={e => setSourceChapters(e.target.checked ? [...sourceChapters,ch.id] : sourceChapters.filter(id => id !== ch.id))} />{ch.title}</label>)}</fieldset>
+          <label className="md:col-span-2 flex gap-2 items-start"><input type="checkbox" checked={source.confirmed} onChange={e => setSource({...source,confirmed:e.target.checked})} />I read the full source and checked that this excerpt and locator support the stated claim. Otherwise save for review.</label>
+          <button className="px-4 py-2 bg-indigo-700 text-white rounded-lg" type="submit">Save source</button><p role="status">{sourceMessage}</p>
+        </form>
+      </details>
       {/* Header Banner */}
       <div className="bg-white border border-slate-200 rounded-xl p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">

@@ -83,3 +83,10 @@ test('preserves Markdown reference links across section boundaries and ignores c
   assert.match(compileStyledHtml(project), /href="https:\/\/example.com\/research"/);
   assert.equal(auditChapter(project.outline[0], project.referenceLibrary.cards).needsReview, 1);
 });
+
+test('a cited nested bullet cannot hide an uncited parent claim', () => {
+  const project=projectWith('- An uncited parent claim\n  - Supported child. [REF-01]');
+  const audit=auditChapter(project.outline[0],project.referenceLibrary.cards);
+  assert.equal(audit.needsReview,1);
+  assert.match(compileStyledHtml(project),/Citation needed/);
+});

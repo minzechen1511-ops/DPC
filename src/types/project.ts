@@ -54,6 +54,11 @@ export interface UserPreferences {
 }
 
 export interface MarketplaceObservation {
+  isSample?: boolean;
+  priceKnown?: boolean;
+  collector?: 'apple-chart-v1' | 'amazon-chart-v1';
+  sourceURL?: string;
+  evidenceExcerpt?: string;
   id: string;
   marketplace: 'Amazon Kindle' | 'Apple Books' | 'Google Play Books' | 'Kobo' | 'Gumroad' | 'Payhip' | 'Etsy';
   category: string;
@@ -73,6 +78,8 @@ export interface MarketplaceObservation {
 }
 
 export interface TopicCandidate {
+  marketCategory?: string;
+  evidenceStatus?: 'CURRENT_CHART' | 'SAMPLE';
   id: string;
   title: string;
   subtitle: string;
@@ -207,6 +214,9 @@ export type ReferenceVerificationStatus =
   | 'NEEDS_REVIEW';
 
 export interface ReferenceCard {
+  verificationQuote?: string;
+  verificationLocator?: string;
+  verifiedAt?: string;
   id: string; // e.g. "REF-01"
   // Mandatory 7-Part Structure:
   title: string; // A. Title
@@ -266,7 +276,18 @@ export interface ProductCharter {
   approvedAt?: string;
 }
 
+export interface ChapterIllustration {
+  id: string;
+  dataUri: string;
+  alt: string;
+  caption: string;
+  paragraphAnchor: string;
+  sourceReferenceIds: string[];
+  credit: string;
+  license: string;
+}
 export interface ChapterOutlineItem {
+  illustrations?: ChapterIllustration[];
   id: string;
   order: number;
   title: string;
@@ -442,6 +463,7 @@ export interface DigitalProductProject {
   };
   marketResearch: {
     researchDate: string;
+    sourceReports?: Array<{ marketplace: string; url: string; status: string; message: string; checkedAt: string; count: number }>;
     platformEvidence: MarketplaceObservation[];
     topicCandidates: TopicCandidate[];
     selectedTopicId: string | null;

@@ -1,3 +1,4 @@
+import { isCurrentMarketEvidence, observationCategory } from '../../utils/marketDiscoveryEngine.ts';
 import React, { useState } from 'react';
 import {
   Search,
@@ -18,9 +19,11 @@ import { DigitalProductProject, MarketplaceObservation } from '../../types/proje
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface MarketIntelligenceViewProps {
+  researchBusy?: boolean;
+  researchError?: string;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
-  onRefreshResearch?: () => void;
+  onRefreshResearch?: () => void | Promise<void>;
   onSynchronizeToGateA?: (options?: {
     prioritizedObservationId?: string;
     focusMarketplace?: string;
@@ -30,6 +33,8 @@ interface MarketIntelligenceViewProps {
 }
 
 export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
+  researchBusy = false,
+  researchError = '',
   project,
   setActiveView,
   onRefreshResearch,
@@ -54,36 +59,17 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
       obs.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       obs.sellerOrAuthor.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // Category match
-    let matchesCategory = true;
-    if (selectedCategory === 'productivity_systems') {
-      matchesCategory = obs.category.toLowerCase().includes('notion') || obs.category.toLowerCase().includes('productivity') || obs.productTitle.toLowerCase().includes('solo');
-    } else if (selectedCategory === 'wellness_habits') {
-      matchesCategory = obs.category.toLowerCase().includes('wellness') || obs.category.toLowerCase().includes('habit') || obs.productTitle.toLowerCase().includes('burnout');
-    } else if (selectedCategory === 'personal_finance') {
-      matchesCategory = obs.category.toLowerCase().includes('finance') || obs.category.toLowerCase().includes('mortgage') || obs.productTitle.toLowerCase().includes('homebuyer');
-    } else if (selectedCategory === 'freelance_career') {
-      matchesCategory = obs.category.toLowerCase().includes('freelance') || obs.category.toLowerCase().includes('career') || obs.productTitle.toLowerCase().includes('proposal');
-    } else if (selectedCategory === 'budget_living') {
-      matchesCategory = obs.category.toLowerCase().includes('budget') || obs.category.toLowerCase().includes('food') || obs.productTitle.toLowerCase().includes('meal');
-    }
+    const matchesCategory = selectedCategory === 'ALL' || observationCategory(obs) === selectedCategory;
 
     return matchesMarket && matchesSearch && matchesCategory;
   });
 
-  // Calculate highest velocity market leader based on reviews & rank
-  const velocityLeader = [...observations].sort((a, b) => {
-    const scoreA = (a.reviewCount || 0) * (a.rating || 4) / Math.max(1, a.observedRank || 10);
-    const scoreB = (b.reviewCount || 0) * (b.rating || 4) / Math.max(1, b.observedRank || 10);
-    return scoreB - scoreA;
-  })[0];
+  // Ordinal chart positions are snapshots, not review or sales velocity measurements.
+  const velocityLeader = [...filteredObservations.filter(o => isCurrentMarketEvidence(o))].sort((a,b) => (a.observedRank || 100) - (b.observedRank || 100))[0];
 
-  const handleRunRefresh = () => {
+  const handleRunRefresh = async () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      if (onRefreshResearch) onRefreshResearch();
-    }, 800);
+    try { await onRefreshResearch?.(); } finally { setIsRefreshing(false); }
   };
 
   const handleTriggerSync = (options?: {
@@ -108,6 +94,12 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {researchError && <p role="alert" className="p-4 bg-red-50 text-red-900 rounded-lg">{researchError}</p>}
+      <section className="p-5 bg-white border border-slate-200 rounded-lg space-y-3">
+        <h2 className="font-semibold text-slate-900">{lang === 'en' ? 'Marketplace evidence and access' : '市場證據與存取狀態'}</h2>
+        <p className="text-sm text-slate-600">{lang === 'en' ? 'Only source-backed chart positions captured within 48 hours can feed Gate A. Search pages, featured products, samples and review counts do not establish current sales. New niche concepts are not themselves bestsellers.' : '只有 48 小時內取得的原站排行榜證據可進入 Gate A。搜尋結果、精選商品、樣本與評論數不代表即時銷售；新題材構想本身不是暢銷商品。'}</p>
+        <div className="space-y-2">{project.marketResearch.sourceReports?.map(report => <article key={report.marketplace} className="border-t border-slate-200 pt-2 text-sm"><div className="flex flex-wrap justify-between gap-2"><a className="font-medium text-indigo-700 underline" href={report.url} target="_blank" rel="noopener noreferrer">{report.marketplace}</a><span className="font-mono text-xs">{report.status} · {report.count} records</span></div><p className="text-xs text-slate-600 mt-1">{report.message}</p><time className="text-xs text-slate-500">{report.checkedAt}</time></article>) || <p className="text-sm text-slate-600">{lang === 'en' ? 'Run research to check the listed marketplaces.' : '執行研究以檢查所列市場。'}</p>}</div>
+      </section>
       {/* Header & Controls */}
       <div className="bg-white border border-slate-200 rounded-xl p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -123,11 +115,11 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={handleRunRefresh}
-              disabled={isRefreshing}
+              disabled={isRefreshing || researchBusy}
               className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
-              <span>{isRefreshing ? t.refreshing : t.refresh}</span>
+              <span>{isRefreshing || researchBusy ? t.refreshing : t.refresh}</span>
             </button>
             <button
               onClick={() =>
@@ -137,7 +129,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                   searchQuery: searchQuery.trim().length > 0 ? searchQuery : undefined,
                 })
               }
-              disabled={isSyncing}
+              disabled={isSyncing || !observations.some(o => isCurrentMarketEvidence(o))}
               className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -239,7 +231,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                 {velocityLeader.productTitle} ({velocityLeader.marketplace})
               </span>
               <span className="text-[11px] font-mono bg-indigo-500/30 px-2 py-0.5 rounded text-indigo-300">
-                #{velocityLeader.observedRank} · {velocityLeader.reviewCount?.toLocaleString()} reviews · ${velocityLeader.currentPrice.toFixed(2)}
+                #{velocityLeader.observedRank} · {velocityLeader.rankScope} · {velocityLeader.observedAt}
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
@@ -310,7 +302,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                   </div>
 
                   <div>
-                    <span className="text-[11px] text-slate-400 block line-clamp-1">{obs.category}</span>
+                    <span className="text-[11px] text-slate-400 block line-clamp-1">{obs.category}</span><span className="text-xs font-semibold text-amber-800">{obs.isSample || !isCurrentMarketEvidence(obs) ? 'Sample / unverified / stale — excluded from Gate A' : 'Current chart record'}</span>
                     <h3 className="text-sm font-bold text-slate-900 line-clamp-2 mt-0.5">
                       {obs.productTitle}
                     </h3>
@@ -323,7 +315,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                   <div className="grid grid-cols-3 gap-2 py-2 px-2.5 bg-slate-50 rounded-lg text-xs font-mono text-slate-700">
                     <div>
                       <span className="text-[10px] text-slate-400 block">{t.priceLabel}</span>
-                      <strong className="text-slate-900">${obs.currentPrice.toFixed(2)}</strong>
+                      <strong className="text-slate-900">{obs.priceKnown === false ? 'Not supplied' : `$${obs.currentPrice.toFixed(2)}`}</strong>
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-400 block">{t.rankLabel}</span>
@@ -331,13 +323,13 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-400 block">{t.reviewsLabel}</span>
-                      <strong>{obs.reviewCount?.toLocaleString() || '0'}</strong>
+                      <strong>{obs.reviewCount?.toLocaleString() ?? 'Not supplied'}</strong>
                     </div>
                   </div>
 
                   <div className="text-[11px] text-slate-400 bg-slate-50/50 p-2 rounded border border-slate-100">
                     <span className="font-semibold text-slate-600 block">{t.dataLimitationNotice}</span>
-                    <span className="line-clamp-2">{obs.dataLimitations}</span>
+                    <span>{obs.dataLimitations}</span><time className="block mt-1">{obs.observedAt}</time>{obs.sourceURL && <a href={obs.sourceURL} target="_blank" rel="noopener noreferrer" className="underline text-indigo-700">Ranking source</a>}
                   </div>
 
                   {/* Actions Strip: Live Inspection & Prioritize */}
@@ -354,6 +346,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                     </a>
 
                     <button
+                      disabled={!isCurrentMarketEvidence(obs)}
                       onClick={() => handleTriggerSync({ prioritizedObservationId: obs.id })}
                       className="py-2 px-2.5 text-[11px] font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors flex items-center justify-center gap-1 active:scale-[0.98] text-center"
                       title="Synthesize this market observation as the top recommendation in Gate A"

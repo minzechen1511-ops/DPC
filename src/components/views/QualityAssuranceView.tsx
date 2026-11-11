@@ -1,101 +1,21 @@
+import { countManuscriptWords } from '../../utils/textMetrics.ts';
 import React from 'react';
-import { ShieldCheck, CheckCircle2, AlertTriangle, ArrowRight, Wrench, ShieldAlert } from 'lucide-react';
-import { DigitalProductProject } from '../../types/project.ts';
+import { ShieldCheck, CheckCircle2, ArrowRight } from 'lucide-react';
+import type { DigitalProductProject } from '../../types/project.ts';
+import { gateIssues } from '../../utils/gatePolicy.ts';
+import { auditChapter } from '../../utils/styledBook.ts';
 import { Language, translations } from '../../utils/i18n.ts';
-
-interface QualityAssuranceViewProps {
-  project: DigitalProductProject;
-  setActiveView: (view: any) => void;
-  onApproveGateC: () => void;
-  lang?: Language;
-}
-
-export const QualityAssuranceView: React.FC<QualityAssuranceViewProps> = ({
-  project,
-  setActiveView,
-  onApproveGateC,
-  lang = 'en',
-}) => {
-  const t = translations[lang];
-  const { qualityReport, workflow, outline } = project;
-  const totalWords = (outline || []).reduce((sum, ch) => sum + (ch.actualWordCount || 0), 0);
-
-  return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 mb-1">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Gate C — {t.qaTitle}</span>
-          </div>
-          <h1 className="text-xl font-bold text-slate-900">{t.qaTitle}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">{t.qaSubtitle}</p>
-        </div>
-
-        <button
-          onClick={() => {
-            onApproveGateC();
-            setActiveView('export_center');
-          }}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap ${
-            workflow?.gates?.gateC?.isApproved
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-95'
-          }`}
-        >
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>{workflow?.gates?.gateC?.isApproved ? t.gateCApprovedBadge : t.approveGateCCta}</span>
-        </button>
-      </div>
-
-      {/* Score Summary Box */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-emerald-50 border-2 border-emerald-500 flex items-center justify-center shrink-0">
-            <span className="text-2xl font-bold font-mono text-emerald-700 tabular-nums">
-              {qualityReport?.overallScore || 0}
-            </span>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-slate-900">{t.qaScoreLabel}</h2>
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                {qualityReport?.overallStatus || 'READY_FOR_EXPORT'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {lang === 'en'
-                ? `Total manuscript length: ${totalWords.toLocaleString()} words · 20 verified reference citations mapped.`
-                : `實際完稿篇幅：${totalWords.toLocaleString()} 字 · 20 篇高公信力研究文獻完整映射。`}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 text-xs font-mono">
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-center">
-            <span className="text-[10px] text-slate-400 block uppercase">{lang === 'en' ? 'Critical Issues' : '嚴重缺失'}</span>
-            <strong className="text-emerald-600 text-base">0</strong>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-center">
-            <span className="text-[10px] text-slate-400 block uppercase">{lang === 'en' ? 'Disclaimers' : '免責聲明'}</span>
-            <strong className="text-emerald-600 text-base">100%</strong>
-          </div>
-        </div>
-      </div>
-
-      {/* Passed Checks List */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
-        <h3 className="text-sm font-bold text-slate-900">{lang === 'en' ? 'Automated Audit Verification Criteria Passed' : '已通過之自動化品質檢驗標準'}</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-700">
-          {(qualityReport?.checksPassed || []).map((check, idx) => (
-            <div key={idx} className="flex items-center gap-2 p-2.5 bg-slate-50 rounded border border-slate-200">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{check}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+interface Props { project: DigitalProductProject; setActiveView: (view: any) => void; onApproveGateC: () => void; lang?: Language }
+export const QualityAssuranceView: React.FC<Props> = ({project,setActiveView,onApproveGateC,lang='en'}) => {
+ const t=translations[lang];
+ const blockers=gateIssues(project,'gateC');
+ const totalWords=project.outline.reduce((sum,ch)=>sum+countManuscriptWords(ch.contentMarkdown || ''),0);
+ return <div className="space-y-6 max-w-7xl mx-auto pb-12">
+  <section className="p-6 bg-white border border-slate-200 rounded-xl flex flex-wrap justify-between gap-4 items-center">
+   <div><h1 className="text-xl font-bold flex gap-2 items-center"><ShieldCheck size={22}/>{t.qaTitle}</h1><p className="text-sm text-slate-600 mt-2">{lang==='en'?'Gate C checks current project data, citations, substantive chapters, source mappings and learning resources. It does not certify scientific validity.':'Gate C 檢查目前專案、引用、實質章節、來源配置與學習資源，不代表獨立科學認證。'}</p></div>
+   <button disabled={blockers.length>0} onClick={()=>{if(blockers.length)return;onApproveGateC();setActiveView('export_center');}} className="px-4 py-3 bg-indigo-700 text-white rounded-lg flex gap-2 items-center"><CheckCircle2 size={16}/>{t.approveGateCCta}</button>
+  </section>
+  <section className="p-6 bg-white border border-slate-200 rounded-xl space-y-4"><h2 className="font-semibold text-lg">{blockers.length?`${blockers.length} publication requirements need attention`:'Current publication checks pass'}</h2><p className="text-sm text-slate-600">{project.outline.length} chapters · {totalWords.toLocaleString()} words counted from the manuscript · {project.resources.length} companion resources</p><ol className="list-disc pl-5 text-sm space-y-2 text-amber-900">{blockers.map(issue=><li key={issue}>{issue}</li>)}</ol><div className="flex flex-wrap gap-3 text-sm">{[['market_research','Review marketplace evidence'],['reference_library','Research and source mappings'],['content_studio','Manuscript and figures'],['workbook_studio','Companion learning materials']].map(([route,label])=><button key={route} className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded flex items-center gap-2" onClick={()=>setActiveView(route)}>{label}<ArrowRight size={14}/></button>)}</div></section>
+  <section className="p-6 bg-white border border-slate-200 rounded-xl space-y-3"><h2 className="font-semibold">Chapter evidence review</h2>{project.outline.map(ch=>{const audit=auditChapter(ch,project.referenceLibrary.cards);return <div key={ch.id} className="py-3 border-t border-slate-200"><h3 className="font-medium">{ch.title}</h3><p className="text-sm text-slate-600">{audit.cited}/{audit.passages} passages cited to full-text source records · {audit.needsReview} need review · {ch.illustrations?.length || 0} author-supplied illustrations</p></div>})}</section>
+ </div>;
 };

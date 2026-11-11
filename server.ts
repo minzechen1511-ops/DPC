@@ -1,3 +1,4 @@
+import { collectMarketResearch } from './server/marketResearch.ts';
 import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,6 +14,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
+
+app.get('/api/market/research', async (_req: Request, res: Response) => {
+  try { res.json(await collectMarketResearch()); }
+  catch { res.status(502).json({ error: 'Market research failed. Retry after checking source access.' }); }
+});
 
 // Health check endpoint
 app.get('/api/health', (req: Request, res: Response) => {

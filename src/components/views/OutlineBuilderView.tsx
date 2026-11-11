@@ -34,8 +34,8 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
           <h1 className="text-xl font-bold text-slate-900">{t.outlineTitle}</h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {lang === 'en'
-              ? `${chapters.length} chapters structured, ~${totalWords.toLocaleString()} total target words, mapped to 20 reference cards and companion worksheets.`
-              : `共 ${chapters.length} 個章節，預計總字數約 ${totalWords.toLocaleString()} 字，已對應 20 篇研究文獻與實作交付檢核`}
+              ? `${chapters.length} chapters structured, ~${totalWords.toLocaleString()} total target words, with ${project.referenceLibrary.cards.length} source records available for chapter mapping.`
+              : `共 ${chapters.length} 個章節，預計總字數約 ${totalWords.toLocaleString()} 字，目前有 ${project.referenceLibrary.cards.length} 篇來源紀錄可配置章節與實作交付檢核`}
           </p>
         </div>
 
