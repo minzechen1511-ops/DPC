@@ -3,7 +3,7 @@ export type Language = 'en' | 'zh';
 export const translations = {
   en: {
     // Header
-    appName: 'Digital Product Creator 2.0',
+    appName: 'Digital Product Studio',
     subtitle: 'V4.0 Full Autopilot & Multi-LLM Edition',
     runAutopilot: 'Run Autopilot',
     autopilotRunning: 'Autopilot Running...',
@@ -207,7 +207,7 @@ export const translations = {
   },
   zh: {
     // Header
-    appName: 'Digital Product Creator 2.0',
+    appName: 'Digital Product Studio',
     subtitle: 'V4.0 全自動多模型版',
     runAutopilot: '全自動推進 (Autopilot)',
     autopilotRunning: 'Autopilot 執行中...',

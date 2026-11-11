@@ -19,7 +19,7 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
     version: '4.0.0',
-    app: 'Digital Product Creator 2.0',
+    app: 'Digital Product Studio',
     supportedProviders: ['openrouter', 'gemini', 'openai', 'claude'],
     geminiKeyAvailable: Boolean(process.env.GEMINI_API_KEY),
     time: new Date().toISOString(),
@@ -443,7 +443,7 @@ app.post('/api/ai/chat', async (req: Request, res: Response) => {
           Authorization: `Bearer ${trimmedKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://aistudio.google.com',
-          'X-Title': 'Digital Product Creator 2.0',
+          'X-Title': 'Digital Product Studio',
         },
         body: JSON.stringify({
           model: model || 'openrouter/free',
@@ -515,7 +515,7 @@ async function startServer() {
   }
 
   app.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`Digital Product Creator 2.0 backend running on http://0.0.0.0:${PORT}`);
+    console.log(`Digital Product Studio backend running on http://0.0.0.0:${PORT}`);
   });
 }
 

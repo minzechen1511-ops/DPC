@@ -65,7 +65,7 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
 
     try {
       const outputLanguage = lang === 'en' ? 'English' : 'Traditional Chinese (繁體中文)';
-      const systemPrompt = `You are the lead author and principal researcher for Digital Product Creator 2.0.
+      const systemPrompt = `You are the lead author and principal researcher for Digital Product Studio.
 You are writing a publication-grade, high-depth digital guide chapter for "${charter?.productTitle}".
 Target Audience: ${charter?.targetAudience}
 Brand Tone: ${charter?.brandVoiceSummary}

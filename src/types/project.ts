@@ -1,5 +1,5 @@
 /**
- * Digital Product Creator 2.0 (V4.0 Full Autopilot & OpenRouter Edition)
+ * Digital Product Studio (V4.0 Full Autopilot & OpenRouter Edition)
  * Core Data Models & Schemas
  */
 

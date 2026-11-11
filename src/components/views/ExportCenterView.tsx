@@ -105,7 +105,7 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
       filename: `project-backup-${project.projectId}.json`,
       mime: 'application/json;charset=utf-8',
       desc: lang === 'en'
-        ? 'Lossless structured project schema (compatible with 1-click import into Digital Product Creator).'
+        ? 'Lossless structured project schema (compatible with 1-click import into Digital Product Studio).'
         : '符合 V4.0 規格之無損結構化 JSON 備份，可於「我的專案庫」一鍵重新載入。',
       getContent: () => JSON.stringify(project, null, 2),
       icon: Code,
@@ -134,7 +134,7 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
 
       // Add README.txt
       const readmeText = `========================================================================
-DIGITAL PRODUCT CREATOR — COMPLETE ASSET PACKAGE
+Digital Product Studio — COMPLETE ASSET PACKAGE
 Project Name: ${project.intake?.projectName || project.marketResearch?.topicCandidates?.[0]?.title || 'Digital Product Package'}
 Target Audience: ${project.intake?.targetAudience || 'General Audience'}
 Generated At: ${new Date().toISOString()}

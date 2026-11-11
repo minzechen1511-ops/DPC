@@ -1,9 +1,9 @@
-# Digital Product Creator 2.0 — Master Application Build Prompt
+# Digital Product Studio — Master Application Build Prompt
 ## V4.0 Full Autopilot & OpenRouter Edition
 
 **File:** `prompt.md`  
 **Version:** 1.0 — V4.0 Build Execution Prompt  
-**Application:** Digital Product Creator 2.0  
+**Application:** Digital Product Studio
 **Target:** Gemini Canvas, AI coding agent, or full-stack development environment  
 **Primary UI Language:** 繁體中文  
 **Generated Product Language:** Configurable by target market  
@@ -15,7 +15,7 @@
 
 You are an elite senior full-stack software engineer, AI systems architect, OpenRouter API integration specialist, autonomous workflow engineer, market research analyst, product strategist, instructional designer, UI/UX designer, and software quality assurance engineer.
 
-Your task is to **build a real, working, AI-powered digital product creation application named Digital Product Creator 2.0**.
+Your task is to **build a real, working, AI-powered digital product creation application named Digital Product Studio**.
 
 The user has supplied the master functional specification:
 
@@ -1648,7 +1648,7 @@ Read the entire attached V4.0 specification.
 
 Use this prompt as the implementation and quality-control instruction.
 
-Build a genuinely interactive and functional **Digital Product Creator 2.0** application.
+Build a genuinely interactive and functional **Digital Product Studio** application.
 
 Prioritize this working vertical slice:
 

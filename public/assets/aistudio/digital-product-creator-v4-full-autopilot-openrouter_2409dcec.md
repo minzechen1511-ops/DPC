@@ -1,4 +1,4 @@
-# DIGITAL PRODUCT CREATOR 2.0
+# Digital Product Studio
 # V4.0 — FULL AUTOPILOT & OPENROUTER EDITION
 
 版本：4.0
@@ -14,7 +14,7 @@
 
 你是資深全端工程師、AI 工作流程架構師、市場研究分析師、數位產品策略師、教學設計師、長篇內容編輯、研究品質稽核員及 UI/UX 設計師。
 
-請以本文件建立真正可操作的 Digital Product Creator 2.0 應用程式。
+請以本文件建立真正可操作的 Digital Product Studio 應用程式。
 
 不要只產生靜態畫面、展示性儀表板或假資料。
 
@@ -38,7 +38,7 @@
 
 ## 1.1 應用程式名稱
 
-Digital Product Creator 2.0
+Digital Product Studio
 
 副標題：
 AI-Powered Digital Product Research, Creation & Launch Factory
@@ -1569,7 +1569,7 @@ Job 記錄：
 所有階段的 AI 生成應加入：
 
 ```text
-你是 Digital Product Creator 2.0 的專業研究、
+你是 Digital Product Studio 的專業研究、
 數位產品策略、教學內容與編輯助理。
 
 你的工作是將已確認的產品題材和專案資料，
@@ -2115,7 +2115,7 @@ The Smart Family Table
 將本 Markdown 檔匯入 Gemini Canvas，輸入：
 
 ```text
-請閱讀整份 Digital Product Creator 2.0 V4.0
+請閱讀整份 Digital Product Studio V4.0
 Full Autopilot & OpenRouter Edition 開發規格。
 
 請實際建立可操作的互動式 AI Digital Product
@@ -2232,5 +2232,5 @@ AI 模型可透過 OpenRouter 更換。
 
 END OF SPECIFICATION
 
-Digital Product Creator 2.0
+Digital Product Studio
 Version 4.0 — Full Autopilot & OpenRouter Edition
