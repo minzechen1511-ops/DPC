@@ -6,17 +6,12 @@ import {
   TrendingUp,
   BookOpen,
   Feather,
-  ShieldCheck,
   Download,
   ArrowRight,
-  Play,
-  RotateCcw,
   CheckCircle2,
-  Clock,
   Layers,
   Award,
-  FileText,
-  HelpCircle,
+  Tag,
 } from 'lucide-react';
 import { DigitalProductProject, StageId } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
@@ -26,7 +21,6 @@ interface DashboardViewProps {
   setActiveView: (view: any) => void;
   progressPercent: number;
   lang?: Language;
-  onLoadDemoProject?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -34,10 +28,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   setActiveView,
   progressPercent,
   lang = 'en',
-  onLoadDemoProject,
 }) => {
   const t = translations[lang];
-  const { charter, referenceLibrary, outline, qualityReport, workflow, marketResearch, aiSettings } = project;
+  const { charter, referenceLibrary, outline, qualityReport, workflow, marketResearch, aiSettings, pricingReport } = project;
 
   const chaptersDone = (outline || []).filter((c) => c.isCompleted).length;
   const totalChapters = (outline || []).length;
@@ -51,14 +44,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-xl p-6 shadow-md border border-indigo-700/50">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-2 max-w-2xl">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                 <span>{t.blankProjectNotice}</span>
               </div>
               <h2 className="text-xl font-bold tracking-tight text-white">
                 {lang === 'en'
-                  ? 'Start Your New High-Value Digital Product'
-                  : '開啟全新的高價值數位商品開發專案'}
+                  ? 'Launch a Commercial, Evidence-Backed Digital Product'
+                  : '開啟全新的商業級數位商品開發專案'}
               </h2>
               <p className="text-xs text-slate-300 leading-relaxed">
                 {t.blankProjectDesc}
@@ -66,17 +59,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-              {onLoadDemoProject && (
-                <button
-                  onClick={onLoadDemoProject}
-                  className="px-4 py-2.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>{t.loadDemoTemplate}</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setActiveView('new_project')}
+                className="px-4 py-2.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>{t.navNewProject}</span>
+              </button>
 
               <button
+                type="button"
                 onClick={() => setActiveView('market_research')}
                 className="px-4 py-2.5 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-100 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
               >
@@ -92,7 +85,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span className="font-semibold text-indigo-600 uppercase tracking-wide">
                 {lang === 'en' ? 'Active Project' : '目前進行中專案'}
               </span>
@@ -104,96 +97,99 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
               <span aria-hidden="true">·</span>
               <span>
-                {lang === 'en' ? 'Lang' : '語言'}: {project.preferences?.language || 'English'}
+                {lang === 'en' ? 'Imprint' : '品牌識別'}: {project.brand?.profileName || 'Modern Minimalist'}
               </span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
               {charter?.productTitle || project.name || t.untitledProject}
             </h1>
             <p className="text-sm text-slate-600 max-w-3xl">
-              {charter?.subtitle || charter?.centralPromise || (lang === 'en' ? 'Ready to analyze market signals and create evidence-based digital products.' : '隨時可啟動市場情報調查並產出高品質數位產品。')}
+              {charter?.subtitle || charter?.centralPromise || (lang === 'en' ? 'Ready to analyze market signals and create commercial evidence-based digital products.' : '隨時可啟動市場情報調查並產出高品質商業數位產品。')}
             </p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
             <button
+              type="button"
               onClick={() => setActiveView('new_project')}
               className="px-3.5 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors whitespace-nowrap"
             >
               {lang === 'en' ? 'New Project' : '建立新專案'}
             </button>
-
           </div>
         </div>
 
-        {/* 3 Major Human Approval Gates */}
+        {/* 3 Major Human Approval Gates (Accessible Button Cards) */}
         <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Gate A */}
-          <div
+          <button
+            type="button"
             onClick={() => setActiveView('topic_selection')}
-            className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-              (workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length)
+            className={`p-3.5 rounded-lg border text-left transition-all ${
+              workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length
                 ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
                 : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold text-slate-800">{t.gateA}</span>
-              {(workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length) ? (
+              {workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length ? (
                 <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {t.approved}
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold text-amber-600">{t.pending}</span>
+                <span className="text-[11px] font-semibold text-amber-700">{t.pending}</span>
               )}
             </div>
             <p className="text-xs text-slate-600 line-clamp-1">
-              {(marketResearch?.topicCandidates || []).find((t) => t.id === marketResearch?.selectedTopicId)?.title ||
-                (lang === 'en' ? 'Click to select and approve recommended topic' : '點擊選擇並核准市場推薦題材')}
+              {(marketResearch?.topicCandidates || []).find((c) => c.id === marketResearch?.selectedTopicId)?.title ||
+                (lang === 'en' ? 'Select and approve recommended topic' : '點擊選擇並核准市場推薦題材')}
             </p>
-          </div>
+          </button>
 
           {/* Gate B */}
-          <div
+          <button
+            type="button"
             onClick={() => setActiveView('product_charter')}
-            className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-              (workflow?.gates?.gateB?.isApproved && !gateIssues(project, 'gateB').length)
+            className={`p-3.5 rounded-lg border text-left transition-all ${
+              workflow?.gates?.gateB?.isApproved && !gateIssues(project, 'gateB').length
                 ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
                 : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold text-slate-800">{t.gateB}</span>
-              {(workflow?.gates?.gateB?.isApproved && !gateIssues(project, 'gateB').length) ? (
+              {workflow?.gates?.gateB?.isApproved && !gateIssues(project, 'gateB').length ? (
                 <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {t.approved}
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold text-amber-600">{t.pending}</span>
+                <span className="text-[11px] font-semibold text-amber-700">{t.pending}</span>
               )}
             </div>
             <p className="text-xs text-slate-600 line-clamp-1">
-              {charter?.signatureFramework || (lang === 'en' ? 'Product Charter & Core Architecture' : '17項不可更動產品規範基準')}
+              {charter?.signatureFramework || (lang === 'en' ? 'Product Charter & Core Architecture' : '17項產品規範基準與架構')}
             </p>
-          </div>
+          </button>
 
           {/* Gate C */}
-          <div
+          <button
+            type="button"
             onClick={() => setActiveView('quality_assurance')}
-            className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-              (workflow?.gates?.gateC?.isApproved && !gateIssues(project, 'gateC').length)
+            className={`p-3.5 rounded-lg border text-left transition-all ${
+              workflow?.gates?.gateC?.isApproved && !gateIssues(project, 'gateC').length
                 ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
                 : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold text-slate-800">{t.gateC}</span>
-              {(workflow?.gates?.gateC?.isApproved && !gateIssues(project, 'gateC').length) ? (
+              {workflow?.gates?.gateC?.isApproved && !gateIssues(project, 'gateC').length ? (
                 <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {lang === 'en' ? 'Ready' : '已就緒'}
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold text-slate-500">
+                <span className="text-[11px] font-semibold text-slate-600">
                   {lang === 'en' ? 'Pending Final Audit' : '待最後稽核'}
                 </span>
               )}
@@ -201,11 +197,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <p className="text-xs text-slate-600 line-clamp-1">
               {lang === 'en' ? 'Publication requirements to review' : '待審查出版要求'}: {gateIssues(project, 'gateC').length}
             </p>
-          </div>
+          </button>
         </div>
       </div>
 
-      {/* 4 Essential Health Metrics */}
+      {/* 4 Essential Health & Commercial Posture Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
@@ -216,8 +212,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {verifiedRefs}
             <span className="text-sm font-normal text-slate-400"> / {targetRefs}</span>
           </div>
-          <div className="text-[11px] text-emerald-600 mt-1">
-            {lang === 'en' ? '7-Part Structured Knowledge Cards' : '100% 具備 7 部分知識卡'}
+          <div className="text-[11px] text-emerald-700 mt-1">
+            {lang === 'en' ? 'Retrieved & Reviewed Sources' : '已驗證並配置之知識卡'}
           </div>
         </div>
 
@@ -231,34 +227,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-sm font-normal text-slate-400"> / {totalChapters}</span>
           </div>
           <div className="text-[11px] text-slate-500 mt-1 font-mono tabular-nums">
-            {lang === 'en' ? 'Word Count' : '實際字數'}: {(qualityReport?.actualWordCount || 0).toLocaleString()} {lang === 'en' ? 'words' : '字'}
+            {lang === 'en' ? 'Words' : '字數'}: {(qualityReport?.actualWordCount || 0).toLocaleString()}
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
-            <span>{lang === 'en' ? 'Companion Tools' : '伴隨工具套件'}</span>
-            <Layers className="w-3.5 h-3.5 text-indigo-500" />
+            <span>{lang === 'en' ? 'Commercial Price Ladder' : '商業三階定價配置'}</span>
+            <Tag className="w-3.5 h-3.5 text-indigo-500" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
-            {(project.resources || []).length}
-            <span className="text-sm font-normal text-slate-400"> {lang === 'en' ? 'assets' : '套資源'}</span>
+          <div className="text-xl font-bold text-slate-900 font-mono tabular-nums">
+            ${pricingReport?.introductoryPrice || 19} / ${pricingReport?.regularPrice || 29} / ${pricingReport?.bundlePrice || 49}
           </div>
-          <div className="text-[11px] text-indigo-600 mt-1">
-            {lang === 'en' ? 'Worksheets, trackers & cheat sheets' : '菜單、採購單與追蹤表'}
+          <div className="text-[11px] text-indigo-700 mt-1">
+            {(project.resources || []).length} {lang === 'en' ? 'companion assets included' : '套伴隨實作資源'}
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
-            <span>{lang === 'en' ? 'AI Provider & Model' : 'AI 模型與用量'}</span>
+            <span>{lang === 'en' ? 'AI Engine & Usage' : 'AI 模型與用量'}</span>
             <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
           </div>
           <div className="text-sm font-bold text-slate-900 font-mono truncate" title={aiSettings?.defaultModel}>
             {aiSettings?.provider?.toUpperCase() || 'OPENROUTER'}: {aiSettings?.defaultModel || 'default'}
           </div>
           <div className="text-[11px] text-slate-500 mt-1 font-mono tabular-nums">
-            {lang === 'en' ? 'Requests' : '已用'}: {aiSettings?.usageStats?.totalRequests || 0} · {lang === 'en' ? 'Cost' : '費用'}: ${(aiSettings?.usageStats?.estimatedCostUsd || 0).toFixed(2)}
+            {lang === 'en' ? 'Requests' : '請求'}: {aiSettings?.usageStats?.totalRequests || 0} · ${(aiSettings?.usageStats?.estimatedCostUsd || 0).toFixed(2)}
           </div>
         </div>
       </div>

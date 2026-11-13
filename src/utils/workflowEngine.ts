@@ -138,7 +138,7 @@ export const STAGE_METADATA_ZH: Record<StageId, { title: string; subtitle: strin
   },
   workbook_studio: {
     title: '實作工具與伴隨資源',
-    subtitle: '工作表、行動檢核清單、28天菜單與追蹤表格',
+    subtitle: '工作表、行動檢核清單、實作範本與追蹤表格',
     icon: 'Layers',
   },
   quality_assurance: {

@@ -1,19 +1,19 @@
 import React from 'react';
-import { Download, Play, Settings2, Globe, Sparkles, Menu } from 'lucide-react';
+import { Download, Settings2, Menu } from 'lucide-react';
 import { DigitalProductProject, StageId } from '../types/project.ts';
-import { STAGE_METADATA, getStageMetadata } from '../utils/workflowEngine.ts';
+import { getStageMetadata } from '../utils/workflowEngine.ts';
 import { Language, translations } from '../utils/i18n.ts';
+import { StudioLogo } from './StudioLogo.tsx';
 
 interface HeaderProps {
   onToggleNavigation: () => void;
   navigationOpen: boolean;
   project: DigitalProductProject;
-  activeView: StageId | 'dashboard' | 'new_project' | 'my_projects' | 'ai_settings' | 'automation_settings';
+  activeView: StageId | 'dashboard' | 'new_project' | 'my_projects' | 'ai_settings' | 'automation_settings' | 'subscription_desktop';
   setActiveView: (view: any) => void;
   progressPercent: number;
   lang: Language;
   setLang: (lang: Language) => void;
-  onLoadDemoProject?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,7 +25,6 @@ export const Header: React.FC<HeaderProps> = ({
   progressPercent,
   lang,
   setLang,
-  onLoadDemoProject,
 }) => {
   const t = translations[lang];
 
@@ -39,29 +38,35 @@ export const Header: React.FC<HeaderProps> = ({
         ? t.navMyProjects
         : activeView === 'ai_settings'
         ? t.navAiSettings
+        : activeView === 'subscription_desktop'
+        ? t.navSubscriptionDesktop
         : t.navAutomationSettings,
     subtitle: t.subtitle,
   };
 
   return (
     <header className="workspace-header px-4 lg:px-6 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
-      {/* Zone 1: Brand Wordmark (Single text element) & Project Context */}
+      {/* Zone 1: Brand Emblem & Wordmark + Project Context */}
       <div className="flex items-center gap-3 min-w-0">
         <button className="navigation-toggle p-2" onClick={onToggleNavigation} aria-label={lang === 'en' ? 'Toggle navigation' : '切換導覽'} aria-expanded={navigationOpen} aria-controls="workspace-navigation"><Menu size={20} /></button>
         <button
           onClick={() => setActiveView('dashboard')}
-          className="text-sm xl:text-base font-bold tracking-tight text-slate-900 hover:text-indigo-600 transition-colors whitespace-nowrap"
+          className="inline-flex items-center gap-2.5 text-sm xl:text-base font-bold tracking-tight text-slate-900 hover:text-indigo-600 transition-colors whitespace-nowrap shrink-0"
         >
-          {t.appName}
+          <StudioLogo size={24} className="shrink-0" />
+          <span>{t.appName}</span>
         </button>
-        <span className="hidden xl:inline text-xs text-slate-400">/</span>
-        <span className="hidden xl:inline text-xs font-medium text-slate-600 whitespace-nowrap truncate max-w-[180px]">
+        <span className="hidden xl:inline text-xs text-slate-400" aria-hidden="true">/</span>
+        <span className="hidden xl:inline text-xs font-medium text-slate-600 whitespace-nowrap truncate max-w-[200px]">
           {project.charter?.productTitle || project.name || t.untitledProject}
         </span>
         {project.isBlankProject && (
-          <span className="text-[10px] uppercase font-semibold tracking-wider text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-            Blank
-          </span>
+          <>
+            <span className="hidden sm:inline text-xs text-slate-300" aria-hidden="true">·</span>
+            <span className="hidden sm:inline text-xs font-medium text-amber-700 whitespace-nowrap">
+              {lang === 'en' ? 'Blank Workspace' : '空白專案'}
+            </span>
+          </>
         )}
       </div>
 
@@ -78,18 +83,6 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Zone 3: Primary Action & Controls */}
       <div className="header-actions flex items-center gap-2 shrink-0">
-        {/* Sample Demo Quick Load Button if on blank or accessible */}
-        {project.isBlankProject && onLoadDemoProject && (
-          <button
-            onClick={onLoadDemoProject}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors whitespace-nowrap"
-            title="Load the completed 28-Day Budget Meal Plan as a sample reference"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>{lang === 'en' ? 'Load Sample Demo' : '載入範例資料'}</span>
-          </button>
-        )}
-
         {/* Language Switcher */}
         <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
           <button

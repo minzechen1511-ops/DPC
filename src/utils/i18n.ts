@@ -42,6 +42,7 @@ export const translations = {
     navMyProjects: 'My Projects Repository',
     navAiSettings: 'AI Model & API Settings',
     navAutomationSettings: 'Workflow & Review Settings',
+    navSubscriptionDesktop: 'Desktop App (.exe) & Subscription',
 
     // Statuses
     statusNotStarted: 'Not Started',
@@ -54,8 +55,7 @@ export const translations = {
 
     // Blank State
     blankProjectNotice: 'New Blank Project Active',
-    blankProjectDesc: 'You are starting with a clean slate. Run Market Intelligence to discover high-opportunity niches, or load the 28-Day Budget Family Meal Plan master template to see how every stage is filled out.',
-    loadDemoTemplate: 'Load Sample: 28-Day Budget Meal Plan',
+    blankProjectDesc: 'You are starting with a clean slate. Run Market Intelligence to discover high-opportunity niches or initialize a custom project brief.',
     startFromScratch: 'Start From Scratch',
     runMarketResearchNow: 'Research Market Trends Now',
 
@@ -244,6 +244,7 @@ export const translations = {
     navMyProjects: '我的專案庫',
     navAiSettings: 'AI 模型與 API 設定',
     navAutomationSettings: '工作流程與審查設定',
+    navSubscriptionDesktop: '桌面程式 (.exe) 與訂閱設定',
 
     // Statuses
     statusNotStarted: '未開始',
@@ -256,8 +257,7 @@ export const translations = {
 
     // Blank State
     blankProjectNotice: '目前為全新空白專案',
-    blankProjectDesc: '你正在使用空白專案。你可以立即執行市場情報引擎尋找高潛力數位產品，或一鍵載入《28天平價家庭餐桌計畫》官方完整範例了解各階段產出標準。',
-    loadDemoTemplate: '載入範例：28-Day Budget Family Meal Plan',
+    blankProjectDesc: '你正在使用空白專案。你可以立即執行市場情報引擎尋找高潛力數位產品，或建立新的專案設定展開創作。',
     startFromScratch: '從空白開始建立',
     runMarketResearchNow: '立即啟動市場情報調查',
 

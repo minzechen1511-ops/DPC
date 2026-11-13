@@ -15,11 +15,13 @@ import {
 } from '../../utils/markdownCompiler.ts';
 import { auditChapter } from '../../utils/styledBook.ts';
 import { Language, translations } from '../../utils/i18n.ts';
+import { AppSubscriptionState, evaluateSubscriptionStatus } from '../../utils/subscriptionLicense.ts';
 
 interface ExportCenterViewProps {
   onSourceCheckFailed: (message: string) => void;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
+  subscriptionState?: AppSubscriptionState;
   lang?: Language;
 }
 
@@ -27,6 +29,7 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
   onSourceCheckFailed,
   project,
   setActiveView,
+  subscriptionState,
   lang = 'en',
 }) => {
   const t = translations[lang];
@@ -38,6 +41,8 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
   const evidence = useMemo(() => project.outline.map(chapter => ({ chapter, audit: auditChapter(chapter, project.referenceLibrary.cards) })), [project]);
   const publicationIssues = gateIssues(project, 'gateC');
   const buyerReady = !publicationIssues.length && project.workflow.gates.gateC.isApproved;
+  const subscriptionEval = subscriptionState ? evaluateSubscriptionStatus(subscriptionState, new Date(), lang) : null;
+  const exportBlockedBySubscription = Boolean(subscriptionEval && !subscriptionEval.canExportCommercialBundle);
   const reviewCount = evidence.reduce((sum, item) => sum + item.audit.needsReview, 0);
   const previewHtml = useMemo(() => showPreview ? compileStyledHtml(project) : '', [showPreview, project]);
 
@@ -200,7 +205,7 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
           {/* Primary CTA: Download All as ZIP */}
           <button
             onClick={handleDownloadZip}
-            disabled={isZipping}
+            disabled={isZipping || exportBlockedBySubscription}
             className={`px-5 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 shadow-sm whitespace-nowrap active:scale-95 ${
               zipSuccess
                 ? 'bg-emerald-600 text-white'
@@ -217,6 +222,8 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
             <span>
               {isZipping
                 ? (lang === 'en' ? 'Archiving Package (.ZIP)...' : '正在壓縮打包 (.ZIP)...')
+                : exportBlockedBySubscription
+                ? (lang === 'en' ? 'Subscription Required for Bundle (.zip)' : '需啟用訂閱授權以匯出 (.zip)')
                 : zipSuccess
                 ? (lang === 'en' ? 'ZIP Package Downloaded!' : 'ZIP 壓縮包已下載！')
                 : (lang === 'en' ? (buyerReady ? 'Download Buyer Learning Bundle (.zip)' : 'Download Author Review Bundle (.zip)') : (buyerReady ? '下載買家學習套件 (.zip)' : '下載作者審查套件 (.zip)'))}
@@ -226,6 +233,7 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
           {/* Secondary: Individual Sequential Download */}
           <button
             onClick={handleDownloadAll}
+            disabled={exportBlockedBySubscription}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
             <Download className="w-3.5 h-3.5" />
@@ -233,6 +241,24 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
           </button>
         </div>
       </div>
+
+      {exportBlockedBySubscription && subscriptionEval && (
+        <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1 text-xs">
+            <strong className="text-amber-950 block">
+              {lang === 'en' ? 'Manual Desktop Subscription Required for Commercial Exports' : '商業匯出已受桌面訂閱授權保護'}
+            </strong>
+            <p className="text-amber-900">{subscriptionEval.reason}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveView('subscription_desktop')}
+            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg whitespace-nowrap shrink-0"
+          >
+            {lang === 'en' ? 'Activate Subscription Key →' : '前往啟用訂閱金鑰 →'}
+          </button>
+        </div>
+      )}
 
       <section className="p-5 bg-white border border-slate-200 rounded-lg space-y-3">
         <h2 className="text-lg font-semibold">{lang === 'en' ? 'An organized learning collection' : '結構化學習套件'}</h2>

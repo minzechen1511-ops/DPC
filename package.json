@@ -7,6 +7,7 @@
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
     "build": "vite build",
+    "build:desktop": "tsx scripts/buildDesktopExe.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
@@ -38,6 +39,7 @@
     "@types/sanitize-html": "^2.16.2",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "postject": "^1.0.0-alpha.6",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2"

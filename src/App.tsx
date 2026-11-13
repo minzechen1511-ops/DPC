@@ -1,8 +1,16 @@
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { chapterResearchFingerprint, isRetrievedSource } from './utils/sourceEvidence.ts';
 import React, { useState, useEffect, useRef } from 'react';
-import { DigitalProductProject, StageId } from './types/project.ts';
-import { DEMO_PROJECT, BLANK_PROJECT } from './data/demoProject.ts';
+import {
+  DigitalProductProject,
+  StageId,
+  ProductCharter,
+  UVZAnalysis,
+  TransformationMap,
+  ProductBible,
+  SalesAssets,
+} from './types/project.ts';
+import { BLANK_PROJECT } from './data/demoProject.ts';
 import { approveGate, revokeApprovals, gateIssues } from './utils/gatePolicy.ts';
 import { Header } from './components/Header.tsx';
 import { Sidebar, NavigationItem } from './components/Sidebar.tsx';
@@ -14,6 +22,15 @@ import {
   propagateTopicToDownstream,
   MarketSyncOptions,
 } from './utils/marketDiscoveryEngine.ts';
+import {
+  loadInitialProjectFromStorage,
+  loadStoredLang,
+  saveProjectsToStorage,
+  saveStoredLang,
+  upsertSavedProject,
+  removeSavedProject,
+  sanitizeProjectForStorage,
+} from './utils/projectStorage.ts';
 
 // Views
 import { DashboardView } from './components/views/DashboardView.tsx';
@@ -35,13 +52,92 @@ import { ExportCenterView } from './components/views/ExportCenterView.tsx';
 import { MyProjectsView } from './components/views/MyProjectsView.tsx';
 import { AISettingsView } from './components/views/AISettingsView.tsx';
 import { AutomationSettingsView } from './components/views/AutomationSettingsView.tsx';
+import { SubscriptionDesktopView } from './components/views/SubscriptionDesktopView.tsx';
+import {
+  AppSubscriptionState,
+  loadSubscriptionState,
+  normalizeSubscriptionState,
+  saveSubscriptionState,
+} from './utils/subscriptionLicense.ts';
 
 export default function App() {
-  // Initial state is blank project as requested by user
-  const [project, setProject] = useState<DigitalProductProject>(BLANK_PROJECT);
-  // Default UI language is English ('en') as requested by user
-  const [lang, setLang] = useState<Language>('en');
+  const [initialWorkspace] = useState(() => loadInitialProjectFromStorage(BLANK_PROJECT));
+  const [project, setProject] = useState<DigitalProductProject>(initialWorkspace.activeProject);
+  const [savedProjects, setSavedProjects] = useState<DigitalProductProject[]>(initialWorkspace.savedProjects);
+  const [lang, setLang] = useState<Language>(() => loadStoredLang());
   const [activeView, setActiveView] = useState<NavigationItem>('dashboard');
+  const [subscription, setSubscription] = useState<AppSubscriptionState>(() => loadSubscriptionState());
+
+  // Sync manual subscription state with desktop local vault (/api/desktop/subscription)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/desktop/subscription');
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const remoteRaw = data?.state ?? data?.subscription;
+        if (!remoteRaw || cancelled) return;
+        const remote = normalizeSubscriptionState(remoteRaw);
+        setSubscription((prev) => {
+          const prevIsDefaultTrial =
+            prev.activePlan === 'TRIAL' &&
+            !prev.licenseKey &&
+            prev.issuedRecords.length === 0 &&
+            !prev.programConfig.enforceExportGate;
+          const remoteHasCustomState =
+            remote.activePlan !== 'TRIAL' ||
+            Boolean(remote.licenseKey) ||
+            remote.issuedRecords.length > 0 ||
+            remote.programConfig.enforceExportGate;
+
+          if (prevIsDefaultTrial && remoteHasCustomState) {
+            saveSubscriptionState(remote);
+            return remote;
+          }
+          if (!prevIsDefaultTrial && !remoteHasCustomState) {
+            fetch('/api/desktop/subscription', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(prev),
+            }).catch(() => {});
+          }
+          return prev;
+        });
+      } catch {
+        // offline or non-desktop fallback relies cleanly on localStorage
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleUpdateSubscription = (next: AppSubscriptionState) => {
+    const normalized = normalizeSubscriptionState(next);
+    setSubscription(normalized);
+    saveSubscriptionState(normalized);
+    fetch('/api/desktop/subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(normalized),
+    }).catch(() => {
+      // localStorage already updated
+    });
+  };
+
+  // Persist active project & repository list to localStorage
+  useEffect(() => {
+    setSavedProjects((prev) => {
+      const next = upsertSavedProject(prev, project);
+      saveProjectsToStorage(next, project.projectId);
+      return next;
+    });
+  }, [project]);
+
+  useEffect(() => {
+    saveStoredLang(lang);
+  }, [lang]);
 
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationTrigger = useRef<HTMLElement | null>(null);
@@ -68,21 +164,6 @@ export default function App() {
 
   const progressPercent = calculateOverallProgress(project);
 
-  // Switch to the master reference sample
-  const handleLoadDemoProject = () => {
-    setProject(revokeApprovals({ ...structuredClone(DEMO_PROJECT), marketResearch: { ...DEMO_PROJECT.marketResearch, platformEvidence: DEMO_PROJECT.marketResearch.platformEvidence.map(obs => ({ ...obs, isSample: true })) } }, 'gateA'));
-  };
-
-  // Reset to clean blank project
-  const handleResetToBlank = () => {
-    setProject({
-      ...BLANK_PROJECT,
-      projectId: `proj_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-  };
-
   const [researchBusy, setResearchBusy] = useState(false);
   const [researchError, setResearchError] = useState('');
   const handleRunMarketDiscovery = async (options?: MarketSyncOptions) => {
@@ -90,12 +171,12 @@ export default function App() {
     setResearchBusy(true); setResearchError('');
     try {
       const result = await runAutomatedMarketDiscovery(options);
-      setProject(prev => revokeApprovals({ ...prev, marketResearch: { ...prev.marketResearch, platformEvidence: result.observations, topicCandidates: result.candidates, selectedTopicId: result.candidates.some(c => c.id === prev.marketResearch.selectedTopicId) ? prev.marketResearch.selectedTopicId : null, sourceReports: result.sources, researchDate: result.checkedAt, confidence: result.observations.length ? 'MEDIUM' : 'LIMITED' }, workflow: { ...prev.workflow, stageStatuses: { ...prev.workflow.stageStatuses, market_research: result.observations.length ? 'COMPLETED' : 'BLOCKED', topic_selection: 'NEEDS_REVIEW' } } }, 'gateA'));
+      setProject(prev => revokeApprovals({ ...prev, updatedAt: new Date().toISOString(), marketResearch: { ...prev.marketResearch, platformEvidence: result.observations, topicCandidates: result.candidates, selectedTopicId: result.candidates.some(c => c.id === prev.marketResearch.selectedTopicId) ? prev.marketResearch.selectedTopicId : null, sourceReports: result.sources, researchDate: result.checkedAt, confidence: result.observations.length ? 'MEDIUM' : 'LIMITED' }, workflow: { ...prev.workflow, stageStatuses: { ...prev.workflow.stageStatuses, market_research: result.observations.length ? 'COMPLETED' : 'BLOCKED', topic_selection: 'NEEDS_REVIEW' } } }, 'gateA'));
     } catch (error) { setResearchError(error instanceof Error ? error.message : 'Research failed.'); }
     finally { setResearchBusy(false); }
   };
   const handleSynchronizeMarketToGateA = (options?: MarketSyncOptions) => {
-    setProject(prev => revokeApprovals({ ...prev, marketResearch: { ...prev.marketResearch, topicCandidates: deriveSynchronizedCandidates(prev.marketResearch.platformEvidence, options) } }, 'gateA'));
+    setProject(prev => revokeApprovals({ ...prev, updatedAt: new Date().toISOString(), marketResearch: { ...prev.marketResearch, topicCandidates: deriveSynchronizedCandidates(prev.marketResearch.platformEvidence, options) } }, 'gateA'));
     setActiveView('topic_selection');
   };
   const handleSelectTopic = (topicId: string) => setProject(prev => propagateTopicToDownstream(prev, topicId, lang));
@@ -121,15 +202,23 @@ export default function App() {
   const handleUpdateIntake = (updatedIntake: any) => {
     setProject((prev) => ({
       ...prev,
+      updatedAt: new Date().toISOString(),
       intake: updatedIntake,
       charter: { ...prev.charter, isApproved: false, approvedAt: undefined },
-      workflow: revokeApprovals(prev, 'gateB').workflow,
+      workflow: {
+        ...revokeApprovals(prev, 'gateB').workflow,
+        stageStatuses: {
+          ...revokeApprovals(prev, 'gateB').workflow.stageStatuses,
+          project_brief: 'COMPLETED',
+        },
+      },
     }));
   };
 
   const handleSelectUVZOption = (optionId: string) => {
     setProject((prev) => ({
       ...prev,
+      updatedAt: new Date().toISOString(),
       workflow: revokeApprovals(prev, 'gateB').workflow,
       charter: { ...prev.charter, isApproved: false },
       uvz: {
@@ -139,10 +228,21 @@ export default function App() {
     }));
   };
 
+  const handleUpdateUvz = (updatedUvz: UVZAnalysis) => {
+    setProject((prev) => ({
+      ...prev,
+      updatedAt: new Date().toISOString(),
+      workflow: revokeApprovals(prev, 'gateB').workflow,
+      charter: { ...prev.charter, isApproved: false, approvedAt: undefined },
+      uvz: updatedUvz,
+    }));
+  };
+
   const handleSelectTitleOption = (titleId: string) => {
     const selected = project.transformationMap.titleOptions.find((t) => t.id === titleId);
     setProject((prev) => ({
       ...prev,
+      updatedAt: new Date().toISOString(),
       workflow: revokeApprovals(prev, 'gateB').workflow,
       transformationMap: {
         ...prev.transformationMap,
@@ -160,9 +260,44 @@ export default function App() {
     }));
   };
 
+  const handleUpdateTransformationMap = (updatedMap: TransformationMap) => {
+    const selected = updatedMap.titleOptions.find((t) => t.id === updatedMap.selectedTitleId);
+    setProject((prev) => ({
+      ...prev,
+      updatedAt: new Date().toISOString(),
+      workflow: revokeApprovals(prev, 'gateB').workflow,
+      transformationMap: updatedMap,
+      charter: selected
+        ? {
+            ...prev.charter,
+            productTitle: selected.title,
+            subtitle: selected.subtitle,
+            centralPromise: updatedMap.bigPromise || prev.charter.centralPromise,
+            isApproved: false,
+            approvedAt: undefined,
+          }
+        : prev.charter,
+    }));
+  };
+
+  const handleUpdateCharter = (updatedCharter: ProductCharter) => {
+    setProject((prev) => ({
+      ...prev,
+      updatedAt: new Date().toISOString(),
+      name: updatedCharter.productTitle || prev.name,
+      charter: {
+        ...updatedCharter,
+        isApproved: false,
+        approvedAt: undefined,
+      },
+      workflow: revokeApprovals(prev, 'gateB').workflow,
+    }));
+  };
+
   const handleUpdateChapter = (chapterId: string, content: string, wordCount: number) => {
     setProject((prev) => ({
       ...prev,
+      updatedAt: new Date().toISOString(),
       workflow: { ...revokeApprovals(prev, 'gateC').workflow, stageStatuses: { ...revokeApprovals(prev, 'gateC').workflow.stageStatuses, content_studio: prev.outline.every(ch => ch.id === chapterId || ch.isCompleted) ? 'COMPLETED' : 'PARTIAL' } },
       outline: prev.outline.map((ch) =>
         ch.id === chapterId
@@ -185,17 +320,161 @@ export default function App() {
     }));
   };
 
+  const handleUpdateProductBible = (updatedBible: ProductBible) => {
+    setProject((prev) => ({
+      ...prev,
+      updatedAt: new Date().toISOString(),
+      productBible: updatedBible,
+    }));
+  };
+
+  const handleUpdateBrand = (updatedBrand: DigitalProductProject['brand']) => {
+    setProject((prev) => ({
+      ...prev,
+      updatedAt: new Date().toISOString(),
+      brand: updatedBrand,
+      intake: {
+        ...prev.intake,
+        brandStyleAndVoice: {
+          ...prev.intake.brandStyleAndVoice,
+          primaryColor: updatedBrand.primaryHex,
+          secondaryColor: updatedBrand.secondaryHex,
+          accentColor: updatedBrand.accentHex,
+          typographyDirection: `${updatedBrand.fontDisplay} + ${updatedBrand.fontBody}`,
+        },
+      },
+      workflow: {
+        ...prev.workflow,
+        stageStatuses: {
+          ...prev.workflow.stageStatuses,
+          brand_design: 'COMPLETED',
+        },
+      },
+    }));
+  };
+
+  const handleUpdatePricingAndSales = (
+    pricingReport: DigitalProductProject['pricingReport'],
+    salesAssets: SalesAssets
+  ) => {
+    setProject((prev) => ({
+      ...prev,
+      updatedAt: new Date().toISOString(),
+      pricingReport,
+      salesAssets,
+      intake: {
+        ...prev.intake,
+        recommendedPrice: {
+          ...prev.intake.recommendedPrice,
+          introductoryTest: pricingReport.introductoryPrice,
+          regular: pricingReport.regularPrice,
+          premiumBundle: pricingReport.bundlePrice,
+          currency: pricingReport.currency,
+          rationale: pricingReport.rationale,
+        },
+      },
+      workflow: {
+        ...prev.workflow,
+        stageStatuses: {
+          ...prev.workflow.stageStatuses,
+          pricing_launch: 'COMPLETED',
+        },
+      },
+    }));
+  };
+
+  const handleRecordAiUsage = (usage?: { total_tokens?: number }, model?: string) => {
+    const tokens = Number(usage?.total_tokens || 0);
+    setProject((prev) => {
+      const modelId = (model || prev.aiSettings.defaultModel || '').toLowerCase();
+      const isFreeModel =
+        modelId.includes(':free') ||
+        modelId === 'openrouter/free' ||
+        modelId.includes('flash');
+      const incrementalCost = isFreeModel ? 0 : Number(((tokens / 1_000_000) * 1.5).toFixed(4));
+      return {
+        ...prev,
+        aiSettings: {
+          ...prev.aiSettings,
+          usageStats: {
+            ...prev.aiSettings.usageStats,
+            totalRequests: (prev.aiSettings.usageStats?.totalRequests || 0) + 1,
+            totalTokens: (prev.aiSettings.usageStats?.totalTokens || 0) + tokens,
+            estimatedCostUsd: Number(
+              ((prev.aiSettings.usageStats?.estimatedCostUsd || 0) + incrementalCost).toFixed(4)
+            ),
+            lastRequestAt: new Date().toISOString(),
+          },
+        },
+      };
+    });
+  };
+
+  const handleSwitchProject = (target: DigitalProductProject) => {
+    setProject(sanitizeProjectForStorage(target));
+    setWorkflowError('');
+  };
+
+  const handleDuplicateProject = (source: DigitalProductProject) => {
+    const now = new Date().toISOString();
+    const copyTitle = `${source.charter?.productTitle || source.name || 'Project'} (Copy)`;
+    const cloned: DigitalProductProject = sanitizeProjectForStorage({
+      ...structuredClone(source),
+      projectId: `proj_${Date.now()}`,
+      name: copyTitle,
+      createdAt: now,
+      updatedAt: now,
+      charter: {
+        ...source.charter,
+        productTitle: source.charter?.productTitle ? `${source.charter.productTitle} (Copy)` : copyTitle,
+      },
+    });
+    setProject(cloned);
+    setWorkflowError('');
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    const remaining = removeSavedProject(savedProjects, projectId);
+    if (remaining.length === 0) {
+      const freshBlank: DigitalProductProject = {
+        ...BLANK_PROJECT,
+        projectId: `proj_${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setSavedProjects([sanitizeProjectForStorage(freshBlank)]);
+      saveProjectsToStorage([freshBlank], freshBlank.projectId);
+      setProject(freshBlank);
+      return;
+    }
+    setSavedProjects(remaining);
+    if (project.projectId === projectId) {
+      saveProjectsToStorage(remaining, remaining[0].projectId);
+      setProject(remaining[0]);
+    } else {
+      saveProjectsToStorage(remaining, project.projectId);
+    }
+  };
+
   const handleStartNewProject = (params: any) => {
+    const now = new Date().toISOString();
     const newProj: DigitalProductProject = {
       ...BLANK_PROJECT,
       projectId: `proj_${Date.now()}`,
       name: params.projectName,
+      isBlankProject: false,
+      createdAt: now,
+      updatedAt: now,
       preferences: {
         ...BLANK_PROJECT.preferences,
         market: params.market,
         language: params.language,
         productFormat: params.productFormat,
         referenceTarget: params.referenceTarget,
+      },
+      intake: {
+        ...BLANK_PROJECT.intake,
+        projectName: params.projectName,
       },
       charter: {
         ...BLANK_PROJECT.charter,
@@ -240,7 +519,6 @@ export default function App() {
             setActiveView={setActiveView}
             progressPercent={progressPercent}
             lang={lang}
-            onLoadDemoProject={handleLoadDemoProject}
           />
         );
       case 'new_project':
@@ -291,6 +569,7 @@ export default function App() {
             project={project}
             setActiveView={setActiveView}
             onSelectOption={handleSelectUVZOption}
+            onUpdateUvz={handleUpdateUvz}
             lang={lang}
           />
         );
@@ -300,13 +579,14 @@ export default function App() {
             project={project}
             setActiveView={setActiveView}
             onSelectTitle={handleSelectTitleOption}
+            onUpdateTransformationMap={handleUpdateTransformationMap}
             lang={lang}
           />
         );
       case 'reference_library':
         return (
           <ReferenceLibraryView
-          onAddSource={(source, chapterIds) => setProject(prev => revokeApprovals({ ...prev, referenceLibrary: { ...prev.referenceLibrary, cards: [...prev.referenceLibrary.cards, source], verifiedCount: prev.referenceLibrary.cards.filter(isRetrievedSource).length + Number(isRetrievedSource(source)) }, outline: prev.outline.map(ch => chapterIds.includes(ch.id) ? { ...ch, mappedReferenceIds: [...new Set([...ch.mappedReferenceIds, source.id])] } : ch) }, 'gateB'))}
+            onAddSource={(source, chapterIds) => setProject(prev => revokeApprovals({ ...prev, updatedAt: new Date().toISOString(), referenceLibrary: { ...prev.referenceLibrary, cards: [...prev.referenceLibrary.cards, source], verifiedCount: prev.referenceLibrary.cards.filter(isRetrievedSource).length + Number(isRetrievedSource(source)) }, outline: prev.outline.map(ch => chapterIds.includes(ch.id) ? { ...ch, mappedReferenceIds: [...new Set([...ch.mappedReferenceIds, source.id])] } : ch) }, 'gateB'))}
             project={project}
             setActiveView={setActiveView}
             lang={lang}
@@ -319,6 +599,7 @@ export default function App() {
             setActiveView={setActiveView}
             checkingReferences={checkingReferences}
             onApproveGateB={handleApproveGateB}
+            onUpdateCharter={handleUpdateCharter}
             lang={lang}
           />
         );
@@ -327,25 +608,28 @@ export default function App() {
           <OutlineBuilderView
             project={project}
             setActiveView={setActiveView}
-            onUpdateOutline={(out) => setProject(prev => revokeApprovals({...prev,outline:out},out.length!==prev.outline.length||out.some(ch=>{const old=prev.outline.find(item=>item.id===ch.id);return !old||chapterResearchFingerprint(old)!==chapterResearchFingerprint(ch);})?'gateB':'gateC'))}
+            onUpdateOutline={(out) => setProject(prev => revokeApprovals({...prev, updatedAt: new Date().toISOString(), outline:out},out.length!==prev.outline.length||out.some(ch=>{const old=prev.outline.find(item=>item.id===ch.id);return !old||chapterResearchFingerprint(old)!==chapterResearchFingerprint(ch);})?'gateB':'gateC'))}
+            onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
         );
       case 'content_studio':
         return (
           <ContentStudioView
-            onReviewCitations={(chapterId,citationReviews)=>setProject(prev=>revokeApprovals({...prev,outline:prev.outline.map(ch=>ch.id===chapterId?{...ch,citationReviews}:ch)},'gateC'))}
-            onUpdateIllustrations={(chapterId, illustrations) => setProject(prev => revokeApprovals({ ...prev, outline: prev.outline.map(ch => ch.id === chapterId ? { ...ch, illustrations } : ch) }, 'gateC'))}
+            onReviewCitations={(chapterId,citationReviews)=>setProject(prev=>revokeApprovals({...prev, updatedAt: new Date().toISOString(), outline:prev.outline.map(ch=>ch.id===chapterId?{...ch,citationReviews}:ch)},'gateC'))}
+            onUpdateIllustrations={(chapterId, illustrations) => setProject(prev => revokeApprovals({ ...prev, updatedAt: new Date().toISOString(), outline: prev.outline.map(ch => ch.id === chapterId ? { ...ch, illustrations } : ch) }, 'gateC'))}
             project={project}
             setActiveView={setActiveView}
             onUpdateChapter={handleUpdateChapter}
+            onUpdateProductBible={handleUpdateProductBible}
+            onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
         );
       case 'workbook_studio':
         return (
           <WorkbookStudioView
-            onSaveResource={resource => setProject(prev => revokeApprovals({ ...prev, resources: [...prev.resources.filter(item => item.id !== resource.id), resource] }, 'gateC'))}
+            onSaveResource={resource => setProject(prev => revokeApprovals({ ...prev, updatedAt: new Date().toISOString(), resources: [...prev.resources.filter(item => item.id !== resource.id), resource] }, 'gateC'))}
             project={project}
             setActiveView={setActiveView}
             lang={lang}
@@ -366,6 +650,7 @@ export default function App() {
           <BrandDesignView
             project={project}
             setActiveView={setActiveView}
+            onUpdateBrand={handleUpdateBrand}
             lang={lang}
           />
         );
@@ -374,6 +659,8 @@ export default function App() {
           <PricingLaunchView
             project={project}
             setActiveView={setActiveView}
+            onUpdatePricingAndSales={handleUpdatePricingAndSales}
+            onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
         );
@@ -382,6 +669,7 @@ export default function App() {
           <ExportCenterView
             onSourceCheckFailed={message=>{setWorkflowError(message);setProject(prev=>revokeApprovals(prev,'gateC'));}}
             project={project}
+            subscriptionState={subscription}
             setActiveView={setActiveView}
             lang={lang}
           />
@@ -390,6 +678,10 @@ export default function App() {
         return (
           <MyProjectsView
             currentProject={project}
+            savedProjects={savedProjects}
+            onSwitchProject={handleSwitchProject}
+            onDuplicateProject={handleDuplicateProject}
+            onDeleteProject={handleDeleteProject}
             onLoadProject={(proj) => setProject(revokeApprovals({ ...proj, preferences: { ...proj.preferences, automationMode: 'manual_review', autoApproveNonCritical: false } }, 'gateA'))}
             setActiveView={setActiveView}
             lang={lang}
@@ -399,7 +691,7 @@ export default function App() {
         return (
           <AISettingsView
             project={project}
-            onUpdateAiSettings={(newAi) => setProject((prev) => ({ ...prev, aiSettings: newAi }))}
+            onUpdateAiSettings={(newAi) => setProject((prev) => ({ ...prev, updatedAt: new Date().toISOString(), aiSettings: newAi }))}
             lang={lang}
           />
         );
@@ -407,7 +699,15 @@ export default function App() {
         return (
           <AutomationSettingsView
             project={project}
-            onSavePreferences={(prefs) => setProject((prev) => ({ ...prev, preferences: { ...prefs, automationMode: 'manual_review', autoApproveNonCritical: false } }))}
+            onSavePreferences={(prefs) => setProject((prev) => ({ ...prev, updatedAt: new Date().toISOString(), preferences: { ...prefs, automationMode: 'manual_review', autoApproveNonCritical: false } }))}
+            lang={lang}
+          />
+        );
+      case 'subscription_desktop':
+        return (
+          <SubscriptionDesktopView
+            subscription={subscription}
+            onUpdateSubscription={handleUpdateSubscription}
             lang={lang}
           />
         );
@@ -418,7 +718,6 @@ export default function App() {
             setActiveView={setActiveView}
             progressPercent={progressPercent}
             lang={lang}
-            onLoadDemoProject={handleLoadDemoProject}
           />
         );
     }
@@ -451,7 +750,6 @@ export default function App() {
           progressPercent={progressPercent}
           lang={lang}
           setLang={setLang}
-          onLoadDemoProject={handleLoadDemoProject}
         />
 
         {/* Scrollable Main Content */}

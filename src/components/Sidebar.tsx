@@ -25,9 +25,11 @@ import {
   Clock,
   Search,
   X,
+  HardDriveDownload,
 } from 'lucide-react';
 import { DigitalProductProject, StageId } from '../types/project.ts';
 import { Language, translations } from '../utils/i18n.ts';
+import { StudioLogo } from './StudioLogo.tsx';
 
 export type NavigationItem =
   | StageId
@@ -35,7 +37,8 @@ export type NavigationItem =
   | 'new_project'
   | 'my_projects'
   | 'ai_settings'
-  | 'automation_settings';
+  | 'automation_settings'
+  | 'subscription_desktop';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -133,6 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'my_projects', label: t.navMyProjects, icon: FolderKanban },
         { id: 'ai_settings', label: t.navAiSettings, icon: Cpu },
         { id: 'automation_settings', label: t.navAutomationSettings, icon: Sliders },
+        { id: 'subscription_desktop', label: t.navSubscriptionDesktop, icon: HardDriveDownload },
       ],
     },
   ];
@@ -144,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside id="workspace-navigation" aria-label={lang === 'en' ? 'Workspace navigation' : '工作區導覽'} className={`workspace-sidebar ${isOpen ? 'is-open' : ''} w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800`}>
-      <div className="sidebar-brand"><span>Digital Product Studio</span><button onClick={onClose} className="navigation-toggle p-2" aria-label={lang === 'en' ? 'Close navigation' : '關閉導覽'}><X size={20} /></button></div>
+      <div className="sidebar-brand"><span className="inline-flex items-center gap-2.5"><StudioLogo size={24} className="shrink-0" /><span>Digital Product Studio</span></span><button onClick={onClose} className="navigation-toggle p-2" aria-label={lang === 'en' ? 'Close navigation' : '關閉導覽'}><X size={20} /></button></div>
       <label className="navigation-search"><Search size={16} aria-hidden="true" /><span className="sr-only">{lang === 'en' ? 'Find a workspace' : '搜尋工作區'}</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder={lang === 'en' ? 'Find a workspace…' : '搜尋工作區…'} /></label>
       {/* Overall Progress Widget */}
       <div className="p-4 border-b border-slate-800/80 bg-slate-950/40">

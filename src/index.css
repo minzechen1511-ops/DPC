@@ -89,7 +89,7 @@ a { text-underline-offset: 3px; }
 }
 @media (max-width: 639px) {
   .workspace-header { gap: 8px; }
-  .header-actions { width: 100%; justify-content: space-between; }
+  .header-actions { width: 100%; justify-content: flex-end; }
   .workspace-main :where(.flex:not(.flex-col):not(.flex-wrap)) { min-width: 0; }
   .workspace-main :where(.whitespace-nowrap) { white-space: normal; }
   .workspace-main :where(.grid-cols-2,.grid-cols-3,.grid-cols-4,.grid-cols-5) { grid-template-columns: minmax(0,1fr); }

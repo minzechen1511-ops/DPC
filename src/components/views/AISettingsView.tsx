@@ -118,6 +118,11 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
     project.aiSettings.defaultModel ||
     (activeProvider === 'openrouter' ? 'openrouter/free' : activeProvider === 'gemini' ? 'gemini-2.5-flash' : activeProvider === 'openai' ? 'gpt-4o' : 'claude-3-7-sonnet-20250219')
   );
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState(false);
+  const [maxSpendPerRequest, setMaxSpendPerRequest] = useState<number>(project.aiSettings.maxSpendPerRequest ?? 0.5);
+  const [dailyBudget, setDailyBudget] = useState<number>(project.aiSettings.dailyBudget ?? 5);
+  const [projectBudget, setProjectBudget] = useState<number>(project.aiSettings.projectBudget ?? 20);
+  const [allowPaidFallback, setAllowPaidFallback] = useState<boolean>(project.aiSettings.allowPaidFallback ?? false);
 
   const loadModelList = async (provider: AIProviderType = activeProvider, key?: string) => {
     setLoadingModels(true);
@@ -213,6 +218,10 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
       apiKeys: updatedApiKeys,
       providerModels: updatedProviderModels,
       freeOnly,
+      allowPaidFallback,
+      maxSpendPerRequest,
+      dailyBudget,
+      projectBudget,
     });
 
     setTestResult({
@@ -224,20 +233,22 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
     });
   };
 
-  const handleDeleteKey = () => {
-    if (confirm(lang === 'en' ? `Remove stored API key for ${activeProvider}?` : `確定要移除 ${activeProvider} 的 API Key 嗎？`)) {
-      setApiKeys((prev) => ({ ...prev, [activeProvider]: '' }));
-      setStoredApiKey(activeProvider, '');
-      setTestResult(null);
-      onUpdateAiSettings({
-        ...project.aiSettings,
-        apiKeys: {
-          ...project.aiSettings.apiKeys,
-          [activeProvider]: '',
-        },
-        apiKey: activeProvider === project.aiSettings.provider ? '' : project.aiSettings.apiKey,
-      });
-    }
+  const handleConfirmDeleteKey = () => {
+    setApiKeys((prev) => ({ ...prev, [activeProvider]: '' }));
+    setStoredApiKey(activeProvider, '');
+    setTestResult({
+      success: true,
+      message: lang === 'en' ? `Removed stored API key for ${activeProvider.toUpperCase()}.` : `已移除 ${activeProvider.toUpperCase()} API 金鑰。`,
+    });
+    setConfirmDeleteKey(false);
+    onUpdateAiSettings({
+      ...project.aiSettings,
+      apiKeys: {
+        ...project.aiSettings.apiKeys,
+        [activeProvider]: '',
+      },
+      apiKey: activeProvider === project.aiSettings.provider ? '' : project.aiSettings.apiKey,
+    });
   };
 
   const filteredModels = models.filter((m) => {
@@ -289,15 +300,13 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
                   : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
               }`}
             >
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1.5 gap-2">
                 <span className="font-bold text-sm text-slate-900">{prov.name}</span>
-                {hasKey ? (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" title="Key Configured" />
-                ) : (
-                  <span className="w-2 h-2 rounded-full bg-slate-300" title="Not Set" />
-                )}
+                <span className={`text-[11px] font-semibold ${hasKey ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {hasKey ? (lang === 'en' ? 'Configured' : '已設定') : (lang === 'en' ? 'Not set' : '未設定')}
+                </span>
               </div>
-              <span className="text-[11px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 block w-fit mb-2">
+              <span className="text-[11px] font-medium text-indigo-600 block mb-2">
                 {prov.badge}
               </span>
               <p className="text-[11px] text-slate-500 line-clamp-2">
@@ -365,14 +374,34 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
               {t.saveSettings}
             </button>
 
-            {currentProviderKey && (
+            {currentProviderKey && !confirmDeleteKey && (
               <button
-                onClick={handleDeleteKey}
+                type="button"
+                onClick={() => setConfirmDeleteKey(true)}
                 className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
-                title={lang === 'en' ? 'Remove this key' : '刪除此金鑰'}
+                aria-label={lang === 'en' ? 'Remove this key' : '刪除此金鑰'}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
+            )}
+
+            {confirmDeleteKey && (
+              <span className="inline-flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteKey}
+                  className="px-2.5 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg"
+                >
+                  {lang === 'en' ? 'Confirm Delete' : '確認刪除'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteKey(false)}
+                  className="px-2.5 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg"
+                >
+                  {lang === 'en' ? 'Cancel' : '取消'}
+                </button>
+              </span>
             )}
           </div>
         </div>
@@ -475,22 +504,23 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
           {filteredModels.slice(0, 30).map((m) => {
             const isSelected = selectedModel === m.id;
             return (
-              <div
+              <button
                 key={m.id}
+                type="button"
                 onClick={() => setSelectedModel(m.id)}
-                className={`p-3.5 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
+                className={`p-3.5 rounded-lg border text-left transition-all flex flex-col justify-between ${
                   isSelected
                     ? 'border-indigo-600 bg-indigo-50/20 ring-1 ring-indigo-500/20'
                     : 'border-slate-200 bg-white hover:border-slate-300'
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
+                <div className="w-full">
+                  <div className="flex items-center justify-between text-xs mb-1 gap-2">
                     <span className="font-mono font-bold text-slate-900 truncate max-w-[220px]" title={m.id}>
                       {m.id}
                     </span>
                     {m.isFree ? (
-                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                      <span className="text-[10px] font-semibold text-emerald-700">
                         FREE
                       </span>
                     ) : m.pricing ? (
@@ -503,23 +533,32 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
                   <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{m.description || 'Standard API model'}</p>
                 </div>
 
-                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <div className="w-full mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
                   <span className="font-mono text-slate-400">Context: {(m.context_length || 128000).toLocaleString()}</span>
                   <span className={isSelected ? 'text-indigo-600 font-bold' : 'text-slate-400'}>
                     {isSelected ? (lang === 'en' ? '✓ Selected' : '✓ 啟用中') : (lang === 'en' ? 'Click to select' : '點擊選取')}
                   </span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
 
-      {/* Usage Dashboard */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-        <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-          {lang === 'en' ? 'Usage & Cost Safeguards' : '用量監控與限流防護'}
-        </h2>
+      {/* Usage Dashboard & Budget Safeguards */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <h2 className="text-sm font-bold text-slate-900">
+            {lang === 'en' ? 'Usage & Cost Safeguards' : '用量監控與預算上限防護'}
+          </h2>
+          <button
+            type="button"
+            onClick={handleSaveSettings}
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+          >
+            {lang === 'en' ? 'Save Budget Limits' : '儲存預算設定'}
+          </button>
+        </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
@@ -545,7 +584,7 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
               {lang === 'en' ? 'Estimated Cost' : '預估累積費用'}
             </span>
             <strong className="text-lg text-emerald-600 tabular-nums">
-              ${(project.aiSettings.usageStats?.estimatedCostUsd || 0).toFixed(2)} USD
+              ${(project.aiSettings.usageStats?.estimatedCostUsd || 0).toFixed(4)} USD
             </strong>
           </div>
 
@@ -557,6 +596,54 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
               {project.aiSettings.provider || 'openrouter'}
             </strong>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs pt-2 border-t border-slate-100">
+          <label className="block space-y-1">
+            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Max Spend / Request ($)' : '單次請求上限 ($)'}</span>
+            <input
+              type="number"
+              min={0}
+              step={0.05}
+              value={maxSpendPerRequest}
+              onChange={(e) => setMaxSpendPerRequest(Number(e.target.value))}
+              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Daily Budget ($)' : '每日預算上限 ($)'}</span>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={dailyBudget}
+              onChange={(e) => setDailyBudget(Number(e.target.value))}
+              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Project Budget Cap ($)' : '單一專案總預算 ($)'}</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={projectBudget}
+              onChange={(e) => setProjectBudget(Number(e.target.value))}
+              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5"
+            />
+          </label>
+
+          <label className="flex items-center gap-2 pt-5 text-xs font-medium text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowPaidFallback}
+              onChange={(e) => setAllowPaidFallback(e.target.checked)}
+              className="rounded border-slate-300 text-indigo-600"
+            />
+            <span>{lang === 'en' ? 'Allow paid model fallback' : '允許切換至付費備援模型'}</span>
+          </label>
         </div>
       </div>
     </div>

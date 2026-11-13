@@ -2,24 +2,24 @@ import { gateIssues } from '../../utils/gatePolicy.ts';
 import { CitationReviewPanel } from '../CitationReviewPanel.tsx';
 import { isRetrievedSource } from '../../utils/sourceEvidence.ts';
 import { countManuscriptWords } from '../../utils/textMetrics.ts';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Feather,
   CheckCircle2,
-  Lock,
-  Unlock,
-  Play,
-  RotateCcw,
   BookOpen,
   Sparkles,
   Save,
   Clock,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
-  FileCheck,
+  X,
 } from 'lucide-react';
-import { DigitalProductProject, ChapterOutlineItem, ChapterIllustration, CitationReview } from '../../types/project.ts';
+import {
+  DigitalProductProject,
+  ChapterIllustration,
+  CitationReview,
+  ProductBible,
+} from '../../types/project.ts';
 import { generateTextWithAi } from '../../services/aiService.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 
@@ -29,6 +29,8 @@ interface ContentStudioViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onUpdateChapter: (chapterId: string, content: string, wordCount: number) => void;
+  onUpdateProductBible?: (bible: ProductBible) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
   lang?: Language;
 }
 
@@ -38,6 +40,8 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   project,
   setActiveView,
   onUpdateChapter,
+  onUpdateProductBible,
+  onRecordAiUsage,
   lang = 'en',
 }) => {
   const t = translations[lang];
@@ -45,7 +49,11 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   const chapters = outline || [];
   const [selectedChapterId, setSelectedChapterId] = useState<string>(chapters[0]?.id || 'CH-01');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string>('');
   const [showBibleModal, setShowBibleModal] = useState<boolean>(false);
+  const [bibleKeywordsText, setBibleKeywordsText] = useState<string>((productBible?.brandVoiceKeywords || []).join(', '));
+  const [bibleConceptsText, setBibleConceptsText] = useState<string>((productBible?.introducedConcepts || []).join('\n'));
+  const [bibleNotesText, setBibleNotesText] = useState<string>((productBible?.continuityHandoffNotes || []).join('\n'));
 
   const canGenerate = project.workflow.gates.gateB.isApproved && !gateIssues(project, 'gateB').length;
   const currentChapter = chapters.find((c) => c.id === selectedChapterId) || chapters[0];
@@ -54,11 +62,30 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [contentDraft, setContentDraft] = useState<string>(currentChapter?.contentMarkdown || '');
 
+  useEffect(() => {
+    if (!chapters.some((c) => c.id === selectedChapterId) && chapters[0]) {
+      setSelectedChapterId(chapters[0].id);
+    }
+  }, [project.projectId, chapters, selectedChapterId]);
+
+  useEffect(() => {
+    setContentDraft(currentChapter?.contentMarkdown || '');
+  }, [project.projectId, selectedChapterId, currentChapter?.contentMarkdown]);
+
+  useEffect(() => {
+    if (showBibleModal) {
+      setBibleKeywordsText((productBible?.brandVoiceKeywords || []).join(', '));
+      setBibleConceptsText((productBible?.introducedConcepts || []).join('\n'));
+      setBibleNotesText((productBible?.continuityHandoffNotes || []).join('\n'));
+    }
+  }, [showBibleModal, productBible]);
+
   // When chapter changes, update local draft
   const handleSelectChapter = (chId: string) => {
     setSelectedChapterId(chId);
     const ch = chapters.find((c) => c.id === chId);
     setContentDraft(ch?.contentMarkdown || '');
+    setAiError('');
   };
 
   const handleSaveDraft = () => {
@@ -69,6 +96,7 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   const handleGenerateCurrentChapter = async () => {
     if (!currentChapter || !canGenerate) return;
     setIsGenerating(true);
+    setAiError('');
 
     try {
       const outputLanguage = lang === 'en' ? 'English' : 'Traditional Chinese (繁體中文)';
@@ -103,14 +131,14 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
         maxTokens: 3000,
       });
 
+      onRecordAiUsage?.(res?.usage, res?.model);
       if (res && res.content) {
         setContentDraft(res.content);
         const words = countManuscriptWords(res.content);
         onUpdateChapter(selectedChapterId, res.content, words);
       }
     } catch (err: any) {
-      console.error('Generation error:', err);
-      alert(lang === 'en' ? `Generation failed: ${err.message}` : `生成失敗: ${err.message}`);
+      setAiError(lang === 'en' ? `Generation failed: ${err.message}` : `生成失敗: ${err.message}`);
     } finally {
       setIsGenerating(false);
     }
@@ -149,6 +177,108 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
           </button>
         </div>
       </div>
+
+      {aiError && (
+        <p role="alert" className="px-4 py-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium">
+          {aiError}
+        </p>
+      )}
+
+      {showBibleModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="product-bible-modal-title"
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center p-4"
+        >
+          <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 id="product-bible-modal-title" className="text-base font-bold text-slate-900">
+                  {lang === 'en' ? 'Product Bible & Continuity Context' : '連續記憶辭典 (Product Bible)'}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {charter?.productTitle || productBible?.productTitle || t.untitledProject}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label={lang === 'en' ? 'Close Product Bible' : '關閉連續記憶辭典'}
+                onClick={() => setShowBibleModal(false)}
+                className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                <strong className="text-slate-800 block">{lang === 'en' ? 'Core Promise & Framework' : '核心承諾與架構'}</strong>
+                <p className="text-slate-600">{charter?.centralPromise || productBible?.centralPromise || '—'}</p>
+                <p className="text-indigo-700 font-semibold">{charter?.signatureFramework || productBible?.signatureFramework || '—'}</p>
+              </div>
+
+              <label className="block space-y-1">
+                <span className="font-semibold text-slate-700">{lang === 'en' ? 'Brand Voice Keywords (comma-separated)' : '品牌語調關鍵詞 (逗號分隔)'}</span>
+                <input
+                  type="text"
+                  value={bibleKeywordsText}
+                  onChange={(e) => setBibleKeywordsText(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="font-semibold text-slate-700">{lang === 'en' ? 'Introduced Concepts Across Chapters (one per line)' : '已引入的核心概念 (每行一項)'}</span>
+                <textarea
+                  rows={3}
+                  value={bibleConceptsText}
+                  onChange={(e) => setBibleConceptsText(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-800"
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="font-semibold text-slate-700">{lang === 'en' ? 'Continuity Handoff Notes (one per line)' : '章節銜接備忘錄 (每行一項)'}</span>
+                <textarea
+                  rows={3}
+                  value={bibleNotesText}
+                  onChange={(e) => setBibleNotesText(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-800"
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowBibleModal(false)}
+                className="px-3.5 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg"
+              >
+                {lang === 'en' ? 'Close' : '關閉'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateProductBible?.({
+                    ...productBible,
+                    productTitle: charter?.productTitle || productBible?.productTitle,
+                    centralPromise: charter?.centralPromise || productBible?.centralPromise,
+                    signatureFramework: charter?.signatureFramework || productBible?.signatureFramework,
+                    brandVoiceKeywords: bibleKeywordsText.split(',').map((s) => s.trim()).filter(Boolean),
+                    introducedConcepts: bibleConceptsText.split('\n').map((s) => s.trim()).filter(Boolean),
+                    continuityHandoffNotes: bibleNotesText.split('\n').map((s) => s.trim()).filter(Boolean),
+                  });
+                  setShowBibleModal(false);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+              >
+                {lang === 'en' ? 'Save Bible Context' : '儲存連續記憶辭典'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Studio Work Area */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -190,17 +320,19 @@ ${JSON.stringify(referenceLibrary.cards.filter(card => currentChapter.mappedRefe
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                  {currentChapter?.id}
+                  {currentChapter?.id || (lang === 'en' ? 'NO CHAPTER' : '尚無章節')}
                 </span>
                 <span className="text-xs text-slate-500 font-medium">
-                  {lang === 'en' ? 'Target' : '目標'}: {currentChapter?.targetWordCount} {lang === 'en' ? 'words' : '字'}
+                  {lang === 'en' ? 'Target' : '目標'}: {currentChapter?.targetWordCount ?? 0} {lang === 'en' ? 'words' : '字'}
                 </span>
                 <span className="text-xs text-slate-400">·</span>
                 <span className="text-xs font-mono text-emerald-600 font-semibold">
                   {lang === 'en' ? 'Current' : '當前'}: {wordCount} {lang === 'en' ? 'words' : '字'}
                 </span>
               </div>
-              <h2 className="text-base font-bold text-slate-900">{currentChapter?.title}</h2>
+              <h2 className="text-base font-bold text-slate-900">
+                {currentChapter?.title || (lang === 'en' ? 'Create chapters in Outline & Structure first' : '請先至「章節大綱規劃」新增章節')}
+              </h2>
             </div>
 
             <div className="flex items-center gap-2">
