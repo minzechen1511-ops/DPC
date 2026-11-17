@@ -1,21 +1,38 @@
-import React, { useState } from 'react';
-import { GitFork, Plus, Edit3, Save, X } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { GitFork, Plus, Edit3, Save, X, Sparkles, RefreshCw, Compass } from 'lucide-react';
 import { DigitalProductProject, TransformationMap } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
+import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  buildTransformationSynthesisPrompt,
+  parseTitleOptionsResponse,
+  parseTransformationSynthesisResponse,
+  StrategyFocusLens,
+  summarizeStrategyContext,
+} from '../../utils/strategySynthesis.ts';
 
 interface TransformationMapViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onSelectTitle: (titleId: string) => void;
   onUpdateTransformationMap: (map: TransformationMap) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string) => void;
   lang?: Language;
 }
+
+const FRAMING_LENSES: Array<{ id: StrategyFocusLens; labelEn: string; labelZh: string }> = [
+  { id: 'balanced', labelEn: 'Balanced Conversion Trio', labelZh: '均衡商業轉換結構' },
+  { id: 'beginner_playbook', labelEn: 'Beginner Step-by-Step', labelZh: '新手零壓力漸進引導' },
+  { id: 'action_toolkit', labelEn: 'Action Kit & Deliverables', labelZh: '實戰工具與即用成果' },
+  { id: 'specialist_deep_dive', labelEn: 'Signature Mastery System', labelZh: '進階系統與方法論命名' },
+];
 
 export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
   project,
   setActiveView,
   onSelectTitle,
   onUpdateTransformationMap,
+  onRecordAiUsage,
   lang = 'en',
 }) => {
   const t = translations[lang];
@@ -25,13 +42,79 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
   const bridgeProcess = transformationMap?.bridgeProcess;
   const afterState = transformationMap?.afterState;
 
+  const contextSummary = useMemo(() => summarizeStrategyContext(project, lang), [project, lang]);
+
+  const [lens, setLens] = useState<StrategyFocusLens>('balanced');
+  const [focusNote, setFocusNote] = useState('');
+  const [aiBusy, setAiBusy] = useState<'full' | 'titles' | null>(null);
+  const [aiError, setAiError] = useState('');
+  const [aiSuccess, setAiSuccess] = useState('');
+
   const [showAddTitle, setShowAddTitle] = useState(false);
   const [newTitle, setNewTitle] = useState({ title: '', subtitle: '', rationale: '' });
+
   const [editingMap, setEditingMap] = useState(false);
+  const [bigPromiseText, setBigPromiseText] = useState(transformationMap?.bigPromise || '');
+  const [uspText, setUspText] = useState(transformationMap?.uniqueSellingProposition || '');
   const [painsText, setPainsText] = useState((beforeState?.currentPains || []).join('\n'));
-  const [milestonesText, setMilestonesText] = useState((bridgeProcess?.keyMilestones || []).join('\n'));
-  const [outcomesText, setOutcomesText] = useState((afterState?.tangibleOutcomes || []).join('\n'));
+  const [anxietiesText, setAnxietiesText] = useState((beforeState?.anxietiesAndFrustrations || []).join('\n'));
+  const [flawedText, setFlawedText] = useState((beforeState?.flawedAlternatives || []).join('\n'));
+  const [drainCostText, setDrainCostText] = useState(beforeState?.dailyDrainCost || '');
   const [frameworkName, setFrameworkName] = useState(bridgeProcess?.signatureFrameworkName || '');
+  const [coreMethodologyText, setCoreMethodologyText] = useState(bridgeProcess?.coreMethodology || '');
+  const [milestonesText, setMilestonesText] = useState((bridgeProcess?.keyMilestones || []).join('\n'));
+  const [practicalToolsText, setPracticalToolsText] = useState((bridgeProcess?.practicalTools || []).join('\n'));
+  const [obstacleBypassesText, setObstacleBypassesText] = useState((bridgeProcess?.obstacleBypasses || []).join('\n'));
+  const [outcomesText, setOutcomesText] = useState((afterState?.tangibleOutcomes || []).join('\n'));
+  const [capabilitiesText, setCapabilitiesText] = useState((afterState?.acquiredCapabilities || []).join('\n'));
+  const [deliverablesText, setDeliverablesText] = useState((afterState?.completedDeliverables || []).join('\n'));
+  const [metricsText, setMetricsText] = useState((afterState?.measurableMetrics || []).join('\n'));
+
+  const handleSynthesizeMap = async (titlesOnly = false) => {
+    if (aiBusy) return;
+    setAiBusy(titlesOnly ? 'titles' : 'full');
+    setAiError('');
+    setAiSuccess('');
+    try {
+      const { systemPrompt, userPrompt } = buildTransformationSynthesisPrompt(project, lang, {
+        lens,
+        focusNote,
+        titlesOnly,
+      });
+      const res = await generateTextWithAi({
+        provider: 'gemini',
+        model: project.aiSettings?.defaultModel || 'gemini-4-hydrogen',
+        systemPrompt,
+        userPrompt,
+        maxTokens: titlesOnly ? 1200 : 2200,
+        projectId: project.projectId,
+      });
+      onRecordAiUsage?.(res?.usage, res?.model);
+      const updatedMap = titlesOnly
+        ? parseTitleOptionsResponse(res?.content || '', transformationMap)
+        : parseTransformationSynthesisResponse(res?.content || '', transformationMap);
+      onUpdateTransformationMap(updatedMap);
+      setEditingMap(false);
+      setAiSuccess(
+        titlesOnly
+          ? lang === 'en'
+            ? `Generated ${updatedMap.titleOptions.length} commercial title & subtitle options aligned with your transformation map.`
+            : `已重新生成 ${updatedMap.titleOptions.length} 組商業書名與副標題切入建議。`
+          : lang === 'en'
+          ? `Synthesized full Before → Bridge → After transformation architecture and ${updatedMap.titleOptions.length} title options.`
+          : `已自動生成完整 Before → Bridge → After 客戶轉變地圖與 ${updatedMap.titleOptions.length} 組書名建議。`
+      );
+    } catch (err: any) {
+      setAiError(
+        err?.message ||
+          (lang === 'en'
+            ? 'Could not reach server Gemini engine. Check Gemini AI Settings or sign in again.'
+            : '無法連接伺服器端 Gemini 引擎，請檢查「Gemini AI 與用量設定」或重新登入。')
+      );
+    } finally {
+      setAiBusy(null);
+    }
+  };
 
   const handleAddTitle = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +128,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
           id,
           title: newTitle.title.trim(),
           subtitle: newTitle.subtitle.trim(),
-          rationale: newTitle.rationale.trim() || 'Custom commercial positioning',
+          rationale: newTitle.rationale.trim() || (lang === 'en' ? 'Custom commercial positioning' : '自訂商業書名切入'),
           isRecommended: titleOptions.length === 0,
         },
       ],
@@ -56,212 +139,560 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
     setShowAddTitle(false);
   };
 
+  const openEditor = () => {
+    setBigPromiseText(transformationMap?.bigPromise || '');
+    setUspText(transformationMap?.uniqueSellingProposition || '');
+    setPainsText((beforeState?.currentPains || []).join('\n'));
+    setAnxietiesText((beforeState?.anxietiesAndFrustrations || []).join('\n'));
+    setFlawedText((beforeState?.flawedAlternatives || []).join('\n'));
+    setDrainCostText(beforeState?.dailyDrainCost || '');
+    setFrameworkName(bridgeProcess?.signatureFrameworkName || '');
+    setCoreMethodologyText(bridgeProcess?.coreMethodology || '');
+    setMilestonesText((bridgeProcess?.keyMilestones || []).join('\n'));
+    setPracticalToolsText((bridgeProcess?.practicalTools || []).join('\n'));
+    setObstacleBypassesText((bridgeProcess?.obstacleBypasses || []).join('\n'));
+    setOutcomesText((afterState?.tangibleOutcomes || []).join('\n'));
+    setCapabilitiesText((afterState?.acquiredCapabilities || []).join('\n'));
+    setDeliverablesText((afterState?.completedDeliverables || []).join('\n'));
+    setMetricsText((afterState?.measurableMetrics || []).join('\n'));
+    setEditingMap(true);
+  };
+
+  const splitLines = (txt: string) => txt.split('\n').map((s) => s.trim()).filter(Boolean);
+
   const handleSavePillars = () => {
     onUpdateTransformationMap({
       ...transformationMap,
+      bigPromise: bigPromiseText.trim(),
+      uniqueSellingProposition: uspText.trim(),
       beforeState: {
         ...transformationMap.beforeState,
-        currentPains: painsText.split('\n').map((s) => s.trim()).filter(Boolean),
+        currentPains: splitLines(painsText),
+        anxietiesAndFrustrations: splitLines(anxietiesText),
+        flawedAlternatives: splitLines(flawedText),
+        dailyDrainCost: drainCostText.trim(),
       },
       bridgeProcess: {
         ...transformationMap.bridgeProcess,
         signatureFrameworkName: frameworkName.trim(),
-        keyMilestones: milestonesText.split('\n').map((s) => s.trim()).filter(Boolean),
+        coreMethodology: coreMethodologyText.trim(),
+        keyMilestones: splitLines(milestonesText),
+        practicalTools: splitLines(practicalToolsText),
+        obstacleBypasses: splitLines(obstacleBypassesText),
       },
       afterState: {
         ...transformationMap.afterState,
-        tangibleOutcomes: outcomesText.split('\n').map((s) => s.trim()).filter(Boolean),
+        tangibleOutcomes: splitLines(outcomesText),
+        acquiredCapabilities: splitLines(capabilitiesText),
+        completedDeliverables: splitLines(deliverablesText),
+        measurableMetrics: splitLines(metricsText),
       },
     });
     setEditingMap(false);
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="w-full space-y-5 pb-3">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="lab-panel p-6 lg:p-7 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 mb-1">
-            <GitFork className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2 text-xs font-mono font-semibold text-teal-700 mb-1.5">
+            <GitFork className="w-4 h-4" />
             <span>{t.navTransformationMap}</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">{t.mapTitle}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">{t.mapSubtitle}</p>
+          <h1 className="text-2xl font-extrabold text-slate-900">{t.mapTitle}</h1>
+          <p className="text-sm text-slate-600 mt-1">{t.mapSubtitle}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={Boolean(aiBusy)}
+            onClick={() => handleSynthesizeMap(false)}
+            className="px-4 py-2.5 text-sm font-semibold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-60"
+          >
+            <Sparkles className={`w-4 h-4 text-teal-700 ${aiBusy === 'full' ? 'animate-spin' : ''}`} />
+            <span>
+              {aiBusy === 'full'
+                ? lang === 'en' ? 'Synthesizing Map...' : '正在生成轉變地圖...'
+                : lang === 'en' ? 'AI Synthesize Full Map' : 'AI 一鍵生成轉變地圖'}
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowAddTitle((v) => !v)}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5"
+            className="px-4 py-2.5 text-sm font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors flex items-center gap-2"
           >
-            {showAddTitle ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+            {showAddTitle ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             <span>{showAddTitle ? (lang === 'en' ? 'Cancel' : '取消') : (lang === 'en' ? 'Add Title Option' : '新增書名備選')}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveView('reference_library')}
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+            className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
             <span>{t.approveMapCta}</span>
           </button>
         </div>
       </div>
 
-      {showAddTitle && (
-        <form onSubmit={handleAddTitle} className="bg-white border border-indigo-200 rounded-xl p-6 space-y-3 text-xs">
-          <h2 className="text-sm font-bold text-slate-900">{lang === 'en' ? 'Add Custom Product Title & Subtitle' : '新增自訂商品書名與副標題'}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <input required placeholder={lang === 'en' ? 'Book / Product Title' : '主標題'} value={newTitle.title} onChange={(e) => setNewTitle({ ...newTitle, title: e.target.value })} className="border border-slate-300 rounded-lg px-3 py-2" />
-            <input required placeholder={lang === 'en' ? 'Outcome-oriented Subtitle' : '成果導向副標題'} value={newTitle.subtitle} onChange={(e) => setNewTitle({ ...newTitle, subtitle: e.target.value })} className="border border-slate-300 rounded-lg px-3 py-2" />
-            <input placeholder={lang === 'en' ? 'Hook / Conversion Rationale' : '轉換訴求說明'} value={newTitle.rationale} onChange={(e) => setNewTitle({ ...newTitle, rationale: e.target.value })} className="border border-slate-300 rounded-lg px-3 py-2" />
+      {/* Guided Automated Synthesis Panel */}
+      <div className="lab-panel p-6 lg:p-7 space-y-5 bg-gradient-to-br from-white via-teal-50/20 to-indigo-50/25">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-teal-700" />
+              <span>
+                {lang === 'en'
+                  ? 'Automated Transformation & Titling Synthesizer'
+                  : 'AI 客戶轉變路徑與商業書名生成引擎'}
+              </span>
+            </h2>
+            <p className="text-xs text-slate-600 mt-1">
+              {lang === 'en'
+                ? 'Automatically translates your selected UVZ positioning and buyer problems into a complete Before → Bridge → After transformation pathway, proprietary method name, and 3 title/subtitle hooks.'
+                : '系統將延續您在第 3 步選擇的 UVZ 定位與痛點矩陣，自動推演完整 Before → Bridge → After 轉變步驟、獨家方法論名稱與 3 組高轉換書名建議。'}
+            </p>
           </div>
-          <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg">
+          <span className="text-xs font-mono font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-md shrink-0 flex items-center gap-1.5">
+            <Compass className="w-3.5 h-3.5" />
+            <span>
+              {contextSummary.selectedUvzName
+                ? contextSummary.selectedUvzName
+                : lang === 'en'
+                ? 'No UVZ angle selected yet (AI will infer best fit)'
+                : '尚未選定 UVZ 定位（AI 將自動推算最佳切角）'}
+            </span>
+          </span>
+        </div>
+
+        {/* Lens Selector */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {FRAMING_LENSES.map((item) => {
+            const active = lens === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setLens(item.id)}
+                className={`p-3 rounded-xl border text-left transition-all text-sm font-semibold ${
+                  active
+                    ? 'border-teal-600 bg-teal-50/80 text-teal-950 ring-2 ring-teal-500/20'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                {lang === 'en' ? item.labelEn : item.labelZh}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Custom Direction Input + Action Buttons */}
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-end">
+          <label className="flex-1 block">
+            <span className="text-xs font-bold text-slate-800 block mb-1.5">
+              {lang === 'en'
+                ? 'Optional Customization Note (e.g. target timeframe, tone, or deliverable focus)'
+                : '補充需求或書名風格偏好（可留白，例如：強調 14 天見效、適合完全初學者）'}
+            </span>
+            <input
+              type="text"
+              value={focusNote}
+              onChange={(e) => setFocusNote(e.target.value)}
+              placeholder={
+                lang === 'en'
+                  ? 'e.g. Highlight a 7-day weekend sprint, include checkable templates, warm practical tone...'
+                  : '例如：主打 7 天實戰改造、附可下載檢查表，語氣專業但親切...'
+              }
+              className="w-full"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2.5 shrink-0">
+            <button
+              type="button"
+              disabled={Boolean(aiBusy)}
+              onClick={() => handleSynthesizeMap(true)}
+              className="px-4 py-3 text-sm font-semibold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${aiBusy === 'titles' ? 'animate-spin' : ''}`} />
+              <span>
+                {aiBusy === 'titles'
+                  ? lang === 'en' ? 'Refreshing Titles...' : '生成書名中...'
+                  : lang === 'en' ? 'Generate 3 Title Ideas Only' : '僅重新生成 3 組書名'}
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(aiBusy)}
+              onClick={() => handleSynthesizeMap(false)}
+              className="px-5 py-3 text-sm font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors flex items-center gap-2 shadow-sm disabled:opacity-60"
+            >
+              <Sparkles className={`w-4 h-4 ${aiBusy === 'full' ? 'animate-spin' : ''}`} />
+              <span>
+                {aiBusy === 'full'
+                  ? lang === 'en' ? 'Building Map & Titles...' : '正在建置轉變地圖...'
+                  : lang === 'en' ? 'Synthesize Full Map & Titles' : '生成完整轉變地圖與書名'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {aiSuccess && (
+          <p role="status" className="px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium">
+            {aiSuccess}
+          </p>
+        )}
+        {aiError && (
+          <p role="alert" className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-sm font-medium">
+            {aiError}
+          </p>
+        )}
+      </div>
+
+      {showAddTitle && (
+        <form onSubmit={handleAddTitle} className="lab-panel border-teal-300 p-6 lg:p-7 space-y-4 text-sm">
+          <h2 className="text-base font-bold text-slate-900">{lang === 'en' ? 'Add Custom Product Title & Subtitle' : '新增自訂商品書名與副標題'}</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input required placeholder={lang === 'en' ? 'Book / Product Title' : '主標題'} value={newTitle.title} onChange={(e) => setNewTitle({ ...newTitle, title: e.target.value })} />
+            <input required placeholder={lang === 'en' ? 'Outcome-oriented Subtitle' : '成果導向副標題'} value={newTitle.subtitle} onChange={(e) => setNewTitle({ ...newTitle, subtitle: e.target.value })} />
+            <input placeholder={lang === 'en' ? 'Hook / Conversion Rationale' : '轉換訴求說明'} value={newTitle.rationale} onChange={(e) => setNewTitle({ ...newTitle, rationale: e.target.value })} />
+          </div>
+          <button type="submit" className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl">
             {lang === 'en' ? 'Save & Select Title' : '儲存並選定此書名'}
           </button>
         </form>
       )}
 
       {/* Title Options Selector */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-        <h2 className="text-sm font-bold text-slate-900">{t.titleOptionsTitle}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {titleOptions.map((item) => {
-            const isSelected = transformationMap.selectedTitleId === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onSelectTitle(item.id)}
-                className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                  isSelected
-                    ? 'border-indigo-600 bg-indigo-50/20 ring-2 ring-indigo-500/20 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-mono text-slate-400">{item.id}</span>
-                    {item.isRecommended && (
-                      <span className="text-[11px] font-semibold text-emerald-700">
-                        {lang === 'en' ? 'Recommended' : '推薦'}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-sm font-bold text-slate-900 mb-1 leading-snug">{item.title}</h3>
-                  <p className="text-xs text-slate-600 mb-2">{item.subtitle}</p>
-                  <p className="text-[11px] text-slate-500">{item.rationale}</p>
-                </div>
-
-                <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold">
-                  <span className={isSelected ? 'text-indigo-600' : 'text-slate-400'}>
-                    {isSelected ? (lang === 'en' ? '✓ Selected' : '✓ 已選定') : t.selectTitleBtn}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+      <div className="lab-panel p-6 lg:p-7 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h2 className="text-base font-bold text-slate-900">{t.titleOptionsTitle}</h2>
+          <span className="text-xs font-mono text-slate-500">
+            {titleOptions.length > 0
+              ? lang === 'en'
+                ? `${titleOptions.length} Options · Active: ${transformationMap.selectedTitleId || 'None'}`
+                : `${titleOptions.length} 組書名 · 已選定：${transformationMap.selectedTitleId || '未選擇'}`
+              : lang === 'en'
+              ? 'No titles generated yet'
+              : '尚未產生書名建議'}
+          </span>
         </div>
+
+        {titleOptions.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center space-y-3">
+            <p className="text-sm text-slate-700 max-w-2xl mx-auto">
+              {lang === 'en'
+                ? 'Click "Synthesize Full Map & Titles" or "Generate 3 Title Ideas Only" above so AI proposes commercial titles & subtitles grounded in your niche.'
+                : '目前尚未生成書名候選。請點擊上方「生成完整轉變地圖與書名」或「僅重新生成 3 組書名」，讓 AI 自動產出高吸引力書名。'}
+            </p>
+            <button
+              type="button"
+              disabled={Boolean(aiBusy)}
+              onClick={() => handleSynthesizeMap(false)}
+              className="px-5 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-xl inline-flex items-center gap-2 disabled:opacity-60"
+            >
+              <Sparkles className={`w-4 h-4 ${aiBusy === 'full' ? 'animate-spin' : ''}`} />
+              <span>{lang === 'en' ? 'Auto-Synthesize Map & Titles' : '立即 AI 生成地圖與書名'}</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {titleOptions.map((item) => {
+              const isSelected = transformationMap.selectedTitleId === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSelectTitle(item.id)}
+                  className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-indigo-600 bg-indigo-50/25 ring-2 ring-indigo-500/20 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 bg-slate-50/60'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-mono font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">{item.id}</span>
+                      {item.isRecommended && (
+                        <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                          {lang === 'en' ? 'Recommended' : '推薦'}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900 mb-1.5 leading-snug">{item.title}</h3>
+                    <p className="text-sm text-slate-700 mb-2">{item.subtitle}</p>
+                    <p className="text-xs text-slate-500">{item.rationale}</p>
+                  </div>
+
+                  <div className="pt-3.5 mt-4 border-t border-slate-200/70 flex items-center justify-between text-sm font-semibold">
+                    <span className={isSelected ? 'text-teal-700' : 'text-slate-500'}>
+                      {isSelected ? (lang === 'en' ? '✓ Selected' : '✓ 已選定') : t.selectTitleBtn}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* 3 Pillars: Before, Bridge, After */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <h2 className="text-sm font-bold text-slate-900">
+      {/* Core Offer Anchors + 3 Pillars: Before, Bridge, After */}
+      <div className="lab-panel p-6 lg:p-7 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h2 className="text-base font-bold text-slate-900">
             {lang === 'en' ? 'Before → Bridge → After Transformation Matrix' : 'Before → Bridge → After 轉變架構矩陣'}
           </h2>
           {editingMap ? (
-            <button
-              type="button"
-              onClick={handleSavePillars}
-              className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg flex items-center gap-1"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{lang === 'en' ? 'Save Matrix' : '儲存矩陣'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingMap(false)}
+                className="px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl"
+              >
+                {lang === 'en' ? 'Cancel' : '取消'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePillars}
+                className="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-1.5"
+              >
+                <Save className="w-4 h-4" />
+                <span>{lang === 'en' ? 'Save Full Matrix' : '儲存完整矩陣'}</span>
+              </button>
+            </div>
           ) : (
             <button
               type="button"
-              onClick={() => {
-                setPainsText((beforeState?.currentPains || []).join('\n'));
-                setMilestonesText((bridgeProcess?.keyMilestones || []).join('\n'));
-                setOutcomesText((afterState?.tangibleOutcomes || []).join('\n'));
-                setFrameworkName(bridgeProcess?.signatureFrameworkName || '');
-                setEditingMap(true);
-              }}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              onClick={openEditor}
+              className="text-sm font-semibold text-sky-700 hover:text-sky-900 flex items-center gap-1.5"
             >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>{lang === 'en' ? 'Edit Pillars' : '編輯三階段內容'}</span>
+              <Edit3 className="w-4 h-4" />
+              <span>{lang === 'en' ? 'Edit Full Matrix' : '編輯完整三階段內容'}</span>
             </button>
           )}
         </div>
 
         {editingMap ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <label className="block space-y-1">
-              <span className="font-semibold text-rose-700">{t.beforeStateTitle} (one per line)</span>
-              <textarea rows={5} value={painsText} onChange={(e) => setPainsText(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2.5" />
-            </label>
-            <div className="space-y-2">
-              <label className="block space-y-1">
-                <span className="font-semibold text-indigo-700">Signature Framework Name</span>
-                <input type="text" value={frameworkName} onChange={(e) => setFrameworkName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5" />
+          <div className="space-y-5 text-sm">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <label className="block space-y-1.5">
+                <span className="font-bold text-slate-800">{lang === 'en' ? 'Big Transformation Promise' : '產品核心大承諾 (Big Promise)'}</span>
+                <textarea rows={3} value={bigPromiseText} onChange={(e) => setBigPromiseText(e.target.value)} className="w-full" />
               </label>
-              <label className="block space-y-1">
-                <span className="font-semibold text-indigo-700">{t.bridgeProcessTitle} (one per line)</span>
-                <textarea rows={3} value={milestonesText} onChange={(e) => setMilestonesText(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2.5" />
+              <label className="block space-y-1.5">
+                <span className="font-bold text-slate-800">{lang === 'en' ? 'Unique Selling Proposition (USP)' : '獨特賣點 (USP)'}</span>
+                <textarea rows={3} value={uspText} onChange={(e) => setUspText(e.target.value)} className="w-full" />
               </label>
             </div>
-            <label className="block space-y-1">
-              <span className="font-semibold text-emerald-700">{t.afterStateTitle} (one per line)</span>
-              <textarea rows={5} value={outcomesText} onChange={(e) => setOutcomesText(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2.5" />
-            </label>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Before Edit */}
+              <div className="p-4 rounded-xl bg-rose-50/30 border border-rose-200 space-y-3">
+                <div className="text-xs font-mono font-bold uppercase text-rose-700">{t.beforeStateTitle}</div>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Current Pains (one per line)' : '日常痛點（每行一項）'}</span>
+                  <textarea rows={4} value={painsText} onChange={(e) => setPainsText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Anxieties & Frustrations (one per line)' : '內心焦慮與挫折（每行一項）'}</span>
+                  <textarea rows={3} value={anxietiesText} onChange={(e) => setAnxietiesText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Flawed Alternatives (one per line)' : '失敗的替代方案（每行一項）'}</span>
+                  <textarea rows={3} value={flawedText} onChange={(e) => setFlawedText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Daily Drain Cost' : '每日時間/精力消耗代價'}</span>
+                  <input type="text" value={drainCostText} onChange={(e) => setDrainCostText(e.target.value)} className="w-full" />
+                </label>
+              </div>
+
+              {/* Bridge Edit */}
+              <div className="p-4 rounded-xl bg-teal-50/30 border border-teal-200 space-y-3">
+                <div className="text-xs font-mono font-bold uppercase text-teal-800">{t.bridgeProcessTitle}</div>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Signature Framework Name' : '專屬方法論名稱'}</span>
+                  <input type="text" value={frameworkName} onChange={(e) => setFrameworkName(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Core Methodology' : '核心執行邏輯'}</span>
+                  <textarea rows={3} value={coreMethodologyText} onChange={(e) => setCoreMethodologyText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Key Milestones (one per line)' : '關鍵步驟與里程碑（每行一項）'}</span>
+                  <textarea rows={4} value={milestonesText} onChange={(e) => setMilestonesText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Practical Tools (one per line)' : '附帶實作工具（每行一項）'}</span>
+                  <textarea rows={3} value={practicalToolsText} onChange={(e) => setPracticalToolsText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Obstacle Bypasses (one per line)' : '卡關突破機制（每行一項）'}</span>
+                  <textarea rows={3} value={obstacleBypassesText} onChange={(e) => setObstacleBypassesText(e.target.value)} className="w-full" />
+                </label>
+              </div>
+
+              {/* After Edit */}
+              <div className="p-4 rounded-xl bg-emerald-50/30 border border-emerald-200 space-y-3">
+                <div className="text-xs font-mono font-bold uppercase text-emerald-700">{t.afterStateTitle}</div>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Tangible Outcomes (one per line)' : '實質成果收穫（每行一項）'}</span>
+                  <textarea rows={4} value={outcomesText} onChange={(e) => setOutcomesText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Acquired Capabilities (one per line)' : '學會的新能力（每行一項）'}</span>
+                  <textarea rows={3} value={capabilitiesText} onChange={(e) => setCapabilitiesText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Completed Deliverables (one per line)' : '帶走的完成作品（每行一項）'}</span>
+                  <textarea rows={3} value={deliverablesText} onChange={(e) => setDeliverablesText(e.target.value)} className="w-full" />
+                </label>
+                <label className="block space-y-1">
+                  <span className="font-semibold text-slate-800">{lang === 'en' ? 'Measurable Metrics (one per line)' : '可驗證成效指標（每行一項）'}</span>
+                  <textarea rows={3} value={metricsText} onChange={(e) => setMetricsText(e.target.value)} className="w-full" />
+                </label>
+              </div>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Before State */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
-              <div className="text-rose-700 text-xs font-bold uppercase tracking-wide">{t.beforeStateTitle}</div>
-              <div className="space-y-2 text-xs text-slate-700">
-                <span className="font-semibold text-slate-800 block">{lang === 'en' ? 'Daily Pains & Friction:' : '日常痛點：'}</span>
-                <ul className="list-disc list-inside space-y-1 text-slate-600">
-                  {(beforeState?.currentPains || []).map((p, idx) => (
-                    <li key={idx}>{p}</li>
-                  ))}
-                </ul>
-                <div className="p-2.5 bg-rose-50/70 rounded border border-rose-100 text-[11px] text-rose-800 mt-2">
-                  <strong>{lang === 'en' ? 'Daily Drain Cost:' : '每日消耗代價：'}</strong> {beforeState?.dailyDrainCost || '—'}
+          <div className="space-y-5">
+            {(transformationMap?.bigPromise || transformationMap?.uniqueSellingProposition) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-indigo-50/40 border border-indigo-200/80">
+                  <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-indigo-800 mb-1">
+                    {lang === 'en' ? 'Core Big Promise' : '產品核心大承諾'}
+                  </div>
+                  <p className="text-sm font-medium text-slate-800">{transformationMap.bigPromise || '—'}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-teal-50/40 border border-teal-200/80">
+                  <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-teal-800 mb-1">
+                    {lang === 'en' ? 'Unique Selling Proposition (USP)' : '獨特賣點定位 (USP)'}
+                  </div>
+                  <p className="text-sm font-medium text-slate-800">{transformationMap.uniqueSellingProposition || '—'}</p>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Bridge Process */}
-            <div className="bg-indigo-50/30 border border-indigo-200 rounded-xl p-5 space-y-3">
-              <div className="text-indigo-700 text-xs font-bold uppercase tracking-wide">{t.bridgeProcessTitle}</div>
-              <div className="space-y-2 text-xs text-slate-700">
-                <span className="font-semibold text-slate-800 block">{bridgeProcess?.signatureFrameworkName || '—'}</span>
-                <ul className="list-disc list-inside space-y-1 text-slate-600">
-                  {(bridgeProcess?.keyMilestones || []).map((m, idx) => (
-                    <li key={idx}>{m}</li>
-                  ))}
-                </ul>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Before */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3.5">
+                <div className="text-rose-700 text-xs font-mono font-bold uppercase tracking-wider">{t.beforeStateTitle}</div>
+                <div className="space-y-3 text-sm text-slate-700">
+                  <div>
+                    <span className="font-bold text-slate-900 block mb-1">{lang === 'en' ? 'Daily Pains & Friction:' : '日常痛點：'}</span>
+                    <ul className="list-disc list-inside space-y-1 text-slate-600">
+                      {(beforeState?.currentPains || []).map((p, idx) => (
+                        <li key={idx}>{p}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  {(beforeState?.anxietiesAndFrustrations || []).length > 0 && (
+                    <div>
+                      <span className="font-bold text-slate-900 block mb-1">{lang === 'en' ? 'Anxieties & Doubts:' : '心理焦慮與摩擦：'}</span>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600">
+                        {beforeState.anxietiesAndFrustrations.map((a, idx) => (
+                          <li key={idx}>{a}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(beforeState?.flawedAlternatives || []).length > 0 && (
+                    <div>
+                      <span className="font-bold text-slate-900 block mb-1">{lang === 'en' ? 'Why Existing Alternatives Fail:' : '為何常見替代方式會失敗：'}</span>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600">
+                        {beforeState.flawedAlternatives.map((f, idx) => (
+                          <li key={idx}>{f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="p-3 bg-rose-50/80 rounded-xl border border-rose-200 text-xs text-rose-900">
+                    <strong>{lang === 'en' ? 'Daily Drain Cost:' : '每日消耗代價：'}</strong> {beforeState?.dailyDrainCost || '—'}
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* After State */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3">
-              <div className="text-emerald-700 text-xs font-bold uppercase tracking-wide">{t.afterStateTitle}</div>
-              <div className="space-y-2 text-xs text-slate-700">
-                <span className="font-semibold text-slate-800 block">{lang === 'en' ? 'Measurable Outcomes:' : '實質收穫：'}</span>
-                <ul className="list-disc list-inside space-y-1 text-slate-600">
-                  {(afterState?.tangibleOutcomes || []).map((o, idx) => (
-                    <li key={idx}>{o}</li>
-                  ))}
-                </ul>
-                <div className="p-2.5 bg-emerald-50/70 rounded border border-emerald-100 text-[11px] text-emerald-800 mt-2">
-                  <strong>{lang === 'en' ? 'Metrics:' : '關鍵指標：'}</strong> {(afterState?.measurableMetrics || []).join(' · ') || '—'}
+              {/* Bridge */}
+              <div className="bg-teal-50/40 border border-teal-200 rounded-2xl p-5 space-y-3.5">
+                <div className="text-teal-800 text-xs font-mono font-bold uppercase tracking-wider">{t.bridgeProcessTitle}</div>
+                <div className="space-y-3 text-sm text-slate-700">
+                  <div>
+                    <span className="text-xs text-slate-500 block">{lang === 'en' ? 'Signature Method:' : '專屬方法論名稱：'}</span>
+                    <span className="font-bold text-slate-900 text-base">{bridgeProcess?.signatureFrameworkName || '—'}</span>
+                  </div>
+                  {bridgeProcess?.coreMethodology && (
+                    <p className="text-xs text-slate-700 bg-white/80 border border-teal-100 rounded-xl p-3 leading-relaxed">
+                      {bridgeProcess.coreMethodology}
+                    </p>
+                  )}
+                  <div>
+                    <span className="font-bold text-slate-900 block mb-1">{lang === 'en' ? 'Step-by-Step Milestones:' : '核心執行步驟：'}</span>
+                    <ul className="list-disc list-inside space-y-1 text-slate-700">
+                      {(bridgeProcess?.keyMilestones || []).map((m, idx) => (
+                        <li key={idx}>{m}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  {(bridgeProcess?.practicalTools || []).length > 0 && (
+                    <div>
+                      <span className="font-bold text-slate-900 block mb-1">{lang === 'en' ? 'Action Tools & Templates:' : '實作輔助工具：'}</span>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600">
+                        {bridgeProcess.practicalTools.map((tool, idx) => (
+                          <li key={idx}>{tool}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(bridgeProcess?.obstacleBypasses || []).length > 0 && (
+                    <div className="p-3 bg-teal-50 rounded-xl border border-teal-200 text-xs text-teal-950">
+                      <strong className="block mb-1">{lang === 'en' ? 'Obstacle Bypasses:' : '卡關突破設計：'}</strong>
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {bridgeProcess.obstacleBypasses.map((b, idx) => (
+                          <li key={idx}>{b}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* After */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3.5">
+                <div className="text-emerald-700 text-xs font-mono font-bold uppercase tracking-wider">{t.afterStateTitle}</div>
+                <div className="space-y-3 text-sm text-slate-700">
+                  <div>
+                    <span className="font-bold text-slate-900 block mb-1">{lang === 'en' ? 'Measurable Outcomes:' : '實質收穫：'}</span>
+                    <ul className="list-disc list-inside space-y-1 text-slate-600">
+                      {(afterState?.tangibleOutcomes || []).map((o, idx) => (
+                        <li key={idx}>{o}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  {(afterState?.acquiredCapabilities || []).length > 0 && (
+                    <div>
+                      <span className="font-bold text-slate-900 block mb-1">{lang === 'en' ? 'Acquired Capabilities:' : '建立的持久能力：'}</span>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600">
+                        {afterState.acquiredCapabilities.map((cap, idx) => (
+                          <li key={idx}>{cap}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(afterState?.completedDeliverables || []).length > 0 && (
+                    <div>
+                      <span className="font-bold text-slate-900 block mb-1">{lang === 'en' ? 'Completed Deliverables:' : '完成帶走的成果物：'}</span>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600">
+                        {afterState.completedDeliverables.map((del, idx) => (
+                          <li key={idx}>{del}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="p-3 bg-emerald-50/80 rounded-xl border border-emerald-200 text-xs text-emerald-900">
+                    <strong>{lang === 'en' ? 'Metrics:' : '關鍵指標：'}</strong> {(afterState?.measurableMetrics || []).join(' · ') || '—'}
+                  </div>
                 </div>
               </div>
             </div>

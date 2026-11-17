@@ -217,4 +217,83 @@ export function compileLaunchAssetsMarkdown(project: DigitalProductProject): str
   return md;
 }
 
+export function compileExecutiveSummaryMarkdown(project: DigitalProductProject): string {
+  const { charter, outline, intake, brand, transformationMap, productBible, pricingReport } = project;
+  const title = charter.productTitle || intake.projectName || 'Digital Product';
+  let md = `# ${title} — Executive Summary & Action Playbook\n`;
+  if (charter.subtitle) md += `> ${charter.subtitle}\n\n`;
+  md += `**Author / Imprint:** ${intake.creatorName || brand.profileName || 'Digital Product Studio'}\n`;
+  md += `**Recommended Format:** ${charter.deliveryFormat || 'Ebook + Companion Toolkit Bundle'}\n\n`;
+  md += `---\n\n`;
+
+  md += `## 1. Purpose & Core Problem Solved\n\n`;
+  md += `- **Who This Helps:** ${charter.targetAudience || intake.targetAudience || 'Learners seeking structured mastery.'}\n`;
+  md += `- **Core Problem Addressed:** ${charter.primaryProblemSolved || intake.problemsSolved || 'Eliminating trial-and-error execution.'}\n`;
+  md += `- **Key Transformation Outcome:** ${charter.centralPromise || intake.desiredTransformation || 'Step-by-step measurable skill mastery.'}\n\n`;
+
+  const beforeItems = transformationMap?.beforeState?.currentPains || [];
+  const bridgeItems = transformationMap?.bridgeProcess?.keyMilestones || [];
+  const afterItems = transformationMap?.afterState?.tangibleOutcomes || [];
+  const keyTermEntries = Object.entries(productBible?.keyTerminology || {});
+  const introducedConcepts = productBible?.introducedConcepts || [];
+
+  if (beforeItems.length || bridgeItems.length || afterItems.length) {
+    md += `## 2. Customer Transformation Roadmap (Before → Bridge → After)\n\n`;
+    if (beforeItems.length) {
+      md += `### Where You Start (Before)\n`;
+      for (const item of beforeItems) md += `- ${item}\n`;
+      md += `\n`;
+    }
+    if (bridgeItems.length) {
+      md += `### The Practical Method (The Bridge)\n`;
+      bridgeItems.forEach((item, idx) => {
+        md += `${idx + 1}. ${item}\n`;
+      });
+      md += `\n`;
+    }
+    if (afterItems.length) {
+      md += `### What Changes Upon Completion (After)\n`;
+      for (const item of afterItems) md += `- ${item}\n`;
+      md += `\n`;
+    }
+  }
+
+  if (productBible?.signatureFramework || keyTermEntries.length || introducedConcepts.length) {
+    md += `## 3. Core Frameworks & Key Terminology\n\n`;
+    if (productBible.signatureFramework) {
+      md += `- **Signature Framework:** ${productBible.signatureFramework}\n`;
+    }
+    for (const concept of introducedConcepts) {
+      md += `- ${concept}\n`;
+    }
+    for (const [term, definition] of keyTermEntries) {
+      md += `- **${term}:** ${definition}\n`;
+    }
+    md += `\n`;
+  }
+
+  md += `## 4. Chapter-by-Chapter Action Takeaways\n\n`;
+  if (outline.length) {
+    md += `| Chapter | Objective | Key Practical Deliverable | Completion Check |\n`;
+    md += `| :--- | :--- | :--- | :--- |\n`;
+    for (const ch of outline) {
+      md += `| Ch. ${ch.order}: ${ch.title.replaceAll('|', '/')} | ${(ch.objective || '—').replaceAll('|', '/')} | ${(ch.practicalDeliverable || '—').replaceAll('|', '/')} | ${(ch.completionMilestone || '—').replaceAll('|', '/')} |\n`;
+    }
+    md += `\n`;
+  } else {
+    md += `No chapters configured yet.\n\n`;
+  }
+
+  md += `## 5. Quick-Start Implementation Guide\n\n`;
+  md += `1. **Review Your Baseline:** Skim the chapter roadmap above and select the first chapter matching your immediate bottleneck.\n`;
+  md += `2. **Pair Reading with Worksheets:** Open the matching chapter worksheet alongside the main e-book to record real numbers and actions.\n`;
+  md += `3. **Verify Sources & Measure Outcomes:** Inspect the cited reading room records and log completed milestones inside \`resources/learning-progress.csv\`.\n\n`;
+
+  if (pricingReport?.regularPrice) {
+    md += `> **Commercial Tier Reference:** Test $${pricingReport.introductoryPrice} · Core $${pricingReport.regularPrice} · Complete Bundle $${pricingReport.bundlePrice} (${pricingReport.currency})\n`;
+  }
+
+  return md;
+}
+
 export { compileStyledHtml } from './styledBook.ts';

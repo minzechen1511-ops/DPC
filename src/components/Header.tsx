@@ -1,19 +1,29 @@
 import React from 'react';
-import { Download, Settings2, Menu } from 'lucide-react';
+import { Download, Settings2, Menu, Cloud, RefreshCw, AlertTriangle, LogOut } from 'lucide-react';
 import { DigitalProductProject, StageId } from '../types/project.ts';
 import { getStageMetadata } from '../utils/workflowEngine.ts';
 import { Language, translations } from '../utils/i18n.ts';
 import { StudioLogo } from './StudioLogo.tsx';
 
+export type LocalSaveStatus = 'local' | 'saving' | 'saved' | 'error' | 'conflict';
+
 interface HeaderProps {
   onToggleNavigation: () => void;
   navigationOpen: boolean;
   project: DigitalProductProject;
-  activeView: StageId | 'dashboard' | 'new_project' | 'my_projects' | 'ai_settings' | 'automation_settings' | 'subscription_desktop';
+  activeView: StageId | 'dashboard' | 'new_project' | 'my_projects' | 'ai_settings' | 'automation_settings';
   setActiveView: (view: any) => void;
   progressPercent: number;
   lang: Language;
   setLang: (lang: Language) => void;
+  saveStatus?: LocalSaveStatus;
+  activeRevision?: number;
+  onRetrySave?: () => void;
+  onReloadProject?: () => void;
+  userEmail?: string | null;
+  userDisplayName?: string | null;
+  userPhotoUrl?: string | null;
+  onSignOut?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,9 +32,17 @@ export const Header: React.FC<HeaderProps> = ({
   project,
   activeView,
   setActiveView,
-  progressPercent,
+  progressPercent: _progressPercent,
   lang,
   setLang,
+  saveStatus = 'saved',
+  activeRevision,
+  onRetrySave,
+  onReloadProject,
+  userEmail,
+  userDisplayName,
+  userPhotoUrl,
+  onSignOut,
 }) => {
   const t = translations[lang];
 
@@ -38,57 +56,90 @@ export const Header: React.FC<HeaderProps> = ({
         ? t.navMyProjects
         : activeView === 'ai_settings'
         ? t.navAiSettings
-        : activeView === 'subscription_desktop'
-        ? t.navSubscriptionDesktop
         : t.navAutomationSettings,
     subtitle: t.subtitle,
   };
 
   return (
     <header className="workspace-header px-4 lg:px-6 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
-      {/* Zone 1: Brand Emblem & Wordmark + Project Context */}
+      {/* Zone 1: Brand Emblem & Wordmark + Active Workspace */}
       <div className="flex items-center gap-3 min-w-0">
-        <button className="navigation-toggle p-2" onClick={onToggleNavigation} aria-label={lang === 'en' ? 'Toggle navigation' : '切換導覽'} aria-expanded={navigationOpen} aria-controls="workspace-navigation"><Menu size={20} /></button>
+        <button
+          className="navigation-toggle p-2"
+          onClick={onToggleNavigation}
+          aria-label={lang === 'en' ? 'Toggle navigation' : '切換導覽'}
+          aria-expanded={navigationOpen}
+          aria-controls="workspace-navigation"
+        >
+          <Menu size={22} />
+        </button>
         <button
           onClick={() => setActiveView('dashboard')}
-          className="inline-flex items-center gap-2.5 text-sm xl:text-base font-bold tracking-tight text-slate-900 hover:text-indigo-600 transition-colors whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-2.5 text-base xl:text-lg font-bold tracking-tight text-slate-900 hover:text-indigo-600 transition-colors whitespace-nowrap shrink-0"
         >
-          <StudioLogo size={24} className="shrink-0" />
+          <StudioLogo size={26} className="shrink-0" />
           <span>{t.appName}</span>
         </button>
-        <span className="hidden xl:inline text-xs text-slate-400" aria-hidden="true">/</span>
-        <span className="hidden xl:inline text-xs font-medium text-slate-600 whitespace-nowrap truncate max-w-[200px]">
+        <span className="hidden xl:inline text-sm text-slate-400" aria-hidden="true">/</span>
+        <span className="hidden xl:inline text-sm font-medium text-slate-700 whitespace-nowrap truncate max-w-[240px]">
           {project.charter?.productTitle || project.name || t.untitledProject}
         </span>
-        {project.isBlankProject && (
-          <>
-            <span className="hidden sm:inline text-xs text-slate-300" aria-hidden="true">·</span>
-            <span className="hidden sm:inline text-xs font-medium text-amber-700 whitespace-nowrap">
-              {lang === 'en' ? 'Blank Workspace' : '空白專案'}
-            </span>
-          </>
-        )}
       </div>
 
-      {/* Zone 2: Contextual Stage Title & Active Model */}
-      <div className="hidden 2xl:flex items-center gap-3 text-xs text-slate-500 truncate">
-        <span className="font-semibold text-slate-800">{currentStageMeta.title}</span>
+      {/* Zone 2: Stage Context & Gemini Engine Readout */}
+      <div className="hidden 2xl:flex items-center gap-3 text-xs text-slate-600 truncate">
+        <span className="font-semibold text-sm text-slate-900">{currentStageMeta.title}</span>
         <span aria-hidden="true" className="text-slate-300">·</span>
-        <span className="text-slate-500">{currentStageMeta.subtitle}</span>
-        <span aria-hidden="true" className="text-slate-300">·</span>
-        <span className="font-mono text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded text-[11px]">
-          {project.aiSettings.provider?.toUpperCase()}: {project.aiSettings.defaultModel || 'default'}
+        <span className="font-mono text-sky-800 bg-sky-50 border border-sky-200 px-2.5 py-1 rounded-md text-xs font-semibold">
+          GEMINI: {project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
         </span>
       </div>
 
-      {/* Zone 3: Primary Action & Controls */}
-      <div className="header-actions flex items-center gap-2 shrink-0">
-        {/* Language Switcher */}
-        <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+      {/* Zone 3: Cloud Sync, Language Switcher, Settings, Export & Account */}
+      <div className="header-actions flex items-center gap-2.5 shrink-0">
+        <div className="hidden sm:flex items-center">
+          {saveStatus === 'saving' && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span>{lang === 'en' ? 'Syncing...' : '同步中...'}</span>
+            </span>
+          )}
+          {(saveStatus === 'saved' || saveStatus === 'local') && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-medium">
+              <Cloud className="w-3.5 h-3.5" />
+              <span>
+                {lang === 'en' ? 'Cloud Synced' : '雲端已同步'}
+                {typeof activeRevision === 'number' ? ` · r${activeRevision}` : ''}
+              </span>
+            </span>
+          )}
+          {saveStatus === 'error' && (
+            <button
+              type="button"
+              onClick={onRetrySave}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold hover:bg-rose-100"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>{lang === 'en' ? 'Sync Error · Retry' : '同步失敗 · 重試'}</span>
+            </button>
+          )}
+          {saveStatus === 'conflict' && (
+            <button
+              type="button"
+              onClick={onReloadProject}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-amber-50 text-amber-800 border border-amber-300 text-xs font-semibold hover:bg-amber-100"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>{lang === 'en' ? 'Revision Conflict · Reload' : '版次衝突 · 重新載入'}</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
           <button
             onClick={() => setLang('en')}
-            className={`px-2 py-1 rounded font-semibold transition-colors ${
-              lang === 'en' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            className={`px-2.5 py-1 rounded font-semibold transition-colors whitespace-nowrap ${
+              lang === 'en' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
             aria-pressed={lang === 'en'}
             title="Switch UI to English"
@@ -97,8 +148,8 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           <button
             onClick={() => setLang('zh')}
-            className={`px-2 py-1 rounded font-semibold transition-colors ${
-              lang === 'zh' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            className={`px-2.5 py-1 rounded font-semibold transition-colors whitespace-nowrap ${
+              lang === 'zh' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
             aria-pressed={lang === 'zh'}
             title="切換介面為繁體中文"
@@ -107,27 +158,57 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* Settings button */}
         <button
           onClick={() => setActiveView('ai_settings')}
-          className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+          className="p-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
           title={t.aiSettings}
           aria-label={t.aiSettings}
         >
           <Settings2 className="w-4 h-4" />
         </button>
 
-        {/* Export Center Button */}
         <button
           aria-label={t.exportProduct}
           onClick={() => setActiveView('export_center')}
-          className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
+          className="px-3.5 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="w-4 h-4" />
           <span className="hidden sm:inline">{t.exportProduct}</span>
         </button>
 
-
+        {(userEmail || userDisplayName) && (
+          <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+            {userPhotoUrl ? (
+              <img
+                src={userPhotoUrl}
+                alt={userDisplayName || userEmail || 'User'}
+                referrerPolicy="no-referrer"
+                className="w-7 h-7 rounded-full border border-slate-200 object-cover shrink-0"
+              />
+            ) : (
+              <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs inline-flex items-center justify-center shrink-0">
+                {(userDisplayName || userEmail || 'U').slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <span
+              className="hidden md:inline text-xs font-semibold text-slate-700 max-w-[140px] truncate"
+              title={userEmail || userDisplayName || ''}
+            >
+              {userDisplayName || userEmail}
+            </span>
+            {onSignOut && (
+              <button
+                type="button"
+                onClick={onSignOut}
+                title={lang === 'en' ? 'Sign out of Google account' : '登出 Google 帳戶'}
+                aria-label={lang === 'en' ? 'Sign out' : '登出'}
+                className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

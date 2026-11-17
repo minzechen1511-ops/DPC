@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { ListTree, CheckCircle2, Plus, Trash2, Sparkles } from 'lucide-react';
+import { ListTree, CheckCircle2, Plus, Trash2, Sparkles, BarChart3 } from 'lucide-react';
 import { DigitalProductProject, ChapterOutlineItem } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 import { generateTextWithAi } from '../../services/aiService.ts';
+import { countManuscriptWords } from '../../utils/textMetrics.ts';
+import { buildOutlineSynthesisPrompt, parseOutlineSynthesisResponse } from '../../utils/stageSynthesis.ts';
 
 interface OutlineBuilderViewProps {
   project: DigitalProductProject;
@@ -24,8 +26,10 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
   const chapters = outline || [];
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [focusNote, setFocusNote] = useState('');
 
   const totalWords = chapters.reduce((sum, ch) => sum + (ch.actualWordCount || ch.targetWordCount || 0), 0);
+  const maxTargetWords = Math.max(1, ...chapters.map((ch) => Math.max(ch.targetWordCount || 0, countManuscriptWords(ch.contentMarkdown || ''))));
 
   const handleAddChapter = () => {
     const nextNum = chapters.length + 1;
@@ -65,64 +69,26 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
     setAiBusy(true);
     setAiError('');
     try {
-      const outputLang = lang === 'en' ? 'English' : 'Traditional Chinese';
-      const refIds = project.referenceLibrary.cards.map((c) => c.id).join(', ') || 'none';
+      const { systemPrompt, userPrompt } = buildOutlineSynthesisPrompt(project, lang, focusNote);
       const res = await generateTextWithAi({
-        provider: project.aiSettings.provider,
-        model: project.aiSettings.defaultModel || 'openrouter/free',
-        systemPrompt:
-          'You are an editorial curriculum architect. Output valid JSON ONLY containing an array of 5 to 7 structured chapters.',
-        userPrompt: `Design a commercial digital product chapter outline in ${outputLang}. Return JSON array ONLY:
-Product Title: ${project.charter?.productTitle || project.name}
-Central Promise: ${project.charter?.centralPromise}
-Signature Framework: ${project.charter?.signatureFramework}
-Available Reference IDs: ${refIds}
-
-JSON schema:
-[
-  {
-    "title": "string",
-    "objective": "string",
-    "subtopics": ["string", "string", "string"],
-    "targetWordCount": 1800,
-    "practicalDeliverable": "string"
-  }
-]`,
-        maxTokens: 2000,
+        provider: 'gemini',
+        model: project.aiSettings.defaultModel || 'gemini-4-hydrogen',
+        systemPrompt,
+        userPrompt,
+        maxTokens: 2400,
+        projectId: project.projectId,
       });
 
       onRecordAiUsage?.(res?.usage, res?.model);
-      const raw = String(res?.content || '').trim();
-      const arrMatch = raw.match(/\[[\s\S]*\]/);
-      if (!arrMatch) throw new Error('AI response did not return a valid chapter JSON array.');
-      const parsed = JSON.parse(arrMatch[0]);
-      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Empty outline returned.');
-
       const availableRefs = project.referenceLibrary.cards.map((c) => c.id);
-      const built: ChapterOutlineItem[] = parsed.map((item: any, idx: number) => {
-        const order = idx + 1;
-        return {
-          id: `CH-${String(order).padStart(2, '0')}`,
-          order,
-          title: String(item.title || `Chapter ${order}`),
-          objective: String(item.objective || ''),
-          subtopics: Array.isArray(item.subtopics) ? item.subtopics.map(String) : [],
-          targetWordCount: Number(item.targetWordCount) || 1800,
-          practicalDeliverable: String(item.practicalDeliverable || 'Actionable chapter checklist'),
-          mappedReferenceIds: availableRefs.length ? [availableRefs[idx % availableRefs.length]] : [],
-          exampleScenarios: [],
-          completionMilestone: 'Chapter deliverable verified',
-          isCompleted: false,
-          isLocked: false,
-        };
-      });
+      const built = parseOutlineSynthesisResponse(res?.content || '', availableRefs);
       onUpdateOutline(built);
     } catch (err: any) {
       setAiError(
         err?.message ||
           (lang === 'en'
-            ? 'Configure a valid AI API key in AI Settings to draft an outline with AI.'
-            : '請先於「AI 模型與 API 設定」配置有效的 API 金鑰後再使用 AI 規劃大綱。')
+            ? 'Could not reach server Gemini engine. Check Gemini AI Settings or sign in again.'
+            : '無法連接伺服器端 Gemini 引擎，請檢查「Gemini AI 與用量設定」或重新登入。')
       );
     } finally {
       setAiBusy(false);
@@ -130,30 +96,30 @@ JSON schema:
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="w-full space-y-5 pb-3">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="lab-panel p-6 lg:p-7 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 mb-1">
-            <ListTree className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2 text-xs font-mono font-semibold text-teal-700 mb-1.5">
+            <ListTree className="w-4 h-4" />
             <span>{t.navOutlineBuilder}</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">{t.outlineTitle}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-extrabold text-slate-900">{t.outlineTitle}</h1>
+          <p className="text-sm text-slate-600 mt-1">
             {lang === 'en'
               ? `${chapters.length} chapters structured, ~${totalWords.toLocaleString()} total target words, with ${project.referenceLibrary.cards.length} source records available for chapter mapping.`
               : `共 ${chapters.length} 個章節，預計總字數約 ${totalWords.toLocaleString()} 字，目前有 ${project.referenceLibrary.cards.length} 篇來源紀錄可配置章節與實作交付檢核`}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             disabled={aiBusy}
             onClick={handleDraftOutlineWithAi}
-            className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1.5"
+            className="px-4 py-2.5 text-sm font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors flex items-center gap-2"
           >
-            <Sparkles className={`w-3.5 h-3.5 ${aiBusy ? 'animate-spin' : ''}`} />
+            <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
             <span>
               {aiBusy
                 ? lang === 'en' ? 'Drafting Outline...' : '正在規劃大綱...'
@@ -164,33 +130,96 @@ JSON schema:
           <button
             type="button"
             onClick={handleAddChapter}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5"
+            className="px-4 py-2.5 text-sm font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors flex items-center gap-2"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span>{lang === 'en' ? 'Add Chapter' : '新增章節'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveView('content_studio')}
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+            className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
             <span>{t.generateAllChaptersCta}</span>
           </button>
         </div>
       </div>
 
+      {/* Synthesise.ai Curriculum Guidance Bar */}
+      <div className="lab-panel p-4 sm:p-5 bg-gradient-to-r from-teal-50/60 via-white to-sky-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
+        <span className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 whitespace-nowrap">
+          {lang === 'en' ? 'Outline Architect Prompt:' : '大綱結構引導提示：'}
+        </span>
+        <input
+          type="text"
+          value={focusNote}
+          onChange={(e) => setFocusNote(e.target.value)}
+          placeholder={
+            lang === 'en'
+              ? 'Optional structure request (e.g., 6 chapters, include a troubleshooting chapter and a 30-day sprint roadmap...)'
+              : '選填大綱結構偏好（例如：規劃 6 章、加入常見盲點排解章節與 30 天執行路線圖...）'
+          }
+          className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800"
+        />
+      </div>
+
       {aiError && (
-        <p role="alert" className="px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-xs font-medium">
+        <p role="alert" className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-sm font-medium">
           {aiError}
         </p>
       )}
 
-      {/* Chapters Accordion / List */}
-      <div className="space-y-3">
+      {/* Scientific Word Allocation Spectrum */}
+      {chapters.length > 0 && (
+        <div className="lab-panel p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-sky-600" />
+              <span>{lang === 'en' ? 'Chapter Word Density & Target Allocation' : '各章字數規模與完稿密度分布'}</span>
+            </h2>
+            <span className="text-xs font-mono text-slate-500">
+              {lang === 'en' ? 'Actual vs Target' : '實寫 vs 目標字數'}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {chapters.map((ch) => {
+              const actual = countManuscriptWords(ch.contentMarkdown || '');
+              const targetPct = Math.round(((ch.targetWordCount || 0) / maxTargetWords) * 100);
+              const actualPct = Math.round((actual / maxTargetWords) * 100);
+              return (
+                <div key={ch.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="font-bold text-teal-800">{ch.id}</span>
+                    <span className="text-slate-600 tabular-nums">
+                      {actual}/{ch.targetWordCount}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-slate-200 rounded-sm overflow-hidden relative">
+                    <div
+                      className="absolute inset-y-0 left-0 bg-sky-200"
+                      style={{ width: `${targetPct}%` }}
+                    />
+                    <div
+                      className="absolute inset-y-0 left-0 bg-emerald-600"
+                      style={{ width: `${actualPct}%` }}
+                    />
+                  </div>
+                  <div className="text-xs font-medium text-slate-700 truncate" title={ch.title}>
+                    {ch.title}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Chapters List */}
+      <div className="space-y-4">
         {chapters.length === 0 ? (
-          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center space-y-3">
-            <p className="text-sm text-slate-600">
+          <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-10 text-center space-y-4">
+            <p className="text-base text-slate-600">
               {lang === 'en'
                 ? 'No chapters in this outline yet. Add a chapter manually or draft an outline with AI.'
                 : '目前尚無章節大綱。請點擊上方「新增章節」或使用 AI 自動規劃大綱。'}
@@ -198,21 +227,21 @@ JSON schema:
             <button
               type="button"
               onClick={handleAddChapter}
-              className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg inline-flex items-center gap-1.5"
+              className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl inline-flex items-center gap-2"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               <span>{lang === 'en' ? 'Create Chapter 1' : '建立第一章'}</span>
             </button>
           </div>
         ) : (
           chapters.map((ch) => (
-            <div key={ch.id} className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 transition-all space-y-3 shadow-2xs">
-              <details className="text-sm border-b border-slate-200 pb-3">
-                <summary className="font-medium cursor-pointer">
+            <div key={ch.id} className="bg-white border border-slate-200 rounded-2xl p-6 hover:border-slate-300 transition-all space-y-4">
+              <details className="text-sm border-b border-slate-200 pb-4">
+                <summary className="font-bold cursor-pointer text-slate-800">
                   {lang === 'en' ? 'Edit this chapter research plan' : '編輯本章研究與大綱計畫'}
                 </summary>
                 <form
-                  className="mt-3 space-y-3 text-xs"
+                  className="mt-4 space-y-4 text-sm"
                   onSubmit={(event) => {
                     event.preventDefault();
                     const values = new FormData(event.currentTarget);
@@ -235,26 +264,28 @@ JSON schema:
                     );
                   }}
                 >
-                  <label className="block">
+                  <label className="block font-semibold text-slate-800">
                     {lang === 'en' ? 'Chapter title' : '章節標題'}
-                    <input required name="title" defaultValue={ch.title} className="block w-full border border-slate-300 rounded p-2 mt-1" />
+                    <input required name="title" defaultValue={ch.title} className="block w-full border border-slate-300 rounded-xl px-3.5 py-2.5 mt-1.5 bg-slate-50 font-normal" />
                   </label>
-                  <label className="block">
-                    {lang === 'en' ? 'Learning objective' : '學習目標'}
-                    <textarea required name="objective" defaultValue={ch.objective} className="block w-full border border-slate-300 rounded p-2 mt-1" />
-                  </label>
-                  <label className="block">
-                    {lang === 'en' ? 'Subtopics (one per line)' : '子章節規劃（每行一項）'}
-                    <textarea required name="subtopics" defaultValue={ch.subtopics.join('\n')} className="block w-full border border-slate-300 rounded p-2 mt-1" />
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="block">
-                      {lang === 'en' ? 'Practical deliverable' : '實作交付物'}
-                      <input name="practicalDeliverable" defaultValue={ch.practicalDeliverable} className="block w-full border border-slate-300 rounded p-2 mt-1" />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <label className="block font-semibold text-slate-800">
+                      {lang === 'en' ? 'Learning objective' : '學習目標'}
+                      <textarea required name="objective" rows={4} defaultValue={ch.objective} className="block w-full border border-slate-300 rounded-xl p-3 mt-1.5 bg-slate-50 font-normal" />
                     </label>
-                    <label className="block">
+                    <label className="block font-semibold text-slate-800">
+                      {lang === 'en' ? 'Subtopics (one per line)' : '子章節規劃（每行一項）'}
+                      <textarea required name="subtopics" rows={4} defaultValue={ch.subtopics.join('\n')} className="block w-full border border-slate-300 rounded-xl p-3 mt-1.5 bg-slate-50 font-normal" />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <label className="block font-semibold text-slate-800">
+                      {lang === 'en' ? 'Practical deliverable' : '實作交付物'}
+                      <input name="practicalDeliverable" defaultValue={ch.practicalDeliverable} className="block w-full border border-slate-300 rounded-xl px-3.5 py-2.5 mt-1.5 bg-slate-50 font-normal" />
+                    </label>
+                    <label className="block font-semibold text-slate-800">
                       {lang === 'en' ? 'Target length (words)' : '目標字數'}
-                      <input required type="number" min={100} max={20000} name="targetWordCount" defaultValue={ch.targetWordCount} className="block w-full border border-slate-300 rounded p-2 mt-1 font-mono" />
+                      <input required type="number" min={100} max={20000} name="targetWordCount" defaultValue={ch.targetWordCount} className="block w-full border border-slate-300 rounded-xl px-3.5 py-2.5 mt-1.5 font-mono bg-slate-50 font-normal" />
                     </label>
                   </div>
                   <p className="text-xs text-slate-600">
@@ -262,56 +293,56 @@ JSON schema:
                       ? 'Changing the title, objective or subtopics requires a new Gate B relevance review. Changing target length requires Gate C review.'
                       : '修改標題、學習目標或子章節後需重新進行 Gate B 審查；修改目標字數需進行 Gate C 審查。'}
                   </p>
-                  <button type="submit" className="px-3.5 py-2 rounded-lg bg-indigo-700 text-white font-semibold">
+                  <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-semibold">
                     {lang === 'en' ? 'Save chapter plan' : '儲存章節規劃'}
                   </button>
                 </form>
               </details>
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-md">
                     {ch.id}
                   </span>
-                  <h3 className="text-sm font-bold text-slate-900">{ch.title}</h3>
+                  <h3 className="text-base font-bold text-slate-900">{ch.title}</h3>
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
-                  <span className="tabular-nums">{ch.targetWordCount} {lang === 'en' ? 'words' : '字'}</span>
+                <div className="flex items-center gap-3.5 text-sm text-slate-600 font-mono">
+                  <span className="tabular-nums font-semibold">{ch.targetWordCount} {lang === 'en' ? 'words' : '字'}</span>
                   {ch.isCompleted ? (
-                    <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> {lang === 'en' ? 'Completed' : '已完稿'}
+                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> {lang === 'en' ? 'Completed' : '已完稿'}
                     </span>
                   ) : (
-                    <span className="text-slate-400">{lang === 'en' ? 'Pending' : '待生成'}</span>
+                    <span className="text-slate-500">{lang === 'en' ? 'Pending' : '待生成'}</span>
                   )}
                   <button
                     type="button"
                     aria-label={lang === 'en' ? `Remove ${ch.id}` : `刪除 ${ch.id}`}
                     onClick={() => handleDeleteChapter(ch.id)}
-                    className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-600 leading-relaxed">{ch.objective}</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{ch.objective}</p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs">
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-                  <span className="text-[11px] font-semibold text-slate-700 block">{lang === 'en' ? 'Key Subtopics:' : '子章節規劃：'}</span>
-                  <ul className="list-disc list-inside space-y-0.5 text-slate-600">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 text-sm">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700 block">{lang === 'en' ? 'Key Subtopics:' : '子章節規劃：'}</span>
+                  <ul className="list-disc list-inside space-y-1 text-slate-600">
                     {(ch.subtopics || []).map((sub, sIdx) => (
                       <li key={sIdx}>{sub}</li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-                  <span className="text-[11px] font-semibold text-slate-700 block">{lang === 'en' ? 'Practical Deliverable:' : '實作交付物：'}</span>
-                  <p className="text-slate-800 font-medium">{ch.practicalDeliverable}</p>
-                  <div className="text-[11px] text-slate-400 mt-2">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700 block">{lang === 'en' ? 'Practical Deliverable:' : '實作交付物：'}</span>
+                  <p className="text-slate-900 font-semibold">{ch.practicalDeliverable}</p>
+                  <div className="text-xs font-mono text-slate-500 mt-2">
                     <span>Mapped Refs: {(ch.mappedReferenceIds || []).join(', ') || '—'}</span>
                   </div>
                 </div>

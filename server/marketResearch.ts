@@ -3,11 +3,17 @@ import { fetch as proxyFetch, EnvHttpProxyAgent } from 'undici';
 import type { MarketplaceObservation } from '../src/types/project.ts';
 
 export const MARKET_SOURCES = [
-  { marketplace: 'Apple Books', url: 'https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json' },
-  { marketplace: 'Amazon Kindle', url: 'https://www.amazon.com/Best-Sellers-Kindle-Store/zgbs/digital-text' },
-  { marketplace: 'Gumroad', url: 'https://gumroad.com/discover' },
-  { marketplace: 'Etsy', url: 'https://www.etsy.com/market/digital_downloads' },
-  { marketplace: 'Payhip', url: 'https://payhip.com/marketplace' },
+  { marketplace: 'Apple Books', url: 'https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json', categoryLabel: 'Apple Books · Top Paid Books', rankScope: 'US Apple Books · Top paid books · overall chart' },
+  { marketplace: 'Amazon Kindle', url: 'https://www.amazon.com/Best-Sellers-Kindle-Store/zgbs/digital-text', categoryLabel: 'Kindle Store', rankScope: 'Amazon US · Kindle Store Best Sellers chart' },
+  { marketplace: 'Amazon Kindle · Business & Money', url: 'https://www.amazon.com/Best-Sellers-Kindle-Store-Business-Investing/zgbs/digital-text/154821011', categoryLabel: 'Investing, Money & Personal Finance', rankScope: 'Amazon US · Business & Investing Best Sellers' },
+  { marketplace: 'Amazon Kindle · Health & Wellness', url: 'https://www.amazon.com/Best-Sellers-Kindle-Store-Health-Fitness-Dieting/zgbs/digital-text/156430011', categoryLabel: 'Health, Fitness & Habits', rankScope: 'Amazon US · Health, Fitness & Dieting Best Sellers' },
+  { marketplace: 'Amazon Kindle · Self-Help', url: 'https://www.amazon.com/Best-Sellers-Kindle-Store-Self-Help/zgbs/digital-text/156563011', categoryLabel: 'Self-Help, Habits & Mindset', rankScope: 'Amazon US · Self-Help Best Sellers' },
+  { marketplace: 'Amazon Kindle · Cookbooks & Meals', url: 'https://www.amazon.com/Best-Sellers-Kindle-Store-Cookbooks-Food-Wine/zgbs/digital-text/156154011', categoryLabel: 'Cookbooks, Food & Meal Planning', rankScope: 'Amazon US · Cookbooks, Food & Wine Best Sellers' },
+  { marketplace: 'Amazon Kindle · Tech & Systems', url: 'https://www.amazon.com/Best-Sellers-Kindle-Store-Computers-Technology/zgbs/digital-text/156116011', categoryLabel: 'Computers, AI Systems & Productivity', rankScope: 'Amazon US · Computers & Technology Best Sellers' },
+  { marketplace: 'Amazon Kindle · Education & Career', url: 'https://www.amazon.com/Best-Sellers-Kindle-Store-Education-Teaching/zgbs/digital-text/158125011', categoryLabel: 'Education, Teaching & Career', rankScope: 'Amazon US · Education & Teaching Best Sellers' },
+  { marketplace: 'Gumroad', url: 'https://gumroad.com/discover', categoryLabel: 'Gumroad Discover', rankScope: 'Gumroad Discover' },
+  { marketplace: 'Etsy', url: 'https://www.etsy.com/market/digital_downloads', categoryLabel: 'Etsy Digital Downloads', rankScope: 'Etsy Digital Downloads' },
+  { marketplace: 'Payhip', url: 'https://payhip.com/marketplace', categoryLabel: 'Payhip Marketplace', rankScope: 'Payhip Marketplace' },
 ] as const;
 export type SourceReport = { marketplace: string; url: string; status: 'verified' | 'unavailable' | 'no_ranking'; message: string; checkedAt: string; count: number };
 export interface MarketResearchResult { observations: MarketplaceObservation[]; sources: SourceReport[]; checkedAt: string }
@@ -24,7 +30,13 @@ export function parseAppleChart(body: string, observedAt: string): MarketplaceOb
     return [{ id: `apple-${item.id}`, marketplace: 'Apple Books' as const, category: (item.genres || []).map((g: any) => g.name).join(' > ') || 'Books', productTitle: item.name, sellerOrAuthor: item.artistName || 'Not listed', productURL: item.url, currentPrice: 0, priceKnown: false, currency: 'USD', observedRank: i + 1, rankScope: 'US Apple Books · Top paid books · overall chart', productFormat: 'Ebook', observedAt, evidenceLevel: 'VERIFIED_RANKING' as const, sourceURL: MARKET_SOURCES[0].url, evidenceExcerpt: `Position ${i + 1} in Apple top-paid chart: ${item.name}`, isSample: false, collector: 'apple-chart-v1', dataLimitations: 'Chart position is a snapshot, not unit sales or revenue. Price and reviews are not supplied by this feed. A ranked title does not prove an adjacent new product will sell.' }];
   });
 }
-export function parseAmazonChart(body: string, observedAt: string): MarketplaceObservation[] {
+export function parseAmazonChart(
+  body: string,
+  observedAt: string,
+  categoryLabel = 'Kindle Store',
+  sourceURL: string = MARKET_SOURCES[1].url,
+  rankScope = 'Amazon US · Kindle Store Best Sellers chart',
+): MarketplaceObservation[] {
   const $ = load(body);
   if (/captcha|robot check|enter the characters/i.test($('title').text())) throw new Error('Marketplace requires human verification.');
   const results: MarketplaceObservation[] = [];
@@ -36,7 +48,7 @@ export function parseAmazonChart(body: string, observedAt: string): MarketplaceO
     const title = card.find('img[alt]').first().attr('alt')?.trim();
     if (!asin || !/^[A-Z0-9]{10}$/.test(asin) || !rank || rank > 100 || !title || !anchor.length) return;
     if (results.some(r => r.id === `amazon-${asin}`)) return;
-    results.push({ id: `amazon-${asin}`, marketplace: 'Amazon Kindle', category: 'Kindle Store', productTitle: title, sellerOrAuthor: card.find('.a-size-small .a-link-child').first().text().trim() || 'Not listed', productURL: `https://www.amazon.com/dp/${asin}`, currentPrice: 0, priceKnown: false, currency: 'USD', observedRank: rank, rankScope: 'Amazon US · Kindle Store Best Sellers chart', productFormat: 'Kindle Ebook', observedAt, evidenceLevel: 'VERIFIED_RANKING', sourceURL: MARKET_SOURCES[1].url, evidenceExcerpt: `${rankText} ${title}`, isSample: false, collector: 'amazon-chart-v1', dataLimitations: 'Public chart position only; sales, revenue, reviews and price are not inferred.' });
+    results.push({ id: `amazon-${asin}`, marketplace: 'Amazon Kindle', category: categoryLabel, productTitle: title, sellerOrAuthor: card.find('.a-size-small .a-link-child').first().text().trim() || 'Not listed', productURL: `https://www.amazon.com/dp/${asin}`, currentPrice: 0, priceKnown: false, currency: 'USD', observedRank: rank, rankScope, productFormat: 'Kindle Ebook', observedAt, evidenceLevel: 'VERIFIED_RANKING', sourceURL, evidenceExcerpt: `${rankText} ${title} (${categoryLabel})`, isSample: false, collector: 'amazon-chart-v1', dataLimitations: 'Public chart position only; sales, revenue, reviews and price are not inferred.' });
   });
   return results;
 }
@@ -64,13 +76,25 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
     const collected = await Promise.all(MARKET_SOURCES.map(async source => {
       try {
         const body = await readSource(source.url);
-        const observations = source.marketplace === 'Apple Books' ? parseAppleChart(body, checkedAt) : source.marketplace === 'Amazon Kindle' ? parseAmazonChart(body, checkedAt) : [];
-        return { observations, report: { ...source, checkedAt, count: observations.length, status: observations.length ? 'verified' : 'no_ranking', message: observations.length ? 'Source chart positions captured; inspect the linked source and timestamp.' : 'Page reached, but no supported public ranking feed was found. Listings and featured placement are not bestseller proof.' } as SourceReport };
+        const observations = source.marketplace === 'Apple Books'
+          ? parseAppleChart(body, checkedAt)
+          : source.marketplace.startsWith('Amazon Kindle')
+            ? parseAmazonChart(body, checkedAt, source.categoryLabel, source.url, source.rankScope)
+            : [];
+        return { observations, report: { marketplace: source.marketplace, url: source.url, checkedAt, count: observations.length, status: observations.length ? 'verified' : 'no_ranking', message: observations.length ? 'Source chart positions captured; inspect the linked source and timestamp.' : 'Page reached, but no supported public ranking feed was found. Listings and featured placement are not bestseller proof.' } as SourceReport };
       } catch (error) {
-        return { observations: [], report: { ...source, checkedAt, count: 0, status: 'unavailable', message: error instanceof Error && error.message !== 'fetch failed' ? error.message : 'Could not reach the public source. Check the configured HTTPS proxy, marketplace access and allowed domains; no sample data was substituted.' } as SourceReport };
+        return { observations: [], report: { marketplace: source.marketplace, url: source.url, checkedAt, count: 0, status: 'unavailable', message: error instanceof Error && error.message !== 'fetch failed' ? error.message : 'Could not reach the public source. Check the configured HTTPS proxy, marketplace access and allowed domains; no sample data was substituted.' } as SourceReport };
       }
     }));
-    const result = { checkedAt, observations: collected.flatMap(r => r.observations), sources: collected.map(r => r.report) };
+    // Deduplicate across overall and subcategory charts, preferring subcategory-tagged records over generic 'Kindle Store'.
+    const byId = new Map<string, MarketplaceObservation>();
+    for (const obs of collected.flatMap(r => r.observations)) {
+      const existing = byId.get(obs.id);
+      if (!existing || (existing.category === 'Kindle Store' && obs.category !== 'Kindle Store')) {
+        byId.set(obs.id, obs);
+      }
+    }
+    const result = { checkedAt, observations: [...byId.values()], sources: collected.map(r => r.report) };
     cache = { expires: Date.now() + (result.observations.length ? 15 * 60_000 : 60_000), result };
     return result;
   })();

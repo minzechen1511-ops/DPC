@@ -3,11 +3,14 @@ import { Palette, Type, Save, CheckCircle2, Sparkles, BookOpen } from 'lucide-re
 import { DigitalProductProject } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 import { StudioLogo } from '../StudioLogo.tsx';
+import { generateTextWithAi } from '../../services/aiService.ts';
+import { buildBrandDirectionPrompt, parseBrandDirectionResponse } from '../../utils/stageSynthesis.ts';
 
 interface BrandDesignViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onUpdateBrand: (brand: DigitalProductProject['brand']) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
   lang?: Language;
 }
 
@@ -25,7 +28,7 @@ const BRAND_PRESETS: Array<{
     id: 'mineral',
     profileName: 'Mineral Editorial Studio',
     primaryHex: '#162B32',
-    secondaryHex: '#146B5D',
+    secondaryHex: '#0F766E',
     accentHex: '#D97706',
     neutralBgHex: '#F8FAFC',
     fontDisplay: 'Fraunces',
@@ -35,11 +38,11 @@ const BRAND_PRESETS: Array<{
     id: 'navy',
     profileName: 'Executive Navy Advisory',
     primaryHex: '#1E293B',
-    secondaryHex: '#2563EB',
+    secondaryHex: '#0284C7',
     accentHex: '#F59E0B',
     neutralBgHex: '#F8FAFC',
     fontDisplay: 'Playfair Display',
-    fontBody: 'Inter',
+    fontBody: 'Plus Jakarta Sans',
   },
   {
     id: 'botanical',
@@ -59,22 +62,26 @@ const BRAND_PRESETS: Array<{
     accentHex: '#E11D48',
     neutralBgHex: '#F4F4F5',
     fontDisplay: 'Space Grotesk',
-    fontBody: 'Inter',
+    fontBody: 'Source Sans 3',
   },
 ];
 
 const DISPLAY_FONTS = ['Fraunces', 'Playfair Display', 'Plus Jakarta Sans', 'Space Grotesk', 'Merriweather'];
-const BODY_FONTS = ['Plus Jakarta Sans', 'Inter', 'Merriweather', 'Source Sans 3', 'JetBrains Mono'];
+const BODY_FONTS = ['Plus Jakarta Sans', 'Source Sans 3', 'Merriweather', 'JetBrains Mono'];
 
 export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
   project,
   setActiveView,
   onUpdateBrand,
+  onRecordAiUsage,
   lang = 'en',
 }) => {
   const t = translations[lang];
   const [draft, setDraft] = useState(project.brand);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [focusNote, setFocusNote] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   useEffect(() => {
     setDraft(project.brand);
@@ -122,45 +129,114 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
       ? 'Commercial digital publication & implementation toolkit'
       : '高價值商業數位出版品與實作工具套件');
 
+  const handleRecommendBrandWithAi = async () => {
+    setAiBusy(true);
+    setAiError('');
+    try {
+      const { systemPrompt, userPrompt } = buildBrandDirectionPrompt(project, lang, focusNote);
+      const res = await generateTextWithAi({
+        provider: 'gemini',
+        model: project.aiSettings?.defaultModel || 'gemini-4-hydrogen',
+        systemPrompt,
+        userPrompt,
+        maxTokens: 1200,
+        projectId: project.projectId,
+      });
+      onRecordAiUsage?.(res?.usage, res?.model);
+      const recommended = parseBrandDirectionResponse(res?.content || '', draft);
+      setDraft(recommended);
+      onUpdateBrand(recommended);
+      setSavedNotice(true);
+      setTimeout(() => setSavedNotice(false), 3000);
+    } catch (err: any) {
+      setAiError(
+        err?.message ||
+          (lang === 'en'
+            ? 'Could not reach server Gemini engine for brand direction synthesis.'
+            : '無法連接伺服器端 Gemini 引擎以建議品牌視覺方向。')
+      );
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="w-full space-y-5 pb-3">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="lab-panel p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 mb-1">
-            <Palette className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider font-semibold text-indigo-700 mb-1">
+            <Palette className="w-4 h-4" />
             <span>{t.navBrandDesign}</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">{t.brandTitle}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-slate-900">{t.brandTitle}</h1>
+          <p className="text-sm text-slate-600 mt-1">
             {lang === 'en'
               ? `Customize the "${draft?.profileName || 'Digital Product Studio'}" imprint, 60-30-10 palette, and typography applied to your exported HTML e-book.`
               : `自訂「${draft?.profileName || 'Digital Product Studio'}」品牌識別、60-30-10 色票與字體，並即時套用至精裝 HTML 電子書匯出。`}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <button
+            type="button"
+            disabled={aiBusy}
+            onClick={handleRecommendBrandWithAi}
+            className="px-4 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
+          >
+            <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
+            <span>
+              {aiBusy
+                ? lang === 'en' ? 'Designing Brand...' : '正在規劃品牌視覺...'
+                : lang === 'en' ? 'AI Recommend Brand & Cover' : 'AI 推薦主題配色與封面'}
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={handleSave}
-            className="px-4 py-2 text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5"
+            className="px-4 py-2.5 text-sm font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-2"
           >
-            <Save className="w-3.5 h-3.5" />
+            <Save className="w-4 h-4" />
             <span>{lang === 'en' ? 'Save Brand Styling' : '儲存品牌視覺設定'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveView('pricing_launch')}
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+            className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
             <span>{lang === 'en' ? 'Pricing & Launch Suite →' : '前往定價與上市行銷套件 →'}</span>
           </button>
         </div>
       </div>
 
+      {/* Synthesise.ai Art Direction Guidance */}
+      <div className="lab-panel p-4 sm:p-5 bg-gradient-to-r from-teal-50/60 via-white to-sky-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
+        <span className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 whitespace-nowrap">
+          {lang === 'en' ? 'Art Direction Style Hint:' : '品牌美學偏好提示：'}
+        </span>
+        <input
+          type="text"
+          value={focusNote}
+          onChange={(e) => setFocusNote(e.target.value)}
+          placeholder={
+            lang === 'en'
+              ? 'Optional aesthetic note (e.g., Warm luxury editorial serif, calm botanical sage, bold Swiss SaaS look...)'
+              : '選填美學風格方向（例如：溫暖奢華書刊風、沉穩自然草本系、俐落瑞士商業雜誌感...）'
+          }
+          className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800"
+        />
+      </div>
+
+      {aiError && (
+        <p role="alert" className="px-4 py-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-sm font-medium">
+          {aiError}
+        </p>
+      )}
+
       {savedNotice && (
-        <p role="status" className="px-4 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center gap-2">
+        <p role="status" className="px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>
             {lang === 'en'
@@ -171,16 +247,16 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
       )}
 
       {/* Curated Studio Brand Presets */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+      <div className="lab-panel p-5 sm:p-6 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-indigo-600" />
             <span>{lang === 'en' ? 'Commercial Imprint Presets (1-Click Apply)' : '精選商業出版品牌預設 (一鍵套用)'}</span>
           </h2>
-          <span className="text-[11px] font-mono text-slate-500">{draft.profileName}</span>
+          <span className="text-xs font-mono font-semibold text-slate-600">{draft.profileName}</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {BRAND_PRESETS.map((preset) => {
             const isActive = draft.profileName === preset.profileName && draft.primaryHex.toLowerCase() === preset.primaryHex.toLowerCase();
             return (
@@ -188,59 +264,59 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
                 key={preset.id}
                 type="button"
                 onClick={() => applyPreset(preset)}
-                className={`p-3.5 rounded-xl border text-left transition-all ${
+                className={`p-4 rounded-xl border text-left transition-all ${
                   isActive
-                    ? 'border-indigo-600 bg-indigo-50/30 ring-1 ring-indigo-500/20'
-                    : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-white'
+                    ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20'
+                    : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-white'
                 }`}
               >
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="w-4 h-4 rounded-sm border border-black/10" style={{ background: preset.primaryHex }} />
-                  <span className="w-4 h-4 rounded-sm border border-black/10" style={{ background: preset.secondaryHex }} />
-                  <span className="w-4 h-4 rounded-sm border border-black/10" style={{ background: preset.accentHex }} />
-                  <span className="w-4 h-4 rounded-sm border border-slate-300" style={{ background: preset.neutralBgHex }} />
+                <div className="flex items-center gap-2 mb-2.5">
+                  <span className="w-5 h-5 rounded-sm border border-black/15" style={{ background: preset.primaryHex }} />
+                  <span className="w-5 h-5 rounded-sm border border-black/15" style={{ background: preset.secondaryHex }} />
+                  <span className="w-5 h-5 rounded-sm border border-black/15" style={{ background: preset.accentHex }} />
+                  <span className="w-5 h-5 rounded-sm border border-slate-300" style={{ background: preset.neutralBgHex }} />
                 </div>
-                <strong className="block text-xs font-bold text-slate-900">{preset.profileName}</strong>
-                <span className="text-[11px] text-slate-500 block mt-0.5">{preset.fontDisplay} + {preset.fontBody}</span>
+                <strong className="block text-sm font-bold text-slate-900">{preset.profileName}</strong>
+                <span className="text-xs text-slate-600 block mt-1">{preset.fontDisplay} + {preset.fontBody}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Editor Grid + Live E-Book Cover Specimen */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Wide 12-Col Editor Grid + Live E-Book Cover Specimen */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Controls Column */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-8 space-y-5">
           {/* Colors */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div className="lab-panel p-5 sm:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Palette className="w-4 h-4 text-indigo-600" />
-                <h2 className="text-sm font-bold text-slate-900">{lang === 'en' ? '60-30-10 Brand Color System' : '60-30-10 品牌色彩配置系統'}</h2>
+                <h2 className="text-base font-bold text-slate-900">{lang === 'en' ? '60-30-10 Brand Color System' : '60-30-10 品牌色彩配置系統'}</h2>
               </div>
-              <label className="text-xs flex items-center gap-2">
-                <span className="text-slate-500">{lang === 'en' ? 'Profile Name:' : '識別名稱：'}</span>
+              <label className="text-sm flex items-center gap-2.5">
+                <span className="text-slate-600 font-medium whitespace-nowrap">{lang === 'en' ? 'Profile Name:' : '識別名稱：'}</span>
                 <input
                   type="text"
                   value={draft.profileName}
                   onChange={(e) => setDraft({ ...draft, profileName: e.target.value })}
-                  className="text-xs font-medium bg-slate-50 border border-slate-300 rounded px-2.5 py-1 text-slate-900 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                  className="font-semibold bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 min-w-[220px]"
                 />
               </label>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               {colorFields.map(({ key, label, role }) => (
-                <div key={key} className="p-3 rounded-lg border border-slate-200 bg-slate-50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <strong className="text-slate-900">{label}</strong>
+                <div key={key} className="p-4 rounded-xl border border-slate-200 bg-slate-50/90 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <strong className="text-sm font-bold text-slate-900">{label}</strong>
                     <input
                       type="color"
                       aria-label={label}
                       value={/^#[0-9a-f]{6}$/i.test(draft[key]) ? draft[key] : '#162B32'}
                       onChange={(e) => setDraft({ ...draft, [key]: e.target.value.toUpperCase() })}
-                      className="w-7 h-7 rounded cursor-pointer border border-slate-300 bg-white p-0.5"
+                      className="w-9 h-9 rounded-md cursor-pointer border border-slate-300 bg-white p-0.5 shrink-0"
                     />
                   </div>
                   <input
@@ -248,28 +324,28 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
                     aria-label={`${label} hex`}
                     value={draft[key]}
                     onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-                    className="w-full font-mono text-[11px] bg-white border border-slate-300 rounded px-2 py-1 text-slate-800"
+                    className="w-full font-mono text-sm bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
                   />
-                  <span className="text-[11px] text-slate-500 block">{role}</span>
+                  <span className="text-xs text-slate-600 block">{role}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Typography & Editorial Brief */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+          <div className="lab-panel p-5 sm:p-6 space-y-5">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Type className="w-4 h-4 text-indigo-600" />
-              <h2 className="text-sm font-bold text-slate-900">{lang === 'en' ? 'Typography & Cover Direction' : '字體系統與封面排版規範'}</h2>
+              <h2 className="text-base font-bold text-slate-900">{lang === 'en' ? 'Typography & Cover Direction' : '字體系統與封面排版規範'}</h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <label className="block space-y-1">
-                <span className="text-slate-700 font-semibold">{lang === 'en' ? 'Display / Headings Font' : '主標題字體'}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="block space-y-1.5">
+                <span className="text-sm text-slate-800 font-semibold">{lang === 'en' ? 'Display / Headings Font' : '主標題字體'}</span>
                 <select
                   value={draft.fontDisplay}
                   onChange={(e) => setDraft({ ...draft, fontDisplay: e.target.value })}
-                  className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                  className="w-full font-medium bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
                 >
                   {!DISPLAY_FONTS.includes(draft.fontDisplay) && (
                     <option value={draft.fontDisplay}>{draft.fontDisplay}</option>
@@ -280,12 +356,12 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
                 </select>
               </label>
 
-              <label className="block space-y-1">
-                <span className="text-slate-700 font-semibold">{lang === 'en' ? 'Body / Prose Font' : '內文字體'}</span>
+              <label className="block space-y-1.5">
+                <span className="text-sm text-slate-800 font-semibold">{lang === 'en' ? 'Body / Prose Font' : '內文字體'}</span>
                 <select
                   value={draft.fontBody}
                   onChange={(e) => setDraft({ ...draft, fontBody: e.target.value })}
-                  className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                  className="w-full font-medium bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
                 >
                   {!BODY_FONTS.includes(draft.fontBody) && (
                     <option value={draft.fontBody}>{draft.fontBody}</option>
@@ -297,26 +373,26 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
               </label>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <label className="block space-y-1">
-                <span className="text-slate-700 font-semibold">{lang === 'en' ? 'Cover Art Brief' : '封面視覺設計摘要'}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="block space-y-1.5">
+                <span className="text-sm text-slate-800 font-semibold">{lang === 'en' ? 'Cover Art Brief' : '封面視覺設計摘要'}</span>
                 <textarea
-                  rows={3}
+                  rows={5}
                   value={draft.coverBrief}
                   onChange={(e) => setDraft({ ...draft, coverBrief: e.target.value })}
                   placeholder={lang === 'en' ? 'Describe geometric motif, contrast ratio, and badge placement...' : '描述封面幾何構圖、色彩對比與副標排列...'}
-                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800"
                 />
               </label>
 
-              <label className="block space-y-1">
-                <span className="text-slate-700 font-semibold">{lang === 'en' ? 'Manuscript Layout Notes' : '內文版型與留白規範'}</span>
+              <label className="block space-y-1.5">
+                <span className="text-sm text-slate-800 font-semibold">{lang === 'en' ? 'Manuscript Layout Notes' : '內文版型與留白規範'}</span>
                 <textarea
-                  rows={3}
+                  rows={5}
                   value={draft.manuscriptLayoutNotes}
                   onChange={(e) => setDraft({ ...draft, manuscriptLayoutNotes: e.target.value })}
                   placeholder={lang === 'en' ? 'Specify generous line spacing, callout boxes, and data table hierarchy...' : '設定行距比例、提示框與實證數據表格階層...'}
-                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800"
                 />
               </label>
             </div>
@@ -324,53 +400,53 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
         </div>
 
         {/* Live Styled Cover Specimen Column */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 flex flex-col justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+        <div className="lg:col-span-4 lab-panel p-5 sm:p-6 space-y-4 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-indigo-600" />
                 <span>{lang === 'en' ? 'Live Imprint Cover Preview' : '即時出版封面預覽'}</span>
               </h2>
-              <span className="text-[11px] font-mono text-slate-400">60-30-10</span>
+              <span className="text-xs font-mono text-slate-500">60-30-10</span>
             </div>
 
             <div
-              className="rounded-xl overflow-hidden border border-slate-200 shadow-sm p-6 flex flex-col justify-between min-h-[320px]"
+              className="rounded-xl overflow-hidden border border-slate-200 shadow-sm p-6 sm:p-7 flex flex-col justify-between min-h-[400px]"
               style={{
                 backgroundColor: draft.neutralBgHex || '#F8FAFC',
-                borderTop: `8px solid ${draft.primaryHex || '#162B32'}`,
+                borderTop: `10px solid ${draft.primaryHex || '#162B32'}`,
                 fontFamily: draft.fontBody || 'Plus Jakarta Sans, sans-serif',
               }}
             >
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <StudioLogo size={24} />
+              <div className="space-y-5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <StudioLogo size={28} />
                     <span
-                      className="text-[11px] font-bold tracking-wider uppercase"
+                      className="text-xs font-bold tracking-wider uppercase"
                       style={{ color: draft.primaryHex || '#162B32' }}
                     >
                       Digital Product Studio
                     </span>
                   </div>
                   <span
-                    className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded"
+                    className="text-[11px] font-mono font-semibold px-2.5 py-1 rounded-md"
                     style={{
-                      backgroundColor: `${draft.secondaryHex || '#146B5D'}18`,
-                      color: draft.secondaryHex || '#146B5D',
+                      backgroundColor: `${draft.secondaryHex || '#0F766E'}18`,
+                      color: draft.secondaryHex || '#0F766E',
                     }}
                   >
                     {draft.profileName}
                   </span>
                 </div>
 
-                <div className="pt-2 space-y-2">
+                <div className="pt-3 space-y-3">
                   <div
-                    className="w-10 h-1 rounded-full"
+                    className="w-12 h-1.5 rounded-xs"
                     style={{ backgroundColor: draft.accentHex || '#D97706' }}
                   />
                   <h3
-                    className="text-xl font-bold leading-snug"
+                    className="text-2xl font-bold leading-snug"
                     style={{
                       color: draft.primaryHex || '#162B32',
                       fontFamily: `"${draft.fontDisplay || 'Fraunces'}", Georgia, serif`,
@@ -378,19 +454,19 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
                   >
                     {productTitle}
                   </h3>
-                  <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
+                  <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">
                     {productSubtitle}
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 mt-4 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
-                <span className="text-slate-600 font-medium">
+              <div className="pt-4 mt-6 border-t border-slate-200/80 flex items-center justify-between text-xs">
+                <span className="text-slate-700 font-semibold">
                   {project.intake?.creatorName || 'Editorial Studio'}
                 </span>
                 <span
-                  className="font-mono font-bold"
-                  style={{ color: draft.secondaryHex || '#146B5D' }}
+                  className="font-mono font-bold text-sm"
+                  style={{ color: draft.secondaryHex || '#0F766E' }}
                 >
                   {project.pricingReport?.currency || 'USD'} ${project.pricingReport?.regularPrice || 29}
                 </span>
@@ -398,7 +474,7 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 leading-relaxed">
+          <p className="text-xs text-slate-600 leading-relaxed">
             {lang === 'en'
               ? 'Changes saved here dynamically update the CSS variables, cover imprint, and accent system inside Export Center’s Styled HTML edition.'
               : '儲存後將即時驅動「匯出下載中心」精裝 HTML 電子書的色彩變數與出版視覺外觀。'}

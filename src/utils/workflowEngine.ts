@@ -19,13 +19,13 @@ export const STAGE_ORDER: StageId[] = [
 
 export const STAGE_METADATA_EN: Record<StageId, { title: string; subtitle: string; icon: string }> = {
   market_research: {
-    title: 'Market Intelligence (MTRE)',
-    subtitle: 'Multi-platform sales data, pricing, rankings & real market signals',
+    title: '1. Market & Top Niches (Gate A)',
+    subtitle: 'Live marketplace chart signals, curated niche candidates & Gate A selection',
     icon: 'TrendingUp',
   },
   topic_selection: {
-    title: 'Topic Recommendations (Gate A)',
-    subtitle: 'Candidate evaluation, heuristic opportunity scoring & topic approval',
+    title: '1. Market & Top Niches (Gate A)',
+    subtitle: 'Live marketplace chart signals, curated niche candidates & Gate A selection',
     icon: 'Sparkles',
   },
   project_brief: {
@@ -92,13 +92,13 @@ export const STAGE_METADATA_EN: Record<StageId, { title: string; subtitle: strin
 
 export const STAGE_METADATA_ZH: Record<StageId, { title: string; subtitle: string; icon: string }> = {
   market_research: {
-    title: '市場趨勢情報 (MTRE)',
-    subtitle: '多平台暢銷數據、價格、排名與真實市場訊號',
+    title: '1. 市場情報與推薦題材 (Gate A)',
+    subtitle: '即時平台排行信號、熱門題材候選與 Gate A 選題核准',
     icon: 'TrendingUp',
   },
   topic_selection: {
-    title: '熱門題材推薦 (Gate A)',
-    subtitle: '候選產品評估、啟發式商機評分與題材核准',
+    title: '1. 市場情報與推薦題材 (Gate A)',
+    subtitle: '即時平台排行信號、熱門題材候選與 Gate A 選題核准',
     icon: 'Sparkles',
   },
   project_brief: {

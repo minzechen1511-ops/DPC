@@ -1,0 +1,209 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated commercial user profile and workspace preferences stored under /users/{userId}.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID and request.auth.uid.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified Google account email address.",
+          "minLength": 3,
+          "maxLength": 320
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name from Google account.",
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "format": "uri",
+          "description": "Avatar photo URL from Google account.",
+          "maxLength": 1024
+        },
+        "activeProjectId": {
+          "type": "string",
+          "description": "Most recently active project identifier for cross-session resume.",
+          "maxLength": 128
+        },
+        "preferredLang": {
+          "type": "string",
+          "enum": ["en", "zh"],
+          "description": "Preferred studio interface language."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was first initialized."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest profile update."
+        }
+      },
+      "required": ["uid", "email", "displayName", "photoURL", "activeProjectId", "preferredLang", "createdAt", "updatedAt"]
+    },
+    "StudioProject": {
+      "title": "StudioProject",
+      "description": "Complete multi-stage Digital Product Studio project owned by an authenticated user.",
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "description": "Project identifier matching the Firestore document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable project name.",
+          "maxLength": 300
+        },
+        "schemaVersion": {
+          "type": "string",
+          "description": "Schema version identifier.",
+          "maxLength": 16
+        },
+        "isBlankProject": {
+          "type": "boolean",
+          "description": "Whether the project starts empty."
+        },
+        "revision": {
+          "type": "integer",
+          "description": "Monotonically incremented optimistic concurrency revision number."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        },
+        "preferences": {
+          "type": "object",
+          "description": "Market region, language, format, and review gate preferences."
+        },
+        "workflow": {
+          "type": "object",
+          "description": "Stage statuses and Gate A/B/C human approval records."
+        },
+        "marketResearch": {
+          "type": "object",
+          "description": "Live marketplace observations and candidate topic proposals."
+        },
+        "intake": {
+          "type": "object",
+          "description": "13-field structured project setup and boundaries."
+        },
+        "uvz": {
+          "type": "object",
+          "description": "Unique Value Zone analysis and selected positioning."
+        },
+        "transformationMap": {
+          "type": "object",
+          "description": "Before -> Bridge -> After customer transformation map and title options."
+        },
+        "referenceLibrary": {
+          "type": "object",
+          "description": "Evidence-grounded reference cards and verification metadata."
+        },
+        "charter": {
+          "type": "object",
+          "description": "Product Charter (Gate B architectural blueprint)."
+        },
+        "outline": {
+          "type": "array",
+          "description": "Ordered chapter outlines, drafted markdown content, and citation reviews."
+        },
+        "productBible": {
+          "type": "object",
+          "description": "Continuity glossary, brand voice keywords, and active reference map."
+        },
+        "resources": {
+          "type": "array",
+          "description": "Companion toolkits, worksheets, and trackers."
+        },
+        "qualityReport": {
+          "type": "object",
+          "description": "Quality assurance audit score and issues."
+        },
+        "brand": {
+          "type": "object",
+          "description": "Typography, colors, and e-book layout styling."
+        },
+        "pricingReport": {
+          "type": "object",
+          "description": "Three-tier commercial pricing ladder and rationale."
+        },
+        "salesAssets": {
+          "type": "object",
+          "description": "Sales page copy, FAQs, and email launch sequence."
+        },
+        "aiSettings": {
+          "type": "object",
+          "description": "Active Gemini model configuration, budget caps, and token usage counters (never stores secrets)."
+        }
+      },
+      "required": [
+        "projectId",
+        "ownerId",
+        "name",
+        "schemaVersion",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "preferences",
+        "workflow",
+        "marketResearch",
+        "intake",
+        "uvz",
+        "transformationMap",
+        "referenceLibrary",
+        "charter",
+        "outline",
+        "productBible",
+        "resources",
+        "qualityReport",
+        "brand",
+        "pricingReport",
+        "salesAssets",
+        "aiSettings"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Per-user private account profile document containing verified Google account metadata and active workspace pointer."
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": {
+        "$ref": "#/entities/StudioProject"
+      },
+      "description": "Private subcollection of Digital Product Studio projects owned by the authenticated user."
+    }
+  }
+}

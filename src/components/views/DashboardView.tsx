@@ -12,9 +12,11 @@ import {
   Layers,
   Award,
   Tag,
+  Activity,
 } from 'lucide-react';
 import { DigitalProductProject, StageId } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
+import { RadialTelemetryGauge, StudioCalibrationRadar } from '../ScientificVisuals.tsx';
 
 interface DashboardViewProps {
   project: DigitalProductProject;
@@ -37,23 +39,177 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const verifiedRefs = (referenceLibrary?.cards || []).filter(isRetrievedSource).length;
   const targetRefs = referenceLibrary?.targetCount || 20;
 
+  const getNextRecommendedStage = (): {
+    stageId: StageId;
+    title: string;
+    detail: string;
+    cta: string;
+  } => {
+    if (!workflow?.gates?.gateA?.isApproved) {
+      return {
+        stageId: 'market_research',
+        title: lang === 'en' ? 'Stage 1: Select & Approve Top Market Niche (Gate A)' : '階段 1：市場洞察與選題核准 (Gate A)',
+        detail:
+          lang === 'en'
+            ? 'Fetch live marketplace charts, review ranked high-demand product opportunities, and lock your Gate A niche.'
+            : '抓取即時市場榜單訊號、檢視高需求商品選題並核准 Gate A。',
+        cta: lang === 'en' ? 'Open Market & Niches' : '前往市場與選題',
+      };
+    }
+    if (workflow?.stageStatuses?.project_brief !== 'COMPLETED') {
+      return {
+        stageId: 'project_brief',
+        title: lang === 'en' ? 'Stage 2: Synthesize 13-Field Project Brief' : '階段 2：AI 優化 13 項專案核心設定',
+        detail:
+          lang === 'en'
+            ? 'Refine buyer persona, painful problem hooks, safety guardrails, and editorial voice with 1-click AI synthesis.'
+            : '運用一鍵 AI 強化功能完備目標受眾、痛點與品牌語調規範。',
+        cta: lang === 'en' ? 'Open Project Brief' : '前往專案設定',
+      };
+    }
+    if (workflow?.stageStatuses?.uvz !== 'COMPLETED') {
+      return {
+        stageId: 'uvz',
+        title: lang === 'en' ? 'Stage 3: Generate Unique Value Zone (UVZ) Options' : '階段 3：AI 生成獨特價值區隔 (UVZ)',
+        detail:
+          lang === 'en'
+            ? 'Synthesize differentiated positioning wedges so your product stands apart from generic books.'
+            : '生成具商業差異化的定位策略角度與推薦主張。',
+        cta: lang === 'en' ? 'Open UVZ Studio' : '前往 UVZ 策略',
+      };
+    }
+    if (workflow?.stageStatuses?.transformation_map !== 'COMPLETED') {
+      return {
+        stageId: 'transformation_map',
+        title: lang === 'en' ? 'Stage 4: Map Customer Transformation & Titles' : '階段 4：顧客轉變路徑與書名定位',
+        detail:
+          lang === 'en'
+            ? 'Synthesize the Before → Bridge → After roadmap and choose a bestseller-grade title & subtitle.'
+            : '建立 Before → Bridge → After 轉變藍圖並選定高轉化書名。',
+        cta: lang === 'en' ? 'Open Transformation Map' : '前往轉變藍圖',
+      };
+    }
+    if (verifiedRefs < 1) {
+      return {
+        stageId: 'reference_library',
+        title: lang === 'en' ? 'Stage 5: Retrieve Grounded Research Sources (ARCE)' : '階段 5：建立來源實證文獻庫 (ARCE)',
+        detail:
+          lang === 'en'
+            ? 'Retrieve and verify real bibliographic references to back claims and satisfy Gate B.'
+            : '擷取真實文獻摘要與出處連結，滿足 Gate B 引用依據要求。',
+        cta: lang === 'en' ? 'Open Reference Library' : '前往來源研究',
+      };
+    }
+    if (!workflow?.gates?.gateB?.isApproved || gateIssues(project, 'gateB').length > 0) {
+      return {
+        stageId: 'product_charter',
+        title: lang === 'en' ? 'Stage 6: Align & Approve Product Charter (Gate B)' : '階段 6：對齊產品憲章並核准 (Gate B)',
+        detail:
+          lang === 'en'
+            ? 'Synthesize charter pillars & learning objectives, review requirements, and unlock chapter generation.'
+            : '一鍵對齊四大支柱與學習目標，核准 Gate B 以解鎖章節撰寫。',
+        cta: lang === 'en' ? 'Open Product Charter' : '前往產品憲章',
+      };
+    }
+    if (totalChapters === 0) {
+      return {
+        stageId: 'outline_builder',
+        title: lang === 'en' ? 'Stage 7: Architect Chapter Outline' : '階段 7：規劃章節大綱架構',
+        detail:
+          lang === 'en'
+            ? 'Let AI structure 5–7 outcome-driven chapters mapped to your retrieved research sources.'
+            : '由 AI 自動建立 5–7 章具明確交付物與來源對應的大綱結構。',
+        cta: lang === 'en' ? 'Open Outline Builder' : '前往章節大綱',
+      };
+    }
+    if (chaptersDone < totalChapters) {
+      return {
+        stageId: 'content_studio',
+        title:
+          lang === 'en'
+            ? `Stage 8: Draft Remaining Chapters (${chaptersDone}/${totalChapters} Done)`
+            : `階段 8：撰寫電子書章節正文（已完成 ${chaptersDone}/${totalChapters}）`,
+        detail:
+          lang === 'en'
+            ? 'Use Batch Draft Remaining or draft chapter-by-chapter with inline source citations.'
+            : '使用「AI 批量生成剩餘章節」完成全文撰寫與連續記憶同步。',
+        cta: lang === 'en' ? 'Open Content Studio' : '前往長篇內容工廠',
+      };
+    }
+    if ((project.resources || []).length === 0) {
+      return {
+        stageId: 'workbook_studio',
+        title: lang === 'en' ? 'Stage 9: Generate 3-Piece Companion Toolkit Suite' : '階段 9：生成三件組伴隨實作套件',
+        detail:
+          lang === 'en'
+            ? 'Create high-value workbooks, 30-day checklists, and decision matrices included with the e-book.'
+            : '一鍵生成工作表、30 天檢核清單與速查矩陣提升套裝價值。',
+        cta: lang === 'en' ? 'Open Companion Toolkit' : '前往伴隨工具套件',
+      };
+    }
+    if (!workflow?.gates?.gateC?.isApproved || gateIssues(project, 'gateC').length > 0) {
+      return {
+        stageId: 'quality_assurance',
+        title: lang === 'en' ? 'Stage 10: Complete Quality & Citation Audit (Gate C)' : '階段 10：完成出版品質與引用稽核 (Gate C)',
+        detail:
+          lang === 'en'
+            ? 'Verify passage-level source support and unlock commercial Buyer Learning Bundle export.'
+            : '完成逐段引用核對與 Gate C 核准，解鎖商業買家正式套件匯出。',
+        cta: lang === 'en' ? 'Open Quality Audit' : '前往品質審查',
+      };
+    }
+    if (workflow?.stageStatuses?.brand_design !== 'COMPLETED') {
+      return {
+        stageId: 'brand_design',
+        title: lang === 'en' ? 'Stage 11: Apply Commercial Imprint & Cover Styling' : '階段 11：設定出版視覺品牌與封面排版',
+        detail:
+          lang === 'en'
+            ? 'Let AI pair a bestseller typography & 60-30-10 color palette for your exported HTML e-book.'
+            : '套用 AI 推薦配色與出版字體，讓專書、封面與工作表展現精品質感。',
+        cta: lang === 'en' ? 'Open Brand Design' : '前往品牌視覺設計',
+      };
+    }
+    if (workflow?.stageStatuses?.pricing_launch !== 'COMPLETED') {
+      return {
+        stageId: 'pricing_launch',
+        title: lang === 'en' ? 'Stage 12: Synthesize Pricing & Storefront Sales Copy' : '階段 12：生成商業定價與上市銷售文案',
+        detail:
+          lang === 'en'
+            ? 'Model channel margins and generate sales headlines, FAQ, and launch email sequences.'
+            : '試算平台淨利並生成可直接上架 Gumroad / Etsy 的銷售文案。',
+        cta: lang === 'en' ? 'Open Pricing & Launch' : '前往定價與行銷',
+      };
+    }
+    return {
+      stageId: 'export_center',
+      title: lang === 'en' ? 'Stage 13: Bundle Ready — Preview & Export Commercial ZIP' : '階段 13：所有階段已就緒 — 預覽並匯出完整商業套件',
+      detail:
+        lang === 'en'
+          ? 'Download your Buyer Learning Bundle (.zip) with START-HERE.html, Styled E-Book, Workbooks, Executive Summary & Storefront Listing Kit.'
+          : '立即匯出含 START-HERE 入口、精裝電子書、伴隨工作表、執行摘要與上架文案包之完整 ZIP。',
+      cta: lang === 'en' ? 'Open Export Center' : '前往匯出下載中心',
+    };
+  };
+
+  const nextStage = getNextRecommendedStage();
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="w-full space-y-5 pb-3">
       {/* Blank Project Onboarding Notice Banner */}
       {project.isBlankProject && (
-        <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-xl p-6 shadow-md border border-indigo-700/50">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2 max-w-2xl">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+        <div className="bg-gradient-to-r from-[#0b2933] via-[#0f3d47] to-[#0c3556] text-white rounded-2xl p-6 lg:p-7 shadow-md border border-cyan-700/40">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-2 max-w-4xl">
+              <div className="text-xs font-mono font-semibold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-300" />
                 <span>{t.blankProjectNotice}</span>
               </div>
-              <h2 className="text-xl font-bold tracking-tight text-white">
+              <h2 className="text-xl lg:text-2xl font-bold tracking-tight text-white">
                 {lang === 'en'
                   ? 'Launch a Commercial, Evidence-Backed Digital Product'
                   : '開啟全新的商業級數位商品開發專案'}
               </h2>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className="text-sm text-slate-200 leading-relaxed">
                 {t.blankProjectDesc}
               </p>
             </div>
@@ -62,7 +218,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveView('new_project')}
-                className="px-4 py-2.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                className="px-5 py-3 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap"
               >
                 <Sparkles className="w-4 h-4 text-amber-300" />
                 <span>{t.navNewProject}</span>
@@ -71,9 +227,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveView('market_research')}
-                className="px-4 py-2.5 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-100 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                className="px-5 py-3 text-sm font-semibold text-slate-900 bg-white hover:bg-slate-100 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap"
               >
-                <TrendingUp className="w-4 h-4 text-indigo-600" />
+                <TrendingUp className="w-4 h-4 text-sky-700" />
                 <span>{t.runMarketResearchNow}</span>
               </button>
             </div>
@@ -81,13 +237,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* Hero Project Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="font-semibold text-indigo-600 uppercase tracking-wide">
-                {lang === 'en' ? 'Active Project' : '目前進行中專案'}
+      {/* Hero Project Command Deck + Radial Gauge */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 lg:p-7">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2 flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono text-slate-600">
+              <span className="font-bold text-teal-700 uppercase tracking-wider">
+                {lang === 'en' ? 'Active Workspace' : '目前進行中專案'}
               </span>
               <span aria-hidden="true">·</span>
               <span>{project.preferences?.productFormat || 'ebook_toolkit'}</span>
@@ -97,216 +253,258 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
               <span aria-hidden="true">·</span>
               <span>
-                {lang === 'en' ? 'Imprint' : '品牌識別'}: {project.brand?.profileName || 'Modern Minimalist'}
+                {lang === 'en' ? 'Imprint' : '品牌識別'}: {project.brand?.profileName || 'Mineral Studio'}
               </span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-900">
               {charter?.productTitle || project.name || t.untitledProject}
             </h1>
-            <p className="text-sm text-slate-600 max-w-3xl">
+            <p className="text-sm lg:text-base text-slate-600 max-w-4xl leading-relaxed">
               {charter?.subtitle || charter?.centralPromise || (lang === 'en' ? 'Ready to analyze market signals and create commercial evidence-based digital products.' : '隨時可啟動市場情報調查並產出高品質商業數位產品。')}
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-5 shrink-0">
+            <RadialTelemetryGauge
+              value={progressPercent}
+              label={lang === 'en' ? 'Pipeline Index' : '產線完成度'}
+              size={104}
+            />
             <button
               type="button"
               onClick={() => setActiveView('new_project')}
-              className="px-3.5 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors whitespace-nowrap"
+              className="px-4 py-2.5 text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-300 hover:bg-slate-100 rounded-xl transition-colors whitespace-nowrap"
             >
               {lang === 'en' ? 'New Project' : '建立新專案'}
             </button>
           </div>
         </div>
 
-        {/* 3 Major Human Approval Gates (Accessible Button Cards) */}
+        {/* 3 Major Human Approval Gates */}
         <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Gate A */}
           <button
             type="button"
-            onClick={() => setActiveView('topic_selection')}
-            className={`p-3.5 rounded-lg border text-left transition-all ${
+            onClick={() => setActiveView('market_research')}
+            className={`p-4 lg:p-5 rounded-xl border text-left transition-all ${
               workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length
-                ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
-                : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
+                ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-400'
+                : 'bg-slate-50/90 border-slate-200 hover:border-sky-400'
             }`}
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-slate-800">{t.gateA}</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-bold text-slate-900">{t.gateA}</span>
               {workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length ? (
-                <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> {t.approved}
+                <span className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" /> {t.approved}
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold text-amber-700">{t.pending}</span>
+                <span className="text-xs font-mono font-semibold text-amber-700">{t.pending}</span>
               )}
             </div>
-            <p className="text-xs text-slate-600 line-clamp-1">
+            <p className="text-sm text-slate-600 line-clamp-1">
               {(marketResearch?.topicCandidates || []).find((c) => c.id === marketResearch?.selectedTopicId)?.title ||
                 (lang === 'en' ? 'Select and approve recommended topic' : '點擊選擇並核准市場推薦題材')}
             </p>
           </button>
 
-          {/* Gate B */}
           <button
             type="button"
             onClick={() => setActiveView('product_charter')}
-            className={`p-3.5 rounded-lg border text-left transition-all ${
+            className={`p-4 lg:p-5 rounded-xl border text-left transition-all ${
               workflow?.gates?.gateB?.isApproved && !gateIssues(project, 'gateB').length
-                ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
-                : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
+                ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-400'
+                : 'bg-slate-50/90 border-slate-200 hover:border-sky-400'
             }`}
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-slate-800">{t.gateB}</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-bold text-slate-900">{t.gateB}</span>
               {workflow?.gates?.gateB?.isApproved && !gateIssues(project, 'gateB').length ? (
-                <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> {t.approved}
+                <span className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" /> {t.approved}
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold text-amber-700">{t.pending}</span>
+                <span className="text-xs font-mono font-semibold text-amber-700">{t.pending}</span>
               )}
             </div>
-            <p className="text-xs text-slate-600 line-clamp-1">
-              {charter?.signatureFramework || (lang === 'en' ? 'Product Charter & Core Architecture' : '17項產品規範基準與架構')}
+            <p className="text-sm text-slate-600 line-clamp-1">
+              {charter?.signatureFramework || (lang === 'en' ? 'Product Charter & Core Architecture' : '產品憲章規範基準與架構')}
             </p>
           </button>
 
-          {/* Gate C */}
           <button
             type="button"
             onClick={() => setActiveView('quality_assurance')}
-            className={`p-3.5 rounded-lg border text-left transition-all ${
+            className={`p-4 lg:p-5 rounded-xl border text-left transition-all ${
               workflow?.gates?.gateC?.isApproved && !gateIssues(project, 'gateC').length
-                ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
-                : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
+                ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-400'
+                : 'bg-slate-50/90 border-slate-200 hover:border-sky-400'
             }`}
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-slate-800">{t.gateC}</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-bold text-slate-900">{t.gateC}</span>
               {workflow?.gates?.gateC?.isApproved && !gateIssues(project, 'gateC').length ? (
-                <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> {lang === 'en' ? 'Ready' : '已就緒'}
+                <span className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" /> {lang === 'en' ? 'Ready' : '已就緒'}
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold text-slate-600">
+                <span className="text-xs font-mono font-semibold text-slate-600">
                   {lang === 'en' ? 'Pending Final Audit' : '待最後稽核'}
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-600 line-clamp-1">
+            <p className="text-sm text-slate-600 line-clamp-1">
               {lang === 'en' ? 'Publication requirements to review' : '待審查出版要求'}: {gateIssues(project, 'gateC').length}
             </p>
           </button>
         </div>
       </div>
 
-      {/* 4 Essential Health & Commercial Posture Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
+      {/* 4 Telemetry Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center justify-between">
             <span>{lang === 'en' ? 'Reference Library' : '研究文獻庫 (ARCE)'}</span>
-            <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+            <BookOpen className="w-4 h-4 text-teal-600" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
+          <div className="text-3xl font-bold text-slate-900 font-mono tabular-nums">
             {verifiedRefs}
-            <span className="text-sm font-normal text-slate-400"> / {targetRefs}</span>
+            <span className="text-base font-normal text-slate-500"> / {targetRefs}</span>
           </div>
-          <div className="text-[11px] text-emerald-700 mt-1">
+          <div className="text-xs text-emerald-700 font-medium mt-1.5">
             {lang === 'en' ? 'Retrieved & Reviewed Sources' : '已驗證並配置之知識卡'}
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center justify-between">
             <span>{lang === 'en' ? 'Manuscript Progress' : '完成章節與篇幅'}</span>
-            <Feather className="w-3.5 h-3.5 text-indigo-500" />
+            <Feather className="w-4 h-4 text-sky-600" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
+          <div className="text-3xl font-bold text-slate-900 font-mono tabular-nums">
             {chaptersDone}
-            <span className="text-sm font-normal text-slate-400"> / {totalChapters}</span>
+            <span className="text-base font-normal text-slate-500"> / {totalChapters}</span>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1 font-mono tabular-nums">
+          <div className="text-xs text-slate-600 mt-1.5 font-mono tabular-nums">
             {lang === 'en' ? 'Words' : '字數'}: {(qualityReport?.actualWordCount || 0).toLocaleString()}
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center justify-between">
             <span>{lang === 'en' ? 'Commercial Price Ladder' : '商業三階定價配置'}</span>
-            <Tag className="w-3.5 h-3.5 text-indigo-500" />
+            <Tag className="w-4 h-4 text-amber-600" />
           </div>
-          <div className="text-xl font-bold text-slate-900 font-mono tabular-nums">
+          <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
             ${pricingReport?.introductoryPrice || 19} / ${pricingReport?.regularPrice || 29} / ${pricingReport?.bundlePrice || 49}
           </div>
-          <div className="text-[11px] text-indigo-700 mt-1">
+          <div className="text-xs text-teal-700 font-medium mt-1.5">
             {(project.resources || []).length} {lang === 'en' ? 'companion assets included' : '套伴隨實作資源'}
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="text-xs font-medium text-slate-500 mb-1 flex items-center justify-between">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center justify-between">
             <span>{lang === 'en' ? 'AI Engine & Usage' : 'AI 模型與用量'}</span>
-            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+            <Sparkles className="w-4 h-4 text-sky-600" />
           </div>
-          <div className="text-sm font-bold text-slate-900 font-mono truncate" title={aiSettings?.defaultModel}>
-            {aiSettings?.provider?.toUpperCase() || 'OPENROUTER'}: {aiSettings?.defaultModel || 'default'}
+          <div className="text-base font-bold text-slate-900 font-mono truncate" title={aiSettings?.defaultModel}>
+            {(aiSettings?.provider || 'gemini').toUpperCase()}: {aiSettings?.defaultModel || 'gemini-4-hydrogen'}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1 font-mono tabular-nums">
+          <div className="text-xs text-slate-600 mt-2 font-mono tabular-nums">
             {lang === 'en' ? 'Requests' : '請求'}: {aiSettings?.usageStats?.totalRequests || 0} · ${(aiSettings?.usageStats?.estimatedCostUsd || 0).toFixed(2)}
           </div>
         </div>
       </div>
 
-      {/* Pipeline Stage Quick Access Strip */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">
-              {lang === 'en' ? 'Workflow Stage Pipeline' : '自動化產線階段導航'}
-            </h2>
-            <p className="text-xs text-slate-500">
-              {lang === 'en'
-                ? 'Click any stage to enter its dedicated studio, edit data, or trigger generation.'
-                : '點選直接進入各專案工作台進行檢視或自訂微調'}
-            </p>
+      {/* Synthesise.ai Next Recommended Step Co-Pilot */}
+      <div className="lab-panel p-5 sm:p-6 bg-gradient-to-r from-teal-50/70 via-white to-sky-50/60 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{lang === 'en' ? 'Synthesise.ai Guided Workflow Co-Pilot' : 'Synthesise.ai 產線下一步智慧引導'}</span>
           </div>
-          <span className="text-xs font-mono font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">
-            {lang === 'en' ? 'Overall Progress' : '總進度'} {progressPercent}%
-          </span>
+          <h2 className="text-base lg:text-lg font-bold text-slate-900">{nextStage.title}</h2>
+          <p className="text-sm text-slate-600">{nextStage.detail}</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { id: 'market_research', title: lang === 'en' ? '1. Market Intelligence' : '1. 市場情報 (MTRE)', icon: TrendingUp },
-            { id: 'topic_selection', title: lang === 'en' ? '2. Topic Recommendations' : '2. 題材推薦 (Gate A)', icon: Sparkles },
-            { id: 'project_brief', title: lang === 'en' ? '3. Project Setup (13 Fields)' : '3. 13項專案設定', icon: Feather },
-            { id: 'reference_library', title: lang === 'en' ? '4. Reference Library (ARCE)' : '4. 自動文獻庫 (ARCE)', icon: BookOpen },
-            { id: 'product_charter', title: lang === 'en' ? '5. Product Charter (Gate B)' : '5. 產品憲章 (Gate B)', icon: Award },
-            { id: 'content_studio', title: lang === 'en' ? '6. Content Studio' : '6. 長篇內容工廠', icon: Feather },
-            { id: 'workbook_studio', title: lang === 'en' ? '7. Companion Toolkit' : '7. 伴隨工具套件', icon: Layers },
-            { id: 'export_center', title: lang === 'en' ? '8. Export Center' : '8. 匯出下載中心', icon: Download },
-          ].map((stage) => {
-            const Icon = stage.icon;
-            const status = project.workflow?.stageStatuses?.[stage.id as StageId];
-            return (
-              <button
-                key={stage.id}
-                onClick={() => setActiveView(stage.id as StageId)}
-                className="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20 text-left transition-all group"
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <Icon className="w-4 h-4 text-slate-500 group-hover:text-indigo-600 shrink-0" />
-                  <span className="text-xs font-medium text-slate-800 truncate">{stage.title}</span>
-                </div>
-                {status === 'COMPLETED' ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                ) : (
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 shrink-0" />
-                )}
-              </button>
-            );
-          })}
+        <button
+          type="button"
+          onClick={() => setActiveView(nextStage.stageId)}
+          className="px-5 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap shrink-0"
+        >
+          <span>{nextStage.cta}</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Scientific Telemetry Calibration Radar + 8-Stage Pipeline Matrix */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+        <div className="xl:col-span-5 lab-panel p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-sky-600" />
+              <h2 className="text-base font-bold text-slate-900">
+                {lang === 'en' ? 'Studio Calibration Radar' : '產線五維科學成熟度診斷'}
+              </h2>
+            </div>
+            <span className="text-xs font-mono text-sky-700 font-semibold">
+              {lang === 'en' ? '5-Axis Readiness' : '五維成熟度指標'}
+            </span>
+          </div>
+          <StudioCalibrationRadar project={project} lang={lang} />
+        </div>
+
+        <div className="xl:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                {lang === 'en' ? 'Workflow Stage Pipeline' : '自動化產線階段導航'}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {lang === 'en'
+                  ? 'Select any stage to enter its full-screen studio workspace.'
+                  : '點選直接進入各專案工作台進行檢視或自訂微調'}
+              </p>
+            </div>
+            <span className="text-xs font-mono font-bold text-teal-800 bg-teal-50 border border-teal-200 px-3 py-1 rounded-md">
+              {lang === 'en' ? 'Overall Progress' : '總進度'} {progressPercent}%
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {[
+              { id: 'market_research', title: lang === 'en' ? '1. Market & Top Niches (Gate A)' : '1. 市場情報與選題 (Gate A)', icon: TrendingUp },
+              { id: 'project_brief', title: lang === 'en' ? '2. Project Setup (13 Fields)' : '2. 13項專案設定', icon: Feather },
+              { id: 'reference_library', title: lang === 'en' ? '5. Reference Research' : '5. 來源研究與知識庫', icon: BookOpen },
+              { id: 'product_charter', title: lang === 'en' ? '6. Product Charter (Gate B)' : '6. 產品憲章 (Gate B)', icon: Award },
+              { id: 'content_studio', title: lang === 'en' ? '8. Content Studio' : '8. 長篇內容工廠', icon: Feather },
+              { id: 'workbook_studio', title: lang === 'en' ? '9. Companion Toolkit' : '9. 伴隨工具套件', icon: Layers },
+              { id: 'quality_assurance', title: lang === 'en' ? '10. Quality Audit (Gate C)' : '10. 品質審查 (Gate C)', icon: CheckCircle2 },
+              { id: 'export_center', title: lang === 'en' ? '13. Export Bundle' : '13. 匯出下載中心', icon: Download },
+            ].map((stage) => {
+              const Icon = stage.icon;
+              const status = project.workflow?.stageStatuses?.[stage.id as StageId];
+              return (
+                <button
+                  key={stage.id}
+                  onClick={() => setActiveView(stage.id as StageId)}
+                  className="flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-sky-500 hover:bg-sky-50/30 text-left transition-all group"
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <div className="w-9 h-9 rounded-lg bg-slate-100 group-hover:bg-sky-100 flex items-center justify-center shrink-0">
+                      <Icon className="w-4 h-4 text-slate-600 group-hover:text-sky-700" />
+                    </div>
+                    <span className="text-sm font-semibold text-slate-800 truncate">{stage.title}</span>
+                  </div>
+                  {status === 'COMPLETED' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

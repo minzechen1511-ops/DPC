@@ -1,0 +1,56 @@
+name: Digital Product Studio CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run lint
+
+      - name: Run unit and integration test suites
+        run: npm test
+
+      - name: Build production client bundle
+        run: npm run build
+
+      - name: Verify no internal assets leaked into dist
+        run: |
+          if [ -d "dist/assets/aistudio" ]; then
+            echo "ERROR: Internal prompt assets must not exist in dist/assets/aistudio"
+            exit 1
+          fi
+
+      - name: Verify zero legacy desktop EXE or manual license code remains
+        run: |
+          if grep -rnE "desktopPackage|subscriptionLicense|SubscriptionDesktopView|buildDesktopExe|electron/|electron-builder|postject" src server index.html package.json; then
+            echo "ERROR: Legacy desktop packaging or manual license code detected"
+            exit 1
+          fi
+
+      - name: Verify no plaintext API key localStorage keys remain
+        run: |
+          if grep -rnE "localStorage\.(getItem|setItem)\(['\"]dpc_key_" src; then
+            echo "ERROR: Plaintext browser API key persistence detected"
+            exit 1
+          fi

@@ -1,6 +1,6 @@
 {
   "name": "Digital Product Studio",
-  "description": "AI-Powered Digital Product Research, Creation & Launch Factory (Stage-by-stage research and review)",
+  "description": "Commercial AI-Powered Digital Product Studio — Market Intelligence, Evidence Research, Authoring & Launch Suite",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

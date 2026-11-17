@@ -1,27 +1,16 @@
 import type { DigitalProductProject } from '../types/project.ts';
+import { sanitizeProjectForExport } from './projectSanitizer.ts';
 
 const ACTIVE_PROJECT_KEY = 'dps_active_project_id_v1';
 const SAVED_PROJECTS_KEY = 'dps_saved_projects_v1';
+const LEGACY_MIGRATED_KEY = 'dps_legacy_migrated_v1';
 const UI_LANG_KEY = 'dps_ui_lang_v1';
 
 /**
- * Strip sensitive API keys before persisting project state to workspace storage.
- * Keys live exclusively under dedicated `dpc_key_*` keys in localStorage.
+ * Strip sensitive API keys & legacy desktop artifacts before storing or exporting project state.
  */
 export function sanitizeProjectForStorage(project: DigitalProductProject): DigitalProductProject {
-  return {
-    ...project,
-    aiSettings: {
-      ...project.aiSettings,
-      apiKey: '',
-      apiKeys: {
-        openrouter: '',
-        gemini: '',
-        openai: '',
-        claude: '',
-      },
-    },
-  };
+  return sanitizeProjectForExport(project);
 }
 
 export function upsertSavedProject(
@@ -50,9 +39,57 @@ export function loadSavedProjectsFromStorage(): DigitalProductProject[] {
     const raw = localStorage.getItem(SAVED_PROJECTS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((p) => p && typeof p.projectId === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((p) => p && typeof p.projectId === 'string').map(sanitizeProjectForStorage)
+      : [];
   } catch {
     return [];
+  }
+}
+
+export function inspectLegacyLocalProjects(): {
+  hasPendingLegacy: boolean;
+  projects: DigitalProductProject[];
+} {
+  try {
+    if (localStorage.getItem(LEGACY_MIGRATED_KEY) === 'true') {
+      return { hasPendingLegacy: false, projects: [] };
+    }
+    const projects = loadSavedProjectsFromStorage().filter((p) => !p.isBlankProject);
+    return { hasPendingLegacy: projects.length > 0, projects };
+  } catch {
+    return { hasPendingLegacy: false, projects: [] };
+  }
+}
+
+export function markLegacyProjectsMigrated(clearLocalCopy = false): void {
+  try {
+    localStorage.setItem(LEGACY_MIGRATED_KEY, 'true');
+    if (clearLocalCopy) {
+      localStorage.removeItem(SAVED_PROJECTS_KEY);
+      localStorage.removeItem(ACTIVE_PROJECT_KEY);
+    }
+  } catch {
+    // ignore storage quota issues
+  }
+}
+
+export function scrubLegacyApiKeyStorage(): void {
+  try {
+    const keysToScrub = [
+      'dpc_key_openrouter',
+      'dpc_key_gemini',
+      'dpc_key_openai',
+      'dpc_key_claude',
+      'dpc_openrouter_api_key',
+      'dps_desktop_subscription_v1',
+      'dps_license_state_v1',
+    ];
+    for (const k of keysToScrub) {
+      localStorage.removeItem(k);
+    }
+  } catch {
+    // ignore
   }
 }
 

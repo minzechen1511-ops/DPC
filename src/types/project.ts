@@ -49,7 +49,7 @@ export interface UserPreferences {
   market: MarketRegion;
   language: string;
   productFormat: ProductFormat;
-  automationMode: 'selection_autopilot' | 'manual_review';
+  automationMode: 'selection_autopilot' | 'manual_review' | 'guided_until_gate';
   referenceTarget: 8 | 20 | 30;
   autoApproveNonCritical: boolean;
 }

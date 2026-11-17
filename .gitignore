@@ -6,7 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
-.desktop-cache/
-build-desktop/
-release/
-
+.local-data/
+.playwright-cli/

@@ -15,6 +15,7 @@ import { DigitalProductProject, SalesAssets } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 import { calculateProfitability, PLATFORM_FEE_PRESETS } from '../../utils/commercialMath.ts';
 import { generateTextWithAi } from '../../services/aiService.ts';
+import { UnitEconomicsChart } from '../ScientificVisuals.tsx';
 
 interface PricingLaunchViewProps {
   project: DigitalProductProject;
@@ -48,7 +49,7 @@ export const PricingLaunchView: React.FC<PricingLaunchViewProps> = ({
   const [monthlyVisitors, setMonthlyVisitors] = useState<number>(2500);
   const [conversionRatePercent, setConversionRatePercent] = useState<number>(2.5);
   const [bundleSharePercent, setBundleSharePercent] = useState<number>(25);
-  const [introSharePercent, setIntroSharePercent] = useState<number>(15);
+  const [introSharePercent] = useState<number>(15);
   const [monthlyOverheadUsd, setMonthlyOverheadUsd] = useState<number>(150);
 
   useEffect(() => {
@@ -135,12 +136,13 @@ Return JSON with exact keys:
 }`;
 
       const res = await generateTextWithAi({
-        provider: project.aiSettings.provider,
-        model: project.aiSettings.defaultModel || 'openrouter/free',
+        provider: 'gemini',
+        model: project.aiSettings.defaultModel || 'gemini-4-hydrogen',
         systemPrompt:
           'You are a senior digital product launch strategist. Output concise, non-hyped, accurate JSON strictly matching the requested schema.',
         userPrompt,
         maxTokens: 2000,
+        projectId: project.projectId,
       });
 
       onRecordAiUsage?.(res?.usage, res?.model);
@@ -173,8 +175,8 @@ Return JSON with exact keys:
       setAiError(
         err?.message ||
           (lang === 'en'
-            ? 'Configure a valid AI API key in AI Settings to generate launch copy.'
-            : '請先於「AI 模型與 API 設定」配置有效的 API 金鑰後再生成上市文案。')
+            ? 'Could not reach server Gemini engine. Check Gemini AI Settings or sign in again.'
+            : '無法連接伺服器端 Gemini 引擎，請檢查「Gemini AI 與用量設定」或重新登入。')
       );
     } finally {
       setAiBusy(false);
@@ -182,26 +184,26 @@ Return JSON with exact keys:
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="w-full space-y-5 pb-3">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="lab-panel p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 mb-1">
-            <Tag className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider font-semibold text-indigo-700 mb-1">
+            <Tag className="w-4 h-4" />
             <span>{t.navPricingLaunch}</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">{t.pricingTitle}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">{t.pricingSubtitle}</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t.pricingTitle}</h1>
+          <p className="text-sm text-slate-600 mt-1">{t.pricingSubtitle}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
           <button
             type="button"
             disabled={aiBusy}
             onClick={handleGenerateAiLaunchCopy}
-            className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1.5"
+            className="px-4 py-2.5 text-sm font-semibold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-2"
           >
-            <Sparkles className={`w-3.5 h-3.5 ${aiBusy ? 'animate-spin' : ''}`} />
+            <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
             <span>
               {aiBusy
                 ? lang === 'en' ? 'Drafting Copy...' : '正在生成文案...'
@@ -212,16 +214,16 @@ Return JSON with exact keys:
           <button
             type="button"
             onClick={() => commitChanges()}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5"
+            className="px-4 py-2.5 text-sm font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-2"
           >
-            <Save className="w-3.5 h-3.5" />
+            <Save className="w-4 h-4" />
             <span>{lang === 'en' ? 'Save Pricing & Copy' : '儲存定價與文案'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveView('export_center')}
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+            className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
             <span>{lang === 'en' ? 'Export Center →' : '前往匯出中心 →'}</span>
           </button>
@@ -229,30 +231,30 @@ Return JSON with exact keys:
       </div>
 
       {savedNotice && (
-        <p role="status" className="px-4 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center gap-2">
+        <p role="status" className="px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{lang === 'en' ? 'Pricing ladder and launch assets saved to project.' : '三階梯定價與商業行銷文案已儲存至專案。'}</span>
         </p>
       )}
 
       {aiError && (
-        <p role="alert" className="px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-xs font-medium">
+        <p role="alert" className="px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-sm font-medium">
           {aiError}
         </p>
       )}
 
       {/* Editable 3-Tier Value-Based Pricing Ladder */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+      <div className="lab-panel p-5 sm:p-6 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <h2 className="text-sm font-bold text-slate-900">
+          <h2 className="text-base font-bold text-slate-900">
             {lang === 'en' ? '3-Tier Value-Based Pricing Ladder' : '市場對照與三階梯定價策略'}
           </h2>
-          <label className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500 font-medium">{lang === 'en' ? 'Currency:' : '幣別：'}</span>
+          <label className="flex items-center gap-2.5 text-sm">
+            <span className="text-slate-600 font-semibold">{lang === 'en' ? 'Currency:' : '幣別：'}</span>
             <select
               value={pricing.currency || 'USD'}
               onChange={(e) => setPricing({ ...pricing, currency: e.target.value })}
-              className="text-xs font-mono bg-slate-50 border border-slate-300 rounded px-2 py-1 text-slate-900"
+              className="font-mono font-semibold bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
             >
               <option value="USD">USD ($)</option>
               <option value="EUR">EUR (€)</option>
@@ -262,72 +264,72 @@ Return JSON with exact keys:
           </label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-            <label className="text-[11px] font-bold text-slate-600 uppercase block">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="p-5 rounded-xl border border-slate-200 bg-slate-50/90 space-y-3">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
               {lang === 'en' ? '1. Early Bird / Test Price' : '1. 首發限時測試價'}
             </label>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-slate-500">{pricing.currency || 'USD'}</span>
+            <div className="flex items-center gap-2.5">
+              <span className="font-mono text-base font-bold text-slate-500">{pricing.currency || 'USD'}</span>
               <input
                 type="number"
                 min={0}
                 step="1"
                 value={pricing.introductoryPrice}
                 onChange={(e) => setPricing({ ...pricing, introductoryPrice: Number(e.target.value) })}
-                className="w-full text-xl font-bold font-mono tabular-nums bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-900"
+                className="w-full text-2xl font-bold font-mono tabular-nums bg-white border border-slate-300 rounded-lg px-3.5 py-2 text-slate-900"
               />
             </div>
-            <p className="text-xs text-slate-600">
+            <p className="text-sm text-slate-600 leading-relaxed">
               {lang === 'en'
                 ? 'Frictionless entry point for the first 50–100 buyers to validate conversion and gather testimonials.'
                 : '用於前 50–100 位早鳥買家快速驗證轉換率並蒐集真實口碑。'}
             </p>
           </div>
 
-          <div className="p-4 rounded-xl border-2 border-indigo-600 bg-indigo-50/20 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-indigo-700 uppercase">
+          <div className="p-5 rounded-xl border-2 border-indigo-600 bg-indigo-50/30 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold text-indigo-800 uppercase tracking-wider">
                 {lang === 'en' ? '2. Standard Core Guide' : '2. 常態標準核心價'}
               </label>
-              <span className="text-[10px] font-semibold text-indigo-700">
+              <span className="text-xs font-mono font-semibold text-indigo-700">
                 {lang === 'en' ? 'Primary Anchor' : '主力定價'}
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-indigo-700">{pricing.currency || 'USD'}</span>
+            <div className="flex items-center gap-2.5">
+              <span className="font-mono text-base font-bold text-indigo-700">{pricing.currency || 'USD'}</span>
               <input
                 type="number"
                 min={0}
                 step="1"
                 value={pricing.regularPrice}
                 onChange={(e) => setPricing({ ...pricing, regularPrice: Number(e.target.value) })}
-                className="w-full text-xl font-bold font-mono tabular-nums bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-indigo-900"
+                className="w-full text-2xl font-bold font-mono tabular-nums bg-white border border-indigo-300 rounded-lg px-3.5 py-2 text-indigo-900"
               />
             </div>
-            <p className="text-xs text-slate-600">
+            <p className="text-sm text-slate-600 leading-relaxed">
               {lang === 'en'
                 ? 'Core commercial price point anchored to category benchmarks and documented transformation ROI.'
                 : '對齊市場同類暢銷品價值中位數與轉變投資報酬率之標準定價。'}
             </p>
           </div>
 
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-            <label className="text-[11px] font-bold text-emerald-700 uppercase block">
+          <div className="p-5 rounded-xl border border-slate-200 bg-slate-50/90 space-y-3">
+            <label className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">
               {lang === 'en' ? '3. Complete Toolkit Bundle' : '3. 全套工具包旗艦價'}
             </label>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-emerald-700">{pricing.currency || 'USD'}</span>
+            <div className="flex items-center gap-2.5">
+              <span className="font-mono text-base font-bold text-emerald-700">{pricing.currency || 'USD'}</span>
               <input
                 type="number"
                 min={0}
                 step="1"
                 value={pricing.bundlePrice}
                 onChange={(e) => setPricing({ ...pricing, bundlePrice: Number(e.target.value) })}
-                className="w-full text-xl font-bold font-mono tabular-nums bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-emerald-800"
+                className="w-full text-2xl font-bold font-mono tabular-nums bg-white border border-slate-300 rounded-lg px-3.5 py-2 text-emerald-800"
               />
             </div>
-            <p className="text-xs text-slate-600">
+            <p className="text-sm text-slate-600 leading-relaxed">
               {lang === 'en'
                 ? 'Full guide + fillable workbooks, progress trackers, CSV templates, and interactive HTML study room.'
                 : '核心指南搭配所有填空工作表、進度追蹤、CSV 範本與互動閱讀套件。'}
@@ -335,49 +337,49 @@ Return JSON with exact keys:
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-2">
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Pricing Rationale' : '定價策略依據'}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Pricing Rationale' : '定價策略依據'}</span>
             <input
               type="text"
               value={pricing.rationale}
               onChange={(e) => setPricing({ ...pricing, rationale: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-800"
             />
           </label>
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Market Comparison Benchmark' : '競品價格對照摘要'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Market Comparison Benchmark' : '競品價格對照摘要'}</span>
             <input
               type="text"
               value={pricing.marketComparisonSummary}
               onChange={(e) => setPricing({ ...pricing, marketComparisonSummary: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-800"
             />
           </label>
         </div>
       </div>
 
       {/* Unit-Economics & Commercial Profitability Simulator */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+      <div className="lab-panel p-5 sm:p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <Calculator className="w-4 h-4 text-indigo-600" />
-            <h2 className="text-sm font-bold text-slate-900">
+            <h2 className="text-base font-bold text-slate-900">
               {lang === 'en' ? 'Commercial Unit-Economics & Profit Simulator' : '商業收益與獲利試算引擎'}
             </h2>
           </div>
-          <span className="text-[11px] text-slate-500">
+          <span className="text-xs font-mono text-slate-600">
             {lang === 'en' ? 'Modeled net margin after checkout & platform fees' : '扣除平台抽成與固定維運支出之淨收益預測'}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-          <label className="block space-y-1 lg:col-span-2">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Distribution Channel' : '銷售通路費率預設'}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+          <label className="block space-y-1.5 lg:col-span-2">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Distribution Channel' : '銷售通路費率預設'}</span>
             <select
               value={selectedPresetId}
               onChange={(e) => setSelectedPresetId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-slate-900"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
             >
               {PLATFORM_FEE_PRESETS.map((preset) => (
                 <option key={preset.id} value={preset.id}>{preset.name}</option>
@@ -385,20 +387,20 @@ Return JSON with exact keys:
             </select>
           </label>
 
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Monthly Visitors' : '月訪客數'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Monthly Visitors' : '月訪客數'}</span>
             <input
               type="number"
               min={0}
               step={100}
               value={monthlyVisitors}
               onChange={(e) => setMonthlyVisitors(Number(e.target.value))}
-              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-slate-900"
+              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Conversion (%)' : '轉換率 (%)'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Conversion (%)' : '轉換率 (%)'}</span>
             <input
               type="number"
               min={0}
@@ -406,12 +408,12 @@ Return JSON with exact keys:
               step={0.1}
               value={conversionRatePercent}
               onChange={(e) => setConversionRatePercent(Number(e.target.value))}
-              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-slate-900"
+              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Bundle Mix (%)' : '旗艦組佔比 (%)'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Bundle Mix (%)' : '旗艦組佔比 (%)'}</span>
             <input
               type="number"
               min={0}
@@ -419,148 +421,151 @@ Return JSON with exact keys:
               step={5}
               value={bundleSharePercent}
               onChange={(e) => setBundleSharePercent(Number(e.target.value))}
-              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-slate-900"
+              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Monthly Costs ($)' : '月固定成本 ($)'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Monthly Costs ($)' : '月固定成本 ($)'}</span>
             <input
               type="number"
               min={0}
               step={10}
               value={monthlyOverheadUsd}
               onChange={(e) => setMonthlyOverheadUsd(Number(e.target.value))}
-              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-slate-900"
+              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
             />
           </label>
         </div>
 
         {/* Tabular-Nums Profit Projections */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-            <span className="text-[11px] text-slate-500 block">{lang === 'en' ? 'Monthly Units' : '預估月銷量'}</span>
-            <strong className="text-lg font-bold font-mono tabular-nums text-slate-900">{metrics.monthlyUnits}</strong>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-xs font-medium text-slate-600 block">{lang === 'en' ? 'Monthly Units' : '預估月銷量'}</span>
+            <strong className="text-xl font-bold font-mono tabular-nums text-slate-900 mt-0.5 block">{metrics.monthlyUnits}</strong>
           </div>
-          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-            <span className="text-[11px] text-slate-500 block">{lang === 'en' ? 'Blended AOV' : '平均客單價'}</span>
-            <strong className="text-lg font-bold font-mono tabular-nums text-slate-900">${metrics.blendedAverageOrderValue.toFixed(2)}</strong>
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-xs font-medium text-slate-600 block">{lang === 'en' ? 'Blended AOV' : '平均客單價'}</span>
+            <strong className="text-xl font-bold font-mono tabular-nums text-slate-900 mt-0.5 block">${metrics.blendedAverageOrderValue.toFixed(2)}</strong>
           </div>
-          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-            <span className="text-[11px] text-slate-500 block">{lang === 'en' ? 'Gross Revenue' : '月總營收'}</span>
-            <strong className="text-lg font-bold font-mono tabular-nums text-slate-900">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-xs font-medium text-slate-600 block">{lang === 'en' ? 'Gross Revenue' : '月總營收'}</span>
+            <strong className="text-xl font-bold font-mono tabular-nums text-slate-900 mt-0.5 block">
               ${metrics.grossMonthlyRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </strong>
           </div>
-          <div className="p-3.5 rounded-lg bg-emerald-50/70 border border-emerald-200">
-            <span className="text-[11px] text-emerald-700 block">{lang === 'en' ? 'Net Monthly Profit' : '月淨利潤'}</span>
-            <strong className="text-lg font-bold font-mono tabular-nums text-emerald-700">
+          <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200">
+            <span className="text-xs font-semibold text-emerald-800 block">{lang === 'en' ? 'Net Monthly Profit' : '月淨利潤'}</span>
+            <strong className="text-xl font-bold font-mono tabular-nums text-emerald-700 mt-0.5 block">
               ${metrics.netMonthlyProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </strong>
           </div>
-          <div className="p-3.5 rounded-lg bg-indigo-50/60 border border-indigo-200">
-            <span className="text-[11px] text-indigo-700 block">{lang === 'en' ? 'Annualized Net' : '年化淨利預測'}</span>
-            <strong className="text-lg font-bold font-mono tabular-nums text-indigo-700">
+          <div className="p-4 rounded-xl bg-sky-50/70 border border-sky-200">
+            <span className="text-xs font-semibold text-sky-800 block">{lang === 'en' ? 'Annualized Net' : '年化淨利預測'}</span>
+            <strong className="text-xl font-bold font-mono tabular-nums text-sky-700 mt-0.5 block">
               ${metrics.annualizedNetProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </strong>
           </div>
-          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-            <span className="text-[11px] text-slate-500 block">{lang === 'en' ? 'Net Margin / Break-Even' : '淨利率 / 損益兩平'}</span>
-            <strong className="text-sm font-bold font-mono tabular-nums text-slate-900 block mt-1">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-xs font-medium text-slate-600 block">{lang === 'en' ? 'Net Margin / Break-Even' : '淨利率 / 損益兩平'}</span>
+            <strong className="text-base font-bold font-mono tabular-nums text-slate-900 block mt-1">
               {metrics.profitMarginPercent}% · {metrics.breakEvenUnits} {lang === 'en' ? 'sales' : '套'}
             </strong>
           </div>
         </div>
+
+        {/* Integrated Unit Economics Visual Bar */}
+        <UnitEconomicsChart metrics={metrics} monthlyOverheadUsd={monthlyOverheadUsd} lang={lang} />
       </div>
 
       {/* Editable Sales Page Copy */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <h2 className="text-sm font-bold text-slate-900">
+      <div className="lab-panel p-5 sm:p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h2 className="text-base font-bold text-slate-900">
             {lang === 'en' ? 'Sales Page & Checkout Copy Editor' : '高轉換銷售頁核心文案編輯'}
           </h2>
           <button
             type="button"
             onClick={() => commitChanges()}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+            className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 px-3 py-1.5 rounded-lg bg-indigo-50"
           >
             {lang === 'en' ? 'Apply Edits' : '套用修改'}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Hero Headline' : '銷售頁主標題'}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Hero Headline' : '銷售頁主標題'}</span>
             <input
               type="text"
               value={sales.salesPageHeadline}
               onChange={(e) => setSales({ ...sales, salesPageHeadline: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-900 font-semibold"
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Subheadline' : '副標題訴求'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Subheadline' : '副標題訴求'}</span>
             <input
               type="text"
               value={sales.salesPageSubheadline}
               onChange={(e) => setSales({ ...sales, salesPageSubheadline: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-800"
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Hero Opening Pitch' : '核心開場說服文案'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Hero Opening Pitch' : '核心開場說服文案'}</span>
             <textarea
-              rows={4}
+              rows={5}
               value={sales.heroPitch}
               onChange={(e) => setSales({ ...sales, heroPitch: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3.5 text-slate-800"
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">{lang === 'en' ? 'Deliverable Bullets (one per line)' : '內含交付重點 (每行一項)'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Deliverable Bullets (one per line)' : '內含交付重點 (每行一項)'}</span>
             <textarea
-              rows={4}
+              rows={5}
               value={bulletsText}
               onChange={(e) => setBulletsText(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3.5 text-slate-800"
             />
           </label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <label className="block space-y-1">
-            <span className="font-semibold text-emerald-700">{lang === 'en' ? 'Ideal For (Target Buyer)' : '最適合對象'}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-emerald-800">{lang === 'en' ? 'Ideal For (Target Buyer)' : '最適合對象'}</span>
             <input
               type="text"
               value={sales.targetBuyerNotice}
               onChange={(e) => setSales({ ...sales, targetBuyerNotice: e.target.value })}
-              className="w-full bg-emerald-50/40 border border-emerald-200 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full bg-emerald-50/40 border border-emerald-200 rounded-lg px-3.5 py-2.5 text-slate-800"
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="font-semibold text-amber-800">{lang === 'en' ? 'Not Intended For (Scope Exclusion)' : '不適用範圍說明'}</span>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-amber-800">{lang === 'en' ? 'Not Intended For (Scope Exclusion)' : '不適用範圍說明'}</span>
             <input
               type="text"
               value={sales.notForBuyerNotice}
               onChange={(e) => setSales({ ...sales, notForBuyerNotice: e.target.value })}
-              className="w-full bg-amber-50/40 border border-amber-200 rounded-lg px-3 py-2 text-slate-800"
+              className="w-full bg-amber-50/40 border border-amber-200 rounded-lg px-3.5 py-2.5 text-slate-800"
             />
           </label>
         </div>
       </div>
 
       {/* Email Launch Sequence + FAQ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* Email Launch Sequence */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div className="lab-panel p-5 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4 text-indigo-600" />
-              <h2 className="text-sm font-bold text-slate-900">
+              <h2 className="text-base font-bold text-slate-900">
                 {lang === 'en' ? '3-Day Email Launch Sequence' : '三日上市行銷電子報序列'}
               </h2>
             </div>
@@ -581,32 +586,32 @@ Return JSON with exact keys:
                   ],
                 })
               }
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               <span>{lang === 'en' ? 'Add Email' : '新增信件'}</span>
             </button>
           </div>
 
           {(sales.emailLaunchSequence || []).length === 0 ? (
-            <p className="text-xs text-slate-500">
+            <p className="text-sm text-slate-500 py-3">
               {lang === 'en'
                 ? 'No launch emails drafted yet. Click "Draft Launch Copy with AI" or "+ Add Email".'
                 : '尚未撰寫上市電子報。可點擊上方 AI 生成文案或手動新增。'}
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {sales.emailLaunchSequence.map((email, idx) => (
-                <div key={idx} className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                <div key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono font-bold text-indigo-700">Day {email.day} · {email.goal}</span>
+                    <span className="text-xs font-mono font-bold text-indigo-700">Day {email.day} · {email.goal}</span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleCopyEmail(email.subject, email.bodyMarkdown, email.day)}
-                        className="px-2.5 py-1 bg-white border border-slate-300 rounded text-[11px] font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+                        className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-1.5"
                       >
-                        {copiedEmailDay === email.day ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        {copiedEmailDay === email.day ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{copiedEmailDay === email.day ? (lang === 'en' ? 'Copied' : '已複製') : (lang === 'en' ? 'Copy' : '複製')}</span>
                       </button>
                       <button
@@ -618,9 +623,9 @@ Return JSON with exact keys:
                             emailLaunchSequence: sales.emailLaunchSequence.filter((_, i) => i !== idx),
                           })
                         }
-                        className="p-1 text-slate-400 hover:text-rose-600"
+                        className="p-2 text-slate-500 hover:text-rose-600 rounded-lg"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -635,10 +640,10 @@ Return JSON with exact keys:
                         ),
                       })
                     }
-                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-semibold text-slate-900"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-semibold text-slate-900"
                   />
                   <textarea
-                    rows={3}
+                    rows={4}
                     value={email.bodyMarkdown}
                     onChange={(e) =>
                       setSales({
@@ -648,7 +653,7 @@ Return JSON with exact keys:
                         ),
                       })
                     }
-                    className="w-full bg-white border border-slate-300 rounded p-2 text-slate-700"
+                    className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-700"
                   />
                 </div>
               ))}
@@ -657,11 +662,11 @@ Return JSON with exact keys:
         </div>
 
         {/* Buyer FAQ Editor */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div className="lab-panel p-5 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
               <HelpCircle className="w-4 h-4 text-indigo-600" />
-              <h2 className="text-sm font-bold text-slate-900">
+              <h2 className="text-base font-bold text-slate-900">
                 {lang === 'en' ? 'Buyer Objection FAQ List' : '常見購買疑慮與問答 (FAQ)'}
               </h2>
             </div>
@@ -676,21 +681,21 @@ Return JSON with exact keys:
                   ],
                 })
               }
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               <span>{lang === 'en' ? 'Add FAQ' : '新增 FAQ'}</span>
             </button>
           </div>
 
           {(sales.faqList || []).length === 0 ? (
-            <p className="text-xs text-slate-500">
+            <p className="text-sm text-slate-500 py-3">
               {lang === 'en' ? 'No FAQs added yet.' : '尚未建立買家 FAQ。'}
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {sales.faqList.map((faq, idx) => (
-                <div key={idx} className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                <div key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
@@ -701,7 +706,7 @@ Return JSON with exact keys:
                           faqList: sales.faqList.map((f, i) => (i === idx ? { ...f, question: e.target.value } : f)),
                         })
                       }
-                      className="flex-1 bg-white border border-slate-300 rounded px-2.5 py-1.5 font-semibold text-slate-900"
+                      className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 font-semibold text-slate-900"
                     />
                     <button
                       type="button"
@@ -712,13 +717,13 @@ Return JSON with exact keys:
                           faqList: sales.faqList.filter((_, i) => i !== idx),
                         })
                       }
-                      className="p-1 text-slate-400 hover:text-rose-600"
+                      className="p-2 text-slate-500 hover:text-rose-600 rounded-lg"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                   <textarea
-                    rows={2}
+                    rows={4}
                     value={faq.answer}
                     onChange={(e) =>
                       setSales({
@@ -726,7 +731,7 @@ Return JSON with exact keys:
                         faqList: sales.faqList.map((f, i) => (i === idx ? { ...f, answer: e.target.value } : f)),
                       })
                     }
-                    className="w-full bg-white border border-slate-300 rounded p-2 text-slate-700"
+                    className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-700"
                   />
                 </div>
               ))}

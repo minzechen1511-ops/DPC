@@ -70,16 +70,57 @@ test('stale evidence blocks a previously approved buyer bundle and incomplete im
  assert.ok(gateIssues(project,'gateC').some(issue=>issue.includes('48 hours')));
  assert.ok(gateIssues(DEMO_PROJECT,'gateC').length>0);
 });
-test('offline bundle includes chapter readers, usable worksheets, companions and correct integrity hashes',async()=>{
+test('offline bundle includes chapter readers, usable worksheets, companions, executive summary, launch kit and correct integrity hashes',async()=>{
  const project=approveGate(completeProject(),'gateC');
  project.outline[0].title='=HYPERLINK("https://example.com")';
  relevanceFixture(project.referenceLibrary.cards[0],project.outline);
  const {zip,manifest}=await buildLearningBundle(project,sourceCheckFixture(project.referenceLibrary.cards));
- for(const path of ['START-HERE.html','book/executive-ebook.html','chapters/chapter-1.html','resources/worksheet-1.html','resources/companion-1.html','resources/learning-progress.csv','research/reading-room.html','research/marketplace-evidence.json','publisher/project-backup.json','review/publication-review.json','manifest.json'])assert.ok(zip.file(path),path);
+ for(const path of ['START-HERE.html','book/executive-ebook.html','chapters/chapter-1.html','resources/executive-summary.md','resources/executive-summary.html','resources/worksheet-1.html','resources/companion-1.html','resources/learning-progress.csv','research/reading-room.html','research/marketplace-evidence.json','publisher/launch-summary.html','publisher/project-backup.json','review/publication-review.json','manifest.json'])assert.ok(zip.file(path),path);
  assert.equal(JSON.parse(await zip.file('review/publication-review.json')!.async('string')).reviewed,true);
  for(const entry of manifest){const bytes=await zip.file(entry.path)!.async('uint8array');assert.equal(bytes.length,entry.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),entry.sha256);}
  assert.match(await zip.file('resources/learning-progress.csv')!.async('string'),/"'=HYPERLINK/);
+ assert.match(await zip.file('book/executive-ebook.html')!.async('string'),/id="executive-summary"/);
+ assert.match(await zip.file('publisher/launch-summary.html')!.async('string'),/Channel Margin Scenarios/);
  const draft=await buildLearningBundle(topicProject());assert.match(await draft.zip.file('START-HERE.html')!.async('string'),/AUTHOR REVIEW EDITION/);
+});
+test('Amazon Kindle educational subcategory charts pass provenance checks and derive domain niches cleanly',()=>{
+ const amazonFinance: MarketplaceObservation = {
+  id: 'amazon-B0TESTFIN1',
+  marketplace: 'Amazon Kindle',
+  category: 'Investing, Money & Personal Finance',
+  productTitle: 'Household Cashflow & Investing Primer',
+  sellerOrAuthor: 'Jordan Lee',
+  productURL: 'https://www.amazon.com/dp/B0TESTFIN1',
+  currentPrice: 0,
+  priceKnown: false,
+  currency: 'USD',
+  observedRank: 4,
+  rankScope: 'Amazon US · Business & Investing Best Sellers',
+  productFormat: 'Kindle Ebook',
+  observedAt: now(),
+  evidenceLevel: 'VERIFIED_RANKING',
+  sourceURL: 'https://www.amazon.com/Best-Sellers-Kindle-Store-Business-Investing/zgbs/digital-text/154821011',
+  evidenceExcerpt: '#4 Household Cashflow & Investing Primer',
+  isSample: false,
+  collector: 'amazon-chart-v1',
+  dataLimitations: 'Public chart position only.',
+ };
+ const amazonTech: MarketplaceObservation = {
+  ...amazonFinance,
+  id: 'amazon-B0TESTSYS1',
+  category: 'Computers, AI Systems & Productivity',
+  productTitle: 'Solo Founder Workflow Automation',
+  productURL: 'https://www.amazon.com/dp/B0TESTSYS1',
+  sourceURL: 'https://www.amazon.com/Best-Sellers-Kindle-Store-Computers-Technology/zgbs/digital-text/156116011',
+ };
+ assert.equal(isCurrentMarketEvidence(amazonFinance), true);
+ assert.equal(isCurrentMarketEvidence(amazonTech), true);
+ assert.equal(isCurrentMarketEvidence({ ...amazonFinance, sourceURL: 'https://www.amazon.com/s?k=business' }), false);
+ const candidates = deriveSynchronizedCandidates([amazonFinance, amazonTech]);
+ assert.equal(candidates.length, 2);
+ assert.ok(candidates.some(c => c.marketCategory === 'personal_finance'));
+ assert.ok(candidates.some(c => c.marketCategory === 'productivity_systems'));
+ assert.ok(candidates.every(c => c.scoreBreakdown.demandSignal >= 20));
 });
 test('licensed pictures are embedded beside matching text, cited, credited and included as actual files',async()=>{
  const project=completeProject();
