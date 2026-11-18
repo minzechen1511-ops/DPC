@@ -1,3 +1,5 @@
+import { MARKETPLACE_OPTIONS } from '../../utils/marketPlatforms.ts';
+import { INITIAL_GATE_A_RESOURCES, mergeResourceDirectory } from '../../utils/marketResourceDirectory.ts';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Search,
@@ -121,7 +123,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
   }).length;
   const sampleCount = observations.filter((o) => o.isSample).length;
 
-  const resourceDir = marketResearch?.resourceDirectory || [];
+  const resourceDir = mergeResourceDirectory(marketResearch?.resourceDirectory);
   const accessibleResources = resourceDir.filter((r) => r.accessStatus === 'accessible' || r.accessStatus === 'redirected').length;
   const retrievedCount = realObservations.filter((o) => Boolean(o.retrievedAt) || Boolean(o.evidenceAttachmentRef)).length;
   const extractedCount = realObservations.length;
@@ -139,18 +141,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
     }
   }, [liveChartCount, reviewedFallbackCount, allCandidates.length, researchBusy, onRefreshResearch]);
 
-  const marketplaces = [
-    'ALL',
-    'Amazon Kindle',
-    'Apple Books',
-    'NYT Best Sellers',
-    'Keepa',
-    'Google Trends',
-    'Gumroad',
-    'Payhip',
-    'Etsy',
-    'Other Research Source',
-  ];
+  const marketplaces = ['ALL', ...MARKETPLACE_OPTIONS];
 
   const categoryOptions = [
     { id: 'ALL', label: lang === 'en' ? 'All Domains' : '全部領域' },
@@ -342,7 +333,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
               }`}
             >
               <Globe className="w-4 h-4" />
-              <span>{lang === 'en' ? 'Resource Directory (9)' : '研究資源目錄 (9)'}</span>
+              <span>{lang === 'en' ? `Resource Directory (${resourceDir.length})` : `研究資源目錄 (${resourceDir.length})`}</span>
             </button>
 
             <button
@@ -431,7 +422,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
           {[
             {
               step: '1. Resource Available',
-              detail: `${accessibleResources}/${resourceDir.length || 9} reachable`,
+              detail: `${accessibleResources}/${resourceDir.length || INITIAL_GATE_A_RESOURCES.length} reachable`,
               done: accessibleResources > 0,
             },
             {
@@ -795,7 +786,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                         <div>
                           <span className="text-[11px] text-slate-500 block">{t.priceLabel}</span>
                           <strong className="text-sm text-slate-900">
-                            {obs.priceKnown === false || !obs.currentPrice ? 'Not supplied' : `$${obs.currentPrice.toFixed(2)}`}
+                            {obs.priceKnown === false || !Number.isFinite(obs.currentPrice) || (obs.priceKnown !== true && obs.currentPrice === 0) ? 'Not supplied' : `${obs.currency} ${obs.currentPrice.toFixed(2)}`}
                           </strong>
                         </div>
                       </div>

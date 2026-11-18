@@ -1,0 +1,76 @@
+[
+  {
+    "marketplace": "Gumroad",
+    "requestedURL": "https://p2hemi.gumroad.com/l/risabj",
+    "checkedAt": "2026-11-18T12:54:51.211Z",
+    "apiStatus": 200,
+    "response": {
+      "requestedURL": "https://p2hemi.gumroad.com/l/risabj",
+      "resolvedURL": "https://p2hemi.gumroad.com/l/risabj",
+      "httpStatus": 200,
+      "checkedAt": "2026-11-18T12:54:51.201Z",
+      "responseSha256": "39104a3d946dcb95677a7a3a885b6d25f22617425fe9b33d11742bac0de80a80",
+      "observation": {
+        "id": "PAGE-8ce2f81f1a87de8d7280",
+        "marketplace": "Gumroad",
+        "publisher": "Gumroad",
+        "country": "Unknown / listing-specific",
+        "category": "Personal Finance",
+        "productTitle": "BUDGET TEMPLATE",
+        "sellerOrAuthor": "P2",
+        "productURL": "https://p2hemi.gumroad.com/l/risabj",
+        "sourceURL": "https://p2hemi.gumroad.com/l/risabj",
+        "currentPrice": 8,
+        "pricingTerms": "Advertised offer price only. Billing period, renewals, trials, fees and checkout total are unknown unless separately inspected.",
+        "priceKnown": true,
+        "currency": "USD",
+        "productFormat": "Digital planner (investigation scope)",
+        "observedAt": "2026-11-18T12:54:51.201Z",
+        "dataAsOfDate": "2026-11-18T12:54:51.201Z",
+        "retrievedAt": "2026-11-18T12:54:51.201Z",
+        "evidenceExcerpt": "Structured Product name: BUDGET TEMPLATE; brand/seller: P2; advertised offer: 8 USD.",
+        "excerptLocator": "script[type=\"application/ld+json\"] Product matching this product URL",
+        "collectionMethodology": "Backend extraction of original public JSON-LD Product/Offer facts; human relevance and scope review required.",
+        "keepaProvenance": "not_applicable",
+        "evidenceChainId": "gumroad-public-listings",
+        "sourceClass": "supporting_context",
+        "acquisitionMethod": "public_page_capture",
+        "evidenceType": "listing_details",
+        "reviewStatus": "unverified",
+        "evidenceLevel": "PUBLIC_LISTING",
+        "dataLimitations": "Listing metadata only: no unit sales, buyer demand, sales rank, conversion, revenue, profitability, purchase verification or seller-result verification. Country/category/format require review; category and format are user-supplied investigation scope. Advertised offer price only. Billing period, renewals, trials, fees and checkout total are unknown unless separately inspected.",
+        "isSample": false,
+        "evidenceVersionHash": "ev_77eeb59c6796bc8b",
+        "evidenceCapture": {
+          "content": "{\"name\":\"BUDGET TEMPLATE\",\"url\":\"https://p2hemi.gumroad.com/l/risabj\",\"sku\":\"risabj\",\"brand\":{\"@type\":\"Brand\",\"name\":\"P2\"},\"offers\":{\"@type\":\"Offer\",\"priceCurrency\":\"USD\",\"availability\":\"https://schema.org/InStock\",\"url\":\"https://p2hemi.gumroad.com/l/risabj\",\"price\":8}}",
+          "mediaType": "application/json",
+          "sha256": "9f0ff03524d1956f1a3556251d0819f2ddd96549a56a0acad6c5d07beb8af972",
+          "sourceURL": "https://p2hemi.gumroad.com/l/risabj",
+          "retrievedAt": "2026-11-18T12:54:51.201Z"
+        }
+      }
+    }
+  },
+  {
+    "marketplace": "Payhip",
+    "requestedURL": "https://payhip.com/b/9Py8W",
+    "checkedAt": "2026-11-18T12:54:50.583Z",
+    "apiStatus": 422,
+    "response": {
+      "error": "Public listing returned HTTP 403; no observations validated.",
+      "httpStatus": 403,
+      "checkedAt": "2026-11-18T12:54:50.580Z"
+    }
+  },
+  {
+    "marketplace": "Etsy",
+    "requestedURL": "https://www.etsy.com/listing/1639430196/digital-ipad-budget-planner-by-ashley",
+    "checkedAt": "2026-11-18T12:54:52.188Z",
+    "apiStatus": 422,
+    "response": {
+      "error": "Public listing returned HTTP 403; no observations validated.",
+      "httpStatus": 403,
+      "checkedAt": "2026-11-18T12:54:52.188Z"
+    }
+  }
+]

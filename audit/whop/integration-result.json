@@ -1,0 +1,248 @@
+{
+  "checkedAt": "2026-11-18T12:54:09.548Z",
+  "whopListing": {
+    "status": 200,
+    "title": "Digital Products",
+    "seller": "IImagined",
+    "advertisedPrice": 189,
+    "currency": "USD",
+    "resolvedURL": "https://whop.com/iimagined/digital-products-reimagined/",
+    "observedRank": null,
+    "reviewStatusAtIngestion": "unverified",
+    "pricingTerms": "Advertised offer price only. Billing period, renewals, trials, fees and checkout total are unknown unless separately inspected."
+  },
+  "manualReview": {
+    "explicitDecision": true,
+    "acquisitionMethod": "public_page_capture",
+    "qualifiedHypothesis": true,
+    "measuredDemandScore": 0,
+    "sourceStatus": "SINGLE_SOURCE",
+    "gateAApprovedInIsolatedTest": true
+  },
+  "importAndRestore": {
+    "preservesWhop": true,
+    "preservesOriginalCapture": true
+  },
+  "export": {
+    "authorReviewOnly": true,
+    "actualZipCreated": true
+  },
+  "unavailableWhopPage": {
+    "httpStatus": 404,
+    "apiStatus": 422,
+    "noObservation": true
+  },
+  "sources": [
+    {
+      "marketplace": "Apple Books",
+      "url": "https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 0,
+      "httpStatus": 502,
+      "resolvedURL": "https://rss.marketingtools.apple.com/api/v2/us/books/top-paid/100/books.json",
+      "status": "unavailable",
+      "message": "Apple feed redirect target returned HTTP 502."
+    },
+    {
+      "marketplace": "Amazon Kindle",
+      "url": "https://www.amazon.com/Best-Sellers-Kindle-Store/zgbs/digital-text",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 30,
+      "httpStatus": 200,
+      "resolvedURL": "https://www.amazon.com/Best-Sellers-Kindle-Store/zgbs/digital-text",
+      "responseSha256": "2c6a2ba250306cc91fcdec2cc68ec17efb6267e606edf88b6439dcf5949e371e",
+      "status": "verified",
+      "message": "Source chart positions captured (https://www.amazon.com/Best-Sellers-Kindle-Store/zgbs/digital-text); inspect source URL, feed timestamp, and limitations."
+    },
+    {
+      "marketplace": "Amazon Kindle · Business & Money",
+      "url": "https://www.amazon.com/Best-Sellers-Kindle-Store-Business-Investing/zgbs/digital-text/154821011",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 30,
+      "httpStatus": 200,
+      "resolvedURL": "https://www.amazon.com/Best-Sellers-Kindle-Store-Business-Investing/zgbs/digital-text/154821011",
+      "responseSha256": "2feea76ecf4ef45f0f596a5ba0ec7f953f1aeedae48c408873d6dc27c4cbd6fc",
+      "status": "verified",
+      "message": "Source chart positions captured (https://www.amazon.com/Best-Sellers-Kindle-Store-Business-Investing/zgbs/digital-text/154821011); inspect source URL, feed timestamp, and limitations."
+    },
+    {
+      "marketplace": "Amazon Kindle · Health & Wellness",
+      "url": "https://www.amazon.com/Best-Sellers-Kindle-Store-Health-Fitness-Dieting/zgbs/digital-text/156430011",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 30,
+      "httpStatus": 200,
+      "resolvedURL": "https://www.amazon.com/Best-Sellers-Kindle-Store-Health-Fitness-Dieting/zgbs/digital-text/156430011",
+      "responseSha256": "44b0de640ae69019218d676339286064c2cce83b5a32c2130c6ba702d3cd308f",
+      "status": "verified",
+      "message": "Source chart positions captured (https://www.amazon.com/Best-Sellers-Kindle-Store-Health-Fitness-Dieting/zgbs/digital-text/156430011); inspect source URL, feed timestamp, and limitations."
+    },
+    {
+      "marketplace": "Amazon Kindle · Self-Help",
+      "url": "https://www.amazon.com/Best-Sellers-Kindle-Store-Self-Help/zgbs/digital-text/156563011",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 30,
+      "httpStatus": 200,
+      "resolvedURL": "https://www.amazon.com/Best-Sellers-Kindle-Store-Self-Help/zgbs/digital-text/156563011",
+      "responseSha256": "efc18c2c5f94102ed46dab76cd9c639ab2e5c2147fddec7a486fa9e041dd5ac7",
+      "status": "verified",
+      "message": "Source chart positions captured (https://www.amazon.com/Best-Sellers-Kindle-Store-Self-Help/zgbs/digital-text/156563011); inspect source URL, feed timestamp, and limitations."
+    },
+    {
+      "marketplace": "Amazon Kindle · Cookbooks & Meals",
+      "url": "https://www.amazon.com/Best-Sellers-Kindle-Store-Cookbooks-Food-Wine/zgbs/digital-text/156154011",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 30,
+      "httpStatus": 200,
+      "resolvedURL": "https://www.amazon.com/Best-Sellers-Kindle-Store-Cookbooks-Food-Wine/zgbs/digital-text/156154011",
+      "responseSha256": "11b9061bbd6db810701f5acaf6768618b200c2a1c1ebfac3e37f024a62c6003e",
+      "status": "verified",
+      "message": "Source chart positions captured (https://www.amazon.com/Best-Sellers-Kindle-Store-Cookbooks-Food-Wine/zgbs/digital-text/156154011); inspect source URL, feed timestamp, and limitations."
+    },
+    {
+      "marketplace": "Amazon Kindle · Tech & Systems",
+      "url": "https://www.amazon.com/Best-Sellers-Kindle-Store-Computers-Technology/zgbs/digital-text/156116011",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 30,
+      "httpStatus": 200,
+      "resolvedURL": "https://www.amazon.com/Best-Sellers-Kindle-Store-Computers-Technology/zgbs/digital-text/156116011",
+      "responseSha256": "e037b1c0609f8b4e5074c927f65eff754b17be9c72eb8d211ec0b61b4eec206a",
+      "status": "verified",
+      "message": "Source chart positions captured (https://www.amazon.com/Best-Sellers-Kindle-Store-Computers-Technology/zgbs/digital-text/156116011); inspect source URL, feed timestamp, and limitations."
+    },
+    {
+      "marketplace": "Amazon Kindle · Education & Career",
+      "url": "https://www.amazon.com/Best-Sellers-Kindle-Store-Education-Teaching/zgbs/digital-text/158125011",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 30,
+      "httpStatus": 200,
+      "resolvedURL": "https://www.amazon.com/Best-Sellers-Kindle-Store-Education-Teaching/zgbs/digital-text/158125011",
+      "responseSha256": "8688bf9b774fa7630873460ca2efc4f43bf5f7377796efefb724bd234e24e88c",
+      "status": "verified",
+      "message": "Source chart positions captured (https://www.amazon.com/Best-Sellers-Kindle-Store-Education-Teaching/zgbs/digital-text/158125011); inspect source URL, feed timestamp, and limitations."
+    },
+    {
+      "marketplace": "Gumroad",
+      "url": "https://gumroad.com/discover",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 0,
+      "httpStatus": 200,
+      "resolvedURL": "https://gumroad.com/discover",
+      "responseSha256": "889f1d218f0ee9c287925f4225d7137b5265bf7549f217e7f0a5c72604e7cc2c",
+      "status": "no_ranking",
+      "message": "Page reached, but no supported public ranking collector applies here. Discovery and featured listings are never bestseller proof."
+    },
+    {
+      "marketplace": "Etsy",
+      "url": "https://www.etsy.com/market/digital_downloads",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 0,
+      "httpStatus": 403,
+      "status": "unavailable",
+      "message": "Source returned HTTP 403. Access or network policy may require configuration."
+    },
+    {
+      "marketplace": "Payhip",
+      "url": "https://payhip.com/marketplace",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 0,
+      "httpStatus": 403,
+      "status": "unavailable",
+      "message": "Source returned HTTP 403. Access or network policy may require configuration."
+    },
+    {
+      "marketplace": "Whop",
+      "url": "https://whop.com/discover/",
+      "checkedAt": "2026-11-18T12:54:04.385Z",
+      "count": 0,
+      "httpStatus": 200,
+      "resolvedURL": "https://whop.com/",
+      "responseSha256": "e0592eff20f46c30d197d8e6b47db2317c0e9c46e434bda0f9bbbf4ff7124a08",
+      "status": "no_ranking",
+      "message": "Whop discovery resolved to https://whop.com/. No ranking was validated. Retrieve a specific public product URL in Manual Evidence Review to investigate original offer facts."
+    }
+  ],
+  "directory": [
+    {
+      "name": "Whop Digital Products & Memberships",
+      "url": "https://whop.com/discover/",
+      "checkedAt": "2026-11-18T12:54:08.693Z",
+      "httpStatus": 301,
+      "accessStatus": "redirected",
+      "note": "HTTP 301 redirect → https://whop.com/. Follow manually or inspect target policy."
+    },
+    {
+      "name": "Apple Books US Top Paid (100)",
+      "url": "https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json",
+      "checkedAt": "2026-11-18T12:54:08.693Z",
+      "httpStatus": 301,
+      "accessStatus": "redirected",
+      "note": "HTTP 301 redirect → https://rss.marketingtools.apple.com/api/v2/us/books/top-paid/100/books.json. Follow manually or inspect target policy."
+    },
+    {
+      "name": "Amazon Kindle Best Sellers",
+      "url": "https://www.amazon.com/Best-Sellers-Kindle-Store/zgbs/digital-text",
+      "checkedAt": "2026-11-18T12:54:08.693Z",
+      "httpStatus": 200,
+      "accessStatus": "accessible",
+      "note": "HTTP 200 reachable at check time. Reachability alone does not validate page claims or bestseller rank."
+    },
+    {
+      "name": "The New York Times Best Sellers",
+      "url": "https://www.nytimes.com/books/best-sellers/",
+      "checkedAt": "2026-11-18T12:54:08.694Z",
+      "httpStatus": 403,
+      "accessStatus": "blocked",
+      "note": "HTTP 403 access restriction or anti-bot gate returned by host. Do not bypass; use manual review if needed."
+    },
+    {
+      "name": "Keepa Amazon Rank & Price History",
+      "url": "https://keepa.com/",
+      "checkedAt": "2026-11-18T12:54:08.695Z",
+      "httpStatus": 200,
+      "accessStatus": "accessible",
+      "note": "HTTP 200 reachable at check time. Reachability alone does not validate page claims or bestseller rank."
+    },
+    {
+      "name": "Google Trends",
+      "url": "https://trends.google.com/trends/",
+      "checkedAt": "2026-11-18T12:54:08.695Z",
+      "httpStatus": 200,
+      "accessStatus": "accessible",
+      "note": "HTTP 200 reachable at check time. Reachability alone does not validate page claims or bestseller rank."
+    },
+    {
+      "name": "Etsy Digital-Download Discovery",
+      "url": "https://www.etsy.com/market/digital_downloads",
+      "checkedAt": "2026-11-18T12:54:08.696Z",
+      "httpStatus": 403,
+      "accessStatus": "blocked",
+      "note": "HTTP 403 access restriction or anti-bot gate returned by host. Do not bypass; use manual review if needed."
+    },
+    {
+      "name": "Etsy Seller Handbook",
+      "url": "https://www.etsy.com/seller-handbook",
+      "checkedAt": "2026-11-18T12:54:08.696Z",
+      "httpStatus": 403,
+      "accessStatus": "blocked",
+      "note": "HTTP 403 access restriction or anti-bot gate returned by host. Do not bypass; use manual review if needed."
+    },
+    {
+      "name": "Gumroad Discover",
+      "url": "https://gumroad.com/discover",
+      "checkedAt": "2026-11-18T12:54:08.697Z",
+      "httpStatus": 200,
+      "accessStatus": "accessible",
+      "note": "HTTP 200 reachable at check time. Reachability alone does not validate page claims or bestseller rank."
+    },
+    {
+      "name": "Payhip Marketplace",
+      "url": "https://payhip.com/marketplace",
+      "checkedAt": "2026-11-18T12:54:08.697Z",
+      "httpStatus": 403,
+      "accessStatus": "blocked",
+      "note": "HTTP 403 access restriction or anti-bot gate returned by host. Do not bypass; use manual review if needed."
+    }
+  ],
+  "browserVerification": "Not performed; actual API and domain paths exercised.",
+  "deployedBackend": "Not verified"
+}

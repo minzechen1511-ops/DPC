@@ -1,0 +1,16 @@
+{
+  "url": "http://127.0.0.1:3103/api/market/listings/retrieve",
+  "checkedAt": "2026-11-18T12:54:04.382Z",
+  "status": 422,
+  "request": {
+    "url": "https://whop.com/discover/digital-ecommerce/digital-ecommerce/",
+    "category": "Business Productivity Systems",
+    "productFormat": "Course"
+  },
+  "response": {
+    "error": "Public listing returned HTTP 404; no observations validated.",
+    "httpStatus": 404,
+    "checkedAt": "2026-11-18T12:54:04.381Z"
+  },
+  "runtime": "local DPC backend, not deployed Cloud Run"
+}

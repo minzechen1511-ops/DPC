@@ -6,6 +6,7 @@ import type { LookupFunction } from 'node:net';
 import type { GateAResourceEntry, MarketplaceObservation } from '../src/types/project.ts';
 import { INITIAL_GATE_A_RESOURCES } from '../src/utils/marketResourceDirectory.ts';
 import { isPrivateResearchAddress } from './referenceResearch.ts';
+import { listingMarketplace } from '../src/utils/marketPlatforms.ts';
 
 export const APPLE_LEGACY_FEED_URL = 'https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json';
 export const APPLE_CANONICAL_FEED_URL = 'https://rss.marketingtools.apple.com/api/v2/us/books/top-paid/100/books.json';
@@ -22,6 +23,7 @@ export const MARKET_SOURCES = [
   { marketplace: 'Gumroad', url: 'https://gumroad.com/discover', categoryLabel: 'Gumroad Discover', rankScope: 'Gumroad Discover' },
   { marketplace: 'Etsy', url: 'https://www.etsy.com/market/digital_downloads', categoryLabel: 'Etsy Digital Downloads', rankScope: 'Etsy Digital Downloads' },
   { marketplace: 'Payhip', url: 'https://payhip.com/marketplace', categoryLabel: 'Payhip Marketplace', rankScope: 'Payhip Marketplace' },
+  { marketplace: 'Whop', url: 'https://whop.com/discover/', categoryLabel: 'Whop public discovery', rankScope: 'Discovery only; not a sales ranking' },
 ] as const;
 
 export type SourceReport = {
@@ -238,6 +240,27 @@ function capture(content:string,mediaType:string,retrievedAt:string,sourceURL:st
   return {content,mediaType,retrievedAt,sourceURL,sha256:createHash('sha256').update(content).digest('hex')};
 }
 
+/** Bounded public listing requests only. Redirects must stay on the same
+ * recognized marketplace; arbitrary URLs and private services are not fetched. */
+export async function readPublicListingSource(rawUrl:string):Promise<{body:string;resolvedUrl:string;httpStatus:number}> {
+  const marketplace=listingMarketplace(rawUrl);
+  if(!marketplace)throw new Error('Use a supported HTTPS Whop, Gumroad, Etsy or Payhip public listing URL.');
+  let url=rawUrl;
+  const signal=AbortSignal.timeout(15000);
+  for(let hop=0;hop<3;hop++){
+    const response=await proxyFetch(url,{dispatcher,redirect:'manual',signal,headers:{Accept:'text/html,application/json','User-Agent':'DigitalProductStudio/1.0 (public listing investigation)'}});
+    if(response.status>=300 && response.status<400){
+      const target=new URL(response.headers.get('location') || '',url).href;
+      await response.body?.cancel().catch(()=>{});
+      if(listingMarketplace(target)!==marketplace || hop===2)throw Object.assign(new Error('Listing redirect left the recognized marketplace or exceeded the redirect limit.'),{httpStatus:response.status});
+      url=target;continue;
+    }
+    if(!response.ok){await response.body?.cancel().catch(()=>{});throw Object.assign(new Error(`Public listing returned HTTP ${response.status}; no observations validated.`),{httpStatus:response.status});}
+    return {body:await readBoundedText(response),resolvedUrl:url,httpStatus:response.status};
+  }
+  throw new Error('No public listing response.');
+}
+
 async function readSource(url: string): Promise<{ body: string; resolvedUrl: string; httpStatus:number }> {
   // Only the fixed public sources above; redirects are rejected except the canonical Apple RSS relocation.
   const response = await proxyFetch(url, {
@@ -405,7 +428,7 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
         let resolvedURL:string|undefined;
         let responseSha256:string|undefined;
         try {
-          const { body, resolvedUrl, httpStatus:status } = await readSource(source.url);
+          const { body, resolvedUrl, httpStatus:status } = source.marketplace==='Whop' ? await readPublicListingSource(source.url) : await readSource(source.url);
           httpStatus=status;resolvedURL=resolvedUrl;responseSha256=createHash('sha256').update(body).digest('hex');
           const observations =
             source.marketplace === 'Apple Books'
@@ -426,6 +449,8 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
                 ? `Source chart positions captured (${resolvedUrl}); inspect source URL, feed timestamp, and limitations.`
                 : source.marketplace.startsWith('Amazon Kindle') || source.marketplace==='Apple Books'
                 ? 'Page reached, but collector extracted zero valid chart entries. Inspect the original response; no observations were validated.'
+                : source.marketplace==='Whop'
+                ? `Whop discovery resolved to ${resolvedUrl}. No ranking was validated. Retrieve a specific public product URL in Manual Evidence Review to investigate original offer facts.`
                 : 'Page reached, but no supported public ranking collector applies here. Discovery and featured listings are never bestseller proof.',
             } as SourceReport,
           };
@@ -466,7 +491,7 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
         ...seed,
         accessStatus:
           rpt.status === 'verified' || rpt.status === 'no_ranking'
-            ? seed.originalURL === APPLE_LEGACY_FEED_URL
+            ? rpt.resolvedURL && rpt.resolvedURL !== seed.originalURL
               ? 'redirected'
               : 'accessible'
             : /401|403|429|captcha|human verification/i.test(rpt.message)

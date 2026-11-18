@@ -76,8 +76,8 @@ export const GoogleSignInGate: React.FC<GoogleSignInGateProps> = ({
       title: lang === 'en' ? '1. Live Market Intelligence (Gate A)' : '1. 即時多平台市場情報 (Gate A)',
       desc:
         lang === 'en'
-          ? 'Analyze public marketplace signals across Kindle, Apple Books, Gumroad & Etsy with transparent scoring.'
-          : '即時擷取與比對公開市場排行榜與定價信號，精準評估高需求商品題材。',
+          ? 'Compare Kindle and Apple Books chart observations with reviewed Whop, Gumroad, Etsy and Payhip offers, NYT/Keepa reports and Google Trends context.'
+          : '比對 Kindle、Apple Books 排行、Whop、Gumroad、Etsy、Payhip 商品，以及 NYT、Keepa、Google Trends 的覆核脈絡；題材仍需驗證。',
     },
     {
       icon: BookOpen,

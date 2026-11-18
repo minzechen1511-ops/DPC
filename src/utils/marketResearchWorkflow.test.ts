@@ -607,7 +607,7 @@ test('15. Legacy project migration preserves live/manual/import observations, at
   assert.equal(migrated.schemaVersion, '4.0');
   assert.equal(migrated.preferences.automationMode, 'manual_review');
   assert.equal(migrated.preferences.autoApproveNonCritical, false);
-  assert.equal(migrated.marketResearch.resourceDirectory?.length, 9);
+  assert.equal(migrated.marketResearch.resourceDirectory?.length, 10);
   assert.equal(migrated.referenceLibrary.cards.length, 1);
 
   const obsSample = migrated.marketResearch.platformEvidence.find((o) => o.id === 'OBS-01')!;

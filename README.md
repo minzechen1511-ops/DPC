@@ -55,6 +55,7 @@ Editing application files does **not** alter external Codex container networking
   - `www.etsy.com`
   - `gumroad.com`
   - `payhip.com`
+  - `whop.com` (public product-page JSON-LD; no ranking or sales inference)
 - **Gate B Academic Reference Host Allowlist (Preserve Existing)**:
   - `api.crossref.org`, `www.ebi.ac.uk`, `europepmc.org`, `www.who.int`, `www.oecd.org`, `openstax.org`, `www.worldbank.org`, `www.imf.org`, `www.fao.org` (and permitted `.gov` / `.edu` / `.ac.uk` public research sources)
 
@@ -62,7 +63,7 @@ Editing application files does **not** alter external Codex container networking
 
 Digital Product Studio preserves a strict human-reviewed 14-stage sequence (Autopilot is permanently disabled):
 
-1. `market_research` — Resource Directory (9 seed sources), live chart collectors, & Manual Evidence Review
+1. `market_research` — Resource Directory (10 resources including Whop), live chart collectors, & Manual Evidence Review
 2. `topic_selection` — Niche candidates with separated **Evidence Strength** vs. **Product Suitability** & **Gate A** approval
 3. `project_brief` — 13-Field Project Brief (never fabricates unapproved audience or creator expertise)
 4. `uvz` — Unique Value Zone positioning

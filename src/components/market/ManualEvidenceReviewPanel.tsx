@@ -1,3 +1,4 @@
+import { MARKETPLACE_OPTIONS, isSpecificListingUrl } from '../../utils/marketPlatforms.ts';
 import React, { useEffect, useState } from 'react';
 import {
   ClipboardCheck,
@@ -109,6 +110,8 @@ function draftFromObservation(obs: MarketplaceObservation): ManualEvidenceInput 
     metricValue: obs.metricValue ?? '',
     metricUnit: obs.metricUnit || '',
     currentPrice: obs.currentPrice || 0,
+    priceKnown: obs.priceKnown,
+    pricingTerms: obs.pricingTerms,
     currency: obs.currency || 'USD',
     dataAsOfDate: (obs.dataAsOfDate || obs.observedAt || '').slice(0, 10),
     publicationDate: (obs.publicationDate || '').slice(0, 10),
@@ -138,6 +141,7 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
   const [formNotice, setFormNotice] = useState<string>('');
   const [urlCheckInfo, setUrlCheckInfo] = useState<string>('');
   const [urlChecking, setUrlChecking] = useState(false);
+  const [listingBusy, setListingBusy] = useState(false);
 
   // Two-step import state
   const [importText, setImportText] = useState('');
@@ -184,9 +188,9 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
       dateScopeProductMatch: obs.reviewAssessment?.dateScopeProductMatch || 'exact_match',
       metricNature:
         obs.reviewAssessment?.metricNature ||
-        (defs.evidenceType === 'official_ranking'
+        ((defs.evidenceType === 'official_ranking' || defs.evidenceType === 'listing_details')
           ? 'observed'
-          : defs.evidenceType === 'reported_ranking'
+          : (defs.evidenceType === 'reported_ranking' || defs.evidenceType === 'published_research')
           ? 'reported'
           : 'estimated'),
       limitationsSummary: obs.reviewAssessment?.limitationsSummary || obs.dataLimitations || '',
@@ -269,6 +273,8 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
         collectionMethodology: 'Manual inspection of specific public Gumroad creator product URL',
         dataLimitations: 'Gumroad Discover placement is editorial/algorithmic discovery; self-reported sales counts are seller claims.',
       });
+    } else if (res.id === 'res-whop-marketplace') {
+      setDraft({...DEFAULT_DRAFT,marketplace:'Whop',publisher:'Whop',category:'',productFormat:'Course / membership / download (verify)',sourceClass:'supporting_context',evidenceType:'listing_details',collectionMethodology:'Specific public Whop product-page inspection',dataLimitations:res.importantLimitations});
     } else if (res.id === 'res-payhip-marketplace') {
       setDraft({
         ...DEFAULT_DRAFT,
@@ -324,6 +330,18 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
     } finally {
       setUrlChecking(false);
     }
+  };
+
+  const handleRetrieveListing = async () => {
+    setFormErrors([]);setFormNotice('');setListingBusy(true);
+    try {
+      const response=await apiJson<{observation?:MarketplaceObservation;error?:string}>('/api/market/listings/retrieve',{method:'POST',body:JSON.stringify({url:draft.sourceURL,category:draft.category,productFormat:draft.productFormat})});
+      if(!response.ok || !response.data.observation)throw new Error(response.data.error || 'Public listing retrieval failed; enter manual evidence if needed.');
+      const obs=response.data.observation;
+      onAddObservation(obs);setSelectedReviewId(obs.id);syncReviewFormForObservation(obs);
+      setFormNotice(`${obs.marketplace} listing captured as Unverified. Inspect its original offer material and complete an explicit review. Listed price and placement do not establish demand or sales.`);
+    } catch(error){setFormErrors([error instanceof Error?error.message:'Listing retrieval failed.']);}
+    finally{setListingBusy(false);}
   };
 
   const handleCreateObservation = (e: React.FormEvent) => {
@@ -581,15 +599,7 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
                 }
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
               >
-                <option value="Amazon Kindle">Amazon Kindle</option>
-                <option value="Apple Books">Apple Books</option>
-                <option value="NYT Best Sellers">NYT Best Sellers</option>
-                <option value="Keepa">Keepa</option>
-                <option value="Google Trends">Google Trends</option>
-                <option value="Etsy">Etsy</option>
-                <option value="Gumroad">Gumroad</option>
-                <option value="Payhip">Payhip</option>
-                <option value="Other Research Source">Other Research Source</option>
+                {MARKETPLACE_OPTIONS.map(marketplace=><option key={marketplace} value={marketplace}>{marketplace}</option>)}
               </select>
             </label>
 
@@ -655,6 +665,8 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
                   <span>{urlChecking ? 'Checking...' : 'Check Reachability'}</span>
                 </button>
               </div>
+              {isSpecificListingUrl(draft.sourceURL) && <button type="button" disabled={listingBusy || !draft.category.trim() || !draft.productFormat.trim()} onClick={()=>void handleRetrieveListing()} className="px-3 py-2 text-xs font-semibold bg-teal-50 text-teal-900 border border-teal-300 rounded-lg disabled:opacity-50">{listingBusy ? 'Retrieving listing...' : 'Retrieve Public Listing as Unverified'}</button>}
+              <p className="text-xs text-slate-500">Whop, Gumroad, Etsy and Payhip: enter a specific product URL, investigation category and format to retrieve public structured offer facts. Unsupported layouts or access challenges remain visible; manual entry/import is available for every source.</p>
               {urlCheckInfo && (
                 <p className="text-xs font-mono text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-md">
                   {urlCheckInfo}
@@ -701,6 +713,7 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
               >
                 <option value="official_ranking">Official ranking</option>
                 <option value="reported_ranking">Reported ranking</option>
+                <option value="listing_details">Public listing facts (offer metadata; no demand proof)</option>
                 <option value="published_research">Published research / survey (context, not product demand)</option>
                 <option value="estimate">Estimate</option>
                 <option value="interest_signal">Interest signal</option>
@@ -1381,8 +1394,9 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
                           <div className="sm:col-span-2">
                             <span className="text-slate-500">Supporting Excerpt & Attachment Provenance:</span>
                             <blockquote className="mt-1 p-2.5 bg-slate-50 border-l-2 border-teal-600 text-slate-800 italic">
+                              {inspectedObs.pricingTerms && <p>Listed offer: {inspectedObs.priceKnown ? `${inspectedObs.currency} ${inspectedObs.currentPrice.toFixed(2)}` : 'Price unknown'}. {inspectedObs.pricingTerms}</p>}
                               “{inspectedObs.evidenceExcerpt || 'No excerpt captured'}”
-                              {inspectedObs.evidenceCapture && <details className="mt-2"><summary>Original collector material · SHA-256 {inspectedObs.evidenceCapture.sha256}</summary><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{inspectedObs.evidenceCapture.content}</pre></details>}
+                              {inspectedObs.evidenceCapture && <details className="mt-2"><summary>Original captured material · SHA-256 {inspectedObs.evidenceCapture.sha256}</summary><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{inspectedObs.evidenceCapture.content}</pre></details>}
                               {inspectedObs.rawImportedPayload && <details className="mt-2"><summary>Original imported row</summary><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{JSON.stringify(inspectedObs.rawImportedPayload,null,2)}</pre></details>}
                             </blockquote>
                             <div className="text-[11px] font-mono text-slate-500 mt-1 space-y-0.5">

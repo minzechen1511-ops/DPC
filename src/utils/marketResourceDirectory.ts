@@ -7,6 +7,21 @@ import type { GateAResourceEntry } from '../types/project.ts';
  */
 export const INITIAL_GATE_A_RESOURCES: GateAResourceEntry[] = [
   {
+    id: 'res-whop-marketplace',
+    publisher: 'Whop',
+    resourceName: 'Whop Digital Products & Memberships',
+    originalURL: 'https://whop.com/discover/',
+    scopeKind: 'supporting_discovery',
+    purpose: 'Investigate specific public course, toolkit, software and membership offers on Whop.',
+    geography: 'Global; verify currency, seller and audience geography on each offer',
+    categoryCoverage: 'Courses, business tools, communities, memberships and digital downloads',
+    formatCoverage: 'One-time or recurring access; exact billing period and inclusions require offer inspection',
+    whatItSupports: 'Retrieve a specific public product URL: original structured listing title, seller/brand, advertised offer price and currency, when exposed; then explicitly review it.',
+    importantLimitations: 'Discover currently may redirect to the homepage. Public offer metadata is not sales, revenue, profit, bestseller rank or willingness to pay. Member/review counts are not purchases. Official API search requires authorized access; no API key is required for supported public product-page capture.',
+    accessStatus: 'unchecked',
+    collectionMethod: 'manual_review',
+  },
+  {
     id: 'res-apple-books-top-paid',
     publisher: 'Apple',
     resourceName: 'Apple Books US Top Paid (100)',

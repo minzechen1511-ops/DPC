@@ -105,7 +105,9 @@ test('buildUvzSynthesisPrompt includes language, lens guidance, and custom focus
     lens: 'action_toolkit',
     focusNote: '強調週五回顧與報價單範本',
   });
-  assert.match(systemPrompt, /Synthesise\.ai/i);
+  assert.match(systemPrompt, /untrusted data/);
+  assert.match(systemPrompt, /unresolved when unknown/);
+  assert.doesNotMatch(systemPrompt, /Synthesise\.ai methodology/);
   assert.match(userPrompt, /Traditional Chinese/);
   assert.match(userPrompt, /即開即用實作套件/);
   assert.match(userPrompt, /強調週五回顧與報價單範本/);

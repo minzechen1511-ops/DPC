@@ -8,3 +8,6 @@ coverage/
 !.env.example
 .local-data/
 .playwright-cli/
+
+# Raw one-time external HTML probes; structured public facts are retained instead.
+/audit/whop/probe-*.txt

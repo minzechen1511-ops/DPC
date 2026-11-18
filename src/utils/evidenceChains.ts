@@ -10,6 +10,7 @@ function originKey(obs: MarketplaceObservation): string {
   if (obs.marketplace === 'Apple Books' || /(^|\.)apple\.com$/.test(host) || host === 'rss.applemarketingtools.com') return 'origin:apple-books';
   if (obs.marketplace === 'NYT Best Sellers' || /(^|\.)nytimes\.com$/.test(host)) return 'origin:nyt-lists';
   if (obs.marketplace === 'Google Trends' || host === 'trends.google.com') return 'origin:google-trends';
+  if (obs.marketplace === 'Whop' || host === 'whop.com' || host === 'www.whop.com') return 'origin:whop';
   // Unknown origins are conservatively collapsed by publisher host. The
   // reviewer must retain the true underlying dataset in evidenceChainId.
   return `origin:${host || 'unknown'}`;

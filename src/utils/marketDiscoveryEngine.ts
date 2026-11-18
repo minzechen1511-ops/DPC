@@ -43,7 +43,7 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     labelZh: '全部熱門類別',
     descriptionEn: 'Broad scan across educational digital product domains and commerce marketplaces',
     descriptionZh: '全面涵蓋知識手冊、實作工具、管理系統與數位規劃表',
-    marketplaces: ['Amazon Kindle', 'Apple Books', 'NYT Best Sellers', 'Keepa', 'Google Trends', 'Gumroad', 'Etsy', 'Payhip'],
+    marketplaces: ['Amazon Kindle', 'Apple Books', 'NYT Best Sellers', 'Keepa', 'Google Trends', 'Whop', 'Gumroad', 'Etsy', 'Payhip'],
   },
   {
     id: 'productivity_systems',
@@ -51,7 +51,7 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     labelZh: 'Notion 系統與一人公司生產力',
     descriptionEn: 'Operating systems, client onboarding portals, SOPs, and creator dashboards',
     descriptionZh: '一人事業工作空間、客戶接案流程、SOP 與個人生產力管理庫',
-    marketplaces: ['Amazon Kindle', 'Apple Books', 'Gumroad', 'Payhip', 'Etsy'],
+    marketplaces: ['Amazon Kindle', 'Apple Books', 'Whop', 'Gumroad', 'Payhip', 'Etsy'],
   },
   {
     id: 'wellness_habits',
@@ -59,7 +59,7 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     labelZh: '身心健康、微習慣與抗倦怠',
     descriptionEn: 'Burnout recovery journals, habit trackers, GoodNotes reset workbooks',
     descriptionZh: '自律微習慣、抗倦怠自癒手冊、GoodNotes 可填寫數位筆記',
-    marketplaces: ['Amazon Kindle', 'Apple Books', 'NYT Best Sellers', 'Etsy'],
+    marketplaces: ['Amazon Kindle', 'Apple Books', 'Whop', 'NYT Best Sellers', 'Etsy'],
   },
   {
     id: 'personal_finance',
@@ -67,7 +67,7 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     labelZh: '個人理財、房產與資產配置',
     descriptionEn: 'Cashflow planners, debt payoff guides, first-time buyer educational kits',
     descriptionZh: '首購族避坑指南、收支盤點表、資產配置與預算管理套件',
-    marketplaces: ['Apple Books', 'Amazon Kindle', 'Keepa', 'Gumroad'],
+    marketplaces: ['Apple Books', 'Amazon Kindle', 'Keepa', 'Whop', 'Gumroad'],
   },
   {
     id: 'freelance_career',
@@ -75,7 +75,7 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     labelZh: '接案變現、報價談判與合約工具',
     descriptionEn: 'Value pricing worksheets, proposal templates, scope guardrails',
     descriptionZh: '高報價談判架構、防合約扯皮條款、三層客戶提案範本',
-    marketplaces: ['Amazon Kindle', 'Payhip', 'Gumroad'],
+    marketplaces: ['Amazon Kindle', 'Whop', 'Payhip', 'Gumroad'],
   },
   {
     id: 'budget_living',
@@ -83,7 +83,7 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     labelZh: '平價生活、家庭餐桌與節流食譜',
     descriptionEn: 'Zero-waste dinner systems, grocery inflation sheets, pantry inventory guides',
     descriptionZh: '抗通膨食材輪替矩陣、每週採買精算表、零浪費省錢料理計畫',
-    marketplaces: ['Amazon Kindle', 'Apple Books', 'Gumroad', 'Etsy'],
+    marketplaces: ['Amazon Kindle', 'Apple Books', 'Whop', 'Gumroad', 'Etsy'],
   },
 ];
 
@@ -588,7 +588,7 @@ export function compareCandidateEvidence(
   });
   const hasInterestOrEstimate = qualified.some((o) => {
     const d = inferObservationDefaults(o);
-    return d.evidenceType === 'interest_signal' || d.evidenceType === 'published_research' || d.evidenceType === 'estimate' || d.evidenceType === 'featured_collection';
+    return d.evidenceType === 'interest_signal' || d.evidenceType === 'published_research' || d.evidenceType === 'listing_details' || d.evidenceType === 'estimate' || d.evidenceType === 'featured_collection';
   });
   const rejectedOrMismatchInDomain = domainObs.some(
     (o) =>
@@ -628,7 +628,7 @@ export function compareCandidateEvidence(
       relationship = 'complements';
     } else if (
       qualifiedChainIds.length >= 2 &&
-      (defaults.evidenceType === 'interest_signal' || defaults.evidenceType === 'published_research' || defaults.evidenceType === 'estimate') &&
+      (defaults.evidenceType === 'interest_signal' || defaults.evidenceType === 'published_research' || defaults.evidenceType === 'listing_details' || defaults.evidenceType === 'estimate') &&
       hasPrimaryOrLiveRanking
     ) {
       relationship = 'complements';
@@ -741,6 +741,9 @@ function computeCandidateEvidenceAssessment(
     return matching[0];
   });
 
+  const demandSources=sorted.filter(o=>o.evidenceType!=='listing_details');
+  const demandChainCount=new Set(demandSources.map(o=>chainKeys.get(o.id)!)).size;
+  const listingOnly=demandSources.length===0;
   const bestLive = collectorVerified[0];
   const hasPrimaryManual = manualReviewed.some(
     (s) =>
@@ -763,7 +766,7 @@ function computeCandidateEvidenceAssessment(
     evidenceLabel = 'CURRENT_OFFICIAL_CHART';
     evidenceStatus = 'CURRENT_CHART';
     const rankScore = bestLive.observedRank ? Math.max(4, 26 - Math.ceil(bestLive.observedRank / 4)) : 10;
-    const chainBonus = Math.min(3, Math.max(0, independentChainIds.length - 1));
+    const chainBonus = Math.min(3, Math.max(0, demandChainCount - 1));
     demandSignal = Math.min(25, rankScore + chainBonus);
     demandStatus = 'MEASURED';
     demandBasis = `${collectorVerified.length} collector-verified official chart position(s) across ${independentChainIds.length} independent evidence chain(s); top rank #${bestLive.observedRank} (${bestLive.marketplace}).`;
@@ -771,7 +774,7 @@ function computeCandidateEvidenceAssessment(
   } else if (hasPrimaryManual) {
     evidenceLabel = 'MANUALLY_REVIEWED_PRIMARY';
     evidenceStatus = 'REVIEWED_FALLBACK';
-    const ranked = manualReviewed.filter((s) => s.observedRank && s.observedRank > 0);
+    const ranked = manualReviewed.filter((s) => s.evidenceType==='official_ranking' && s.observedRank && s.observedRank > 0);
     const topRank = ranked[0]?.observedRank;
     demandSignal = topRank ? Math.min(18, Math.max(6, 20 - Math.ceil(topRank / 5))) : 10;
     demandStatus = 'REVIEWED_SIGNAL';
@@ -784,16 +787,20 @@ function computeCandidateEvidenceAssessment(
   } else if (hasReportedRank) {
     evidenceLabel = 'SECONDARY_REPORTED_RANKING';
     evidenceStatus = 'REVIEWED_FALLBACK';
-    const ranked = manualReviewed.filter((s) => s.observedRank && s.observedRank > 0);
+    const ranked = manualReviewed.filter((s) => s.evidenceType==='reported_ranking' && s.observedRank && s.observedRank > 0);
     const topRank = ranked[0]?.observedRank;
     demandSignal = topRank ? Math.min(14, Math.max(5, 16 - Math.ceil(topRank / 6))) : 8;
     demandStatus = 'REVIEWED_SIGNAL';
     demandBasis = `Secondary reported ranking (${manualReviewed.length} record(s), ${independentChainIds.length} unique chain(s)). Editorial or combined print/ebook scopes do not isolate digital marketplace rank.`;
     demandUncertainty = 'Secondary report / combined-format scope; cannot be treated as a current digital bestseller proof.';
+  } else if(listingOnly) {
+    evidenceLabel='OPPORTUNITY_HYPOTHESIS';evidenceStatus='REVIEWED_FALLBACK';demandSignal=0;demandStatus='UNMEASURED';
+    demandBasis='Reviewed public offer facts establish that a listing exists, not buyer demand.';
+    demandUncertainty='Listed price, seller promises, members, reviews and discovery placement do not measure sales, conversion, revenue or willingness to pay.';
   } else {
     evidenceLabel = 'SUPPORTING_INTEREST_SIGNAL';
     evidenceStatus = 'REVIEWED_FALLBACK';
-    demandSignal = Math.min(10, 4 + independentChainIds.length * 2);
+    demandSignal = Math.min(10, 4 + demandChainCount * 2);
     demandStatus = 'REVIEWED_SIGNAL';
     demandBasis = `Supporting interest or estimate signal (${manualReviewed.length} reviewed record(s), ${independentChainIds.length} unique chain(s)).`;
     demandUncertainty = 'Interest indices or third-party estimates indicate topic attention only, not verified purchasing demand.';
@@ -859,7 +866,7 @@ function computeCandidateEvidenceAssessment(
       'Creator workflow capability is production coordination; domain expertise, credentials, and customer outcomes are NOT pre-assumed and must be supplied or researched intentionally.',
     productionEffort: 'MODERATE',
     nextValidationStep:
-      collectorVerified.length > 0
+      listingOnly ? 'Interview five intended buyers about the specific problem, compare one-time versus recurring offers, and test a small prototype before assuming willingness to pay.' : collectorVerified.length > 0
         ? 'Inspect top 3 ranked listings manually for pricing, table-of-contents gaps, and negative reader reviews before locking Project Brief.'
         : 'Capture at least one primary digital marketplace chart or run direct buyer interviews to validate willingness to pay before committing production time.',
   };
@@ -954,7 +961,7 @@ function computeCandidateEvidenceAssessment(
 
   const canReceiveVerifiedBadge = collectorVerified.length > 0;
   const confidenceRating: TopicCandidate['confidenceRating'] =
-    collectorVerified.length > 0 && independentChainIds.length >= 2
+    listingOnly ? 'LOW' : collectorVerified.length > 0 && demandChainCount >= 2
       ? 'HIGH'
       : 'MEDIUM';
 

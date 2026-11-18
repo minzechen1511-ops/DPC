@@ -36,6 +36,7 @@ export function migrateObservationRecord(rawObs: Partial<MarketplaceObservation>
     productURL: String(rawObs.productURL || rawObs.sourceURL || ''),
     sourceURL: rawObs.sourceURL,
     currentPrice: Number.isFinite(Number(rawObs.currentPrice)) ? Number(rawObs.currentPrice) : 0,
+    pricingTerms: rawObs.pricingTerms,
     priceKnown: rawObs.priceKnown,
     currency: String(rawObs.currency || 'USD'),
     observedRank: rawObs.observedRank,

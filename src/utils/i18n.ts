@@ -77,7 +77,7 @@ export const translations = {
 
     // Market Research (MTRE)
     mtreTitle: 'Marketplace Intelligence & Sales Observation (MTRE)',
-    mtreSubtitle: 'On-demand public source checks across Amazon Kindle, Gumroad, Etsy, Apple Books, and Payhip',
+    mtreSubtitle: 'On-demand public source checks across Amazon Kindle, Whop, Gumroad, Etsy, Apple Books, Payhip, NYT, Keepa, and Google Trends',
     allPlatforms: 'All Platforms',
     searchMarketplacePlaceholder: 'Search by product title, author, or category...',
     priceLabel: 'Price',
@@ -278,7 +278,7 @@ export const translations = {
 
     // Market Research (MTRE)
     mtreTitle: '市場情報與真實銷售平台監測 (MTRE)',
-    mtreSubtitle: '搜尋並比對 Amazon Kindle, Apple Books, Gumroad, Payhip, Etsy 等平台之公開商品與排名資料',
+    mtreSubtitle: '搜尋並比對 Amazon Kindle, Apple Books, Whop, Gumroad, Payhip, Etsy, NYT, Keepa, Google Trends 等平台之公開商品與排名資料',
     allPlatforms: '全部平台',
     searchMarketplacePlaceholder: '搜尋商品標題、作者或類別...',
     priceLabel: '觀察價格',

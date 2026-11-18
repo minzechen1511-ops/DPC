@@ -427,7 +427,7 @@ export default function App() {
   };
 
   const handleAddManualObservation = (obs: MarketplaceObservation) => {
-    updateProjectObservations((prev) => [obs, ...prev]);
+    updateProjectObservations((prev) => [obs, ...prev.filter(existing=>existing.id!==obs.id)]);
   };
 
   const handleImportObservations = (obsList: MarketplaceObservation[]) => {

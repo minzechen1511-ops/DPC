@@ -1,0 +1,11 @@
+{
+  "whopListing": "Digital Products",
+  "advertisedPrice": 189,
+  "currency": "USD",
+  "statusAtIngestion": "unverified",
+  "sourceReports": 12,
+  "directoryResources": 10,
+  "unavailablePageStatus": 404,
+  "reviewedListingDemandScore": 0,
+  "authorReviewZipCreated": true
+}
