@@ -5,6 +5,7 @@ import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
 import {
   DigitalProductProject,
+  MarketplaceObservation,
   ProductCharter,
   UVZAnalysis,
   TransformationMap,
@@ -20,8 +21,10 @@ import { calculateOverallProgress } from './utils/workflowEngine.ts';
 import { Language } from './utils/i18n.ts';
 import {
   runAutomatedMarketDiscovery,
+  checkSeedResourceDirectory,
   deriveSynchronizedCandidates,
   propagateTopicToDownstream,
+  isGateAQualifiedEvidence,
   MarketSyncOptions,
 } from './utils/marketDiscoveryEngine.ts';
 import {
@@ -305,47 +308,144 @@ export default function App() {
   const progressPercent = calculateOverallProgress(project);
 
   const [researchBusy, setResearchBusy] = useState(false);
+  const [directoryBusy, setDirectoryBusy] = useState(false);
   const [researchError, setResearchError] = useState('');
+
+  const updateProjectObservations = (
+    updater: (prevObs: MarketplaceObservation[]) => MarketplaceObservation[],
+    options?: MarketSyncOptions
+  ) => {
+    setProject((prev) => {
+      const nextEvidence = updater(prev.marketResearch.platformEvidence || []);
+      const nextCandidates = deriveSynchronizedCandidates(nextEvidence, options);
+      const hasQualified = nextEvidence.some((o) => isGateAQualifiedEvidence(o));
+      return revokeApprovals(
+        {
+          ...prev,
+          isBlankProject: false,
+          updatedAt: new Date().toISOString(),
+          marketResearch: {
+            ...prev.marketResearch,
+            platformEvidence: nextEvidence,
+            topicCandidates: nextCandidates,
+            selectedTopicId: nextCandidates.some((c) => c.id === prev.marketResearch.selectedTopicId)
+              ? prev.marketResearch.selectedTopicId
+              : null,
+            confidence: hasQualified ? 'MEDIUM' : 'LIMITED',
+          },
+          workflow: {
+            ...prev.workflow,
+            stageStatuses: {
+              ...prev.workflow.stageStatuses,
+              market_research: hasQualified ? 'COMPLETED' : 'PARTIAL',
+              topic_selection: 'NEEDS_REVIEW',
+            },
+          },
+        },
+        'gateA'
+      );
+    });
+  };
+
   const handleRunMarketDiscovery = async (options?: MarketSyncOptions) => {
     if (researchBusy) return;
     setResearchBusy(true);
     setResearchError('');
     try {
       const result = await runAutomatedMarketDiscovery(options);
-      setProject((prev) =>
-        revokeApprovals(
+      setProject((prev) => {
+        const preservedManual = (prev.marketResearch.platformEvidence || []).filter(
+          (obs) =>
+            !obs.isSample &&
+            obs.collector !== 'apple-chart-v1' &&
+            obs.collector !== 'amazon-chart-v1'
+        );
+        const liveIds = new Set(result.observations.map((o) => o.id));
+        const mergedEvidence = [
+          ...result.observations,
+          ...preservedManual.filter((o) => !liveIds.has(o.id)),
+        ];
+        const candidates = deriveSynchronizedCandidates(mergedEvidence, options);
+        const hasQualified = mergedEvidence.some((o) => isGateAQualifiedEvidence(o));
+        return revokeApprovals(
           {
             ...prev,
             isBlankProject: false,
             updatedAt: new Date().toISOString(),
             marketResearch: {
               ...prev.marketResearch,
-              platformEvidence: result.observations,
-              topicCandidates: result.candidates,
-              selectedTopicId: result.candidates.some((c) => c.id === prev.marketResearch.selectedTopicId)
+              resourceDirectory: result.resourceDirectory,
+              platformEvidence: mergedEvidence,
+              topicCandidates: candidates,
+              selectedTopicId: candidates.some((c) => c.id === prev.marketResearch.selectedTopicId)
                 ? prev.marketResearch.selectedTopicId
                 : null,
               sourceReports: result.sources,
               researchDate: result.checkedAt,
-              confidence: result.observations.length ? 'MEDIUM' : 'LIMITED',
+              confidence: hasQualified ? 'MEDIUM' : 'LIMITED',
             },
             workflow: {
               ...prev.workflow,
               stageStatuses: {
                 ...prev.workflow.stageStatuses,
-                market_research: result.observations.length ? 'COMPLETED' : 'BLOCKED',
+                market_research: hasQualified ? 'COMPLETED' : mergedEvidence.length ? 'PARTIAL' : 'BLOCKED',
                 topic_selection: 'NEEDS_REVIEW',
               },
             },
           },
           'gateA'
-        )
-      );
+        );
+      });
     } catch (error) {
       setResearchError(error instanceof Error ? error.message : 'Research failed.');
     } finally {
       setResearchBusy(false);
     }
+  };
+
+  const handleCheckResources = async () => {
+    if (directoryBusy) return;
+    setDirectoryBusy(true);
+    setResearchError('');
+    try {
+      const res = await checkSeedResourceDirectory();
+      setProject((prev) => ({
+        ...prev,
+        isBlankProject: false,
+        updatedAt: new Date().toISOString(),
+        marketResearch: {
+          ...prev.marketResearch,
+          resourceDirectory: res.resources,
+          researchDate: res.checkedAt,
+        },
+      }));
+    } catch (error) {
+      setResearchError(error instanceof Error ? error.message : 'Resource directory check failed.');
+    } finally {
+      setDirectoryBusy(false);
+    }
+  };
+
+  const handleAddManualObservation = (obs: MarketplaceObservation) => {
+    updateProjectObservations((prev) => [obs, ...prev]);
+  };
+
+  const handleImportObservations = (obsList: MarketplaceObservation[]) => {
+    const incomingIds = new Set(obsList.map((o) => o.id));
+    updateProjectObservations((prev) => [
+      ...obsList,
+      ...prev.filter((o) => !incomingIds.has(o.id)),
+    ]);
+  };
+
+  const handleReviewObservation = (updated: MarketplaceObservation) => {
+    updateProjectObservations((prev) =>
+      prev.map((item) => (item.id === updated.id ? updated : item))
+    );
+  };
+
+  const handleDeleteObservation = (obsId: string) => {
+    updateProjectObservations((prev) => prev.filter((item) => item.id !== obsId));
   };
 
   const handleSynchronizeMarketToGateA = (options?: MarketSyncOptions) => {
@@ -363,7 +463,7 @@ export default function App() {
         'gateA'
       )
     );
-    setActiveView('market_research');
+    setActiveView('topic_selection');
   };
 
   const handleSelectTopic = (topicId: string) =>
@@ -904,17 +1004,44 @@ export default function App() {
           />
         );
       case 'market_research':
+        return (
+          <MarketIntelligenceView
+            project={project}
+            setActiveView={setActiveView}
+            researchBusy={researchBusy}
+            directoryBusy={directoryBusy}
+            researchError={researchError}
+            onRefreshResearch={handleRunMarketDiscovery}
+            onCheckResources={handleCheckResources}
+            onAddManualObservation={handleAddManualObservation}
+            onImportObservations={handleImportObservations}
+            onReviewObservation={handleReviewObservation}
+            onDeleteObservation={handleDeleteObservation}
+            onSynchronizeToGateA={handleSynchronizeMarketToGateA}
+            onSelectTopic={handleSelectTopic}
+            onApproveGateA={handleApproveGateA}
+            initialTab="directory"
+            lang={lang}
+          />
+        );
       case 'topic_selection':
         return (
           <MarketIntelligenceView
             project={project}
             setActiveView={setActiveView}
             researchBusy={researchBusy}
+            directoryBusy={directoryBusy}
             researchError={researchError}
             onRefreshResearch={handleRunMarketDiscovery}
+            onCheckResources={handleCheckResources}
+            onAddManualObservation={handleAddManualObservation}
+            onImportObservations={handleImportObservations}
+            onReviewObservation={handleReviewObservation}
+            onDeleteObservation={handleDeleteObservation}
             onSynchronizeToGateA={handleSynchronizeMarketToGateA}
             onSelectTopic={handleSelectTopic}
             onApproveGateA={handleApproveGateA}
+            initialTab="niches"
             lang={lang}
           />
         );

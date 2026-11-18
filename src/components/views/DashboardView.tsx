@@ -45,54 +45,65 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     detail: string;
     cta: string;
   } => {
-    if (!workflow?.gates?.gateA?.isApproved) {
+    if ((marketResearch?.platformEvidence || []).length === 0) {
       return {
         stageId: 'market_research',
-        title: lang === 'en' ? 'Stage 1: Select & Approve Top Market Niche (Gate A)' : '階段 1：市場洞察與選題核准 (Gate A)',
+        title: lang === 'en' ? 'Stage 1: Inspect Research Sources & Capture Evidence' : '階段 1：檢視研究資源並蒐集市場實證',
         detail:
           lang === 'en'
-            ? 'Fetch live marketplace charts, review ranked high-demand product opportunities, and lock your Gate A niche.'
-            : '抓取即時市場榜單訊號、檢視高需求商品選題並核准 Gate A。',
-        cta: lang === 'en' ? 'Open Market & Niches' : '前往市場與選題',
+            ? 'Review the Gate A resource directory, run live official chart collectors, or log dated observations in Manual Evidence Review.'
+            : '檢視公開研究資源目錄、掃描即時排行榜或透過人工證據審查記錄觀測資料。',
+        cta: lang === 'en' ? 'Open Market Research' : '前往市場研究',
+      };
+    }
+    if (!workflow?.gates?.gateA?.isApproved) {
+      return {
+        stageId: 'topic_selection',
+        title: lang === 'en' ? 'Stage 2: Select & Approve Niche Candidate (Gate A)' : '階段 2：評估推薦選題並核准 (Gate A)',
+        detail:
+          lang === 'en'
+            ? 'Inspect Evidence Strength vs. Product Suitability for each niche candidate and explicitly approve Gate A.'
+            : '分別檢視證據強度與產品適配假設，選定題材並手動核准 Gate A。',
+        cta: lang === 'en' ? 'Open Topic Selection' : '前往選題評估',
       };
     }
     if (workflow?.stageStatuses?.project_brief !== 'COMPLETED') {
       return {
         stageId: 'project_brief',
-        title: lang === 'en' ? 'Stage 2: Synthesize 13-Field Project Brief' : '階段 2：AI 優化 13 項專案核心設定',
+        title: lang === 'en' ? 'Stage 3: Define 13-Field Project Brief' : '階段 3：設定 13 項專案核心規範',
         detail:
           lang === 'en'
-            ? 'Refine buyer persona, painful problem hooks, safety guardrails, and editorial voice with 1-click AI synthesis.'
-            : '運用一鍵 AI 強化功能完備目標受眾、痛點與品牌語調規範。',
+            ? 'Refine buyer persona, core problem boundaries, safety guardrails, and editorial voice.'
+            : '完備目標受眾、問題邊界、安全準則與品牌語調規範。',
         cta: lang === 'en' ? 'Open Project Brief' : '前往專案設定',
       };
     }
     if (workflow?.stageStatuses?.uvz !== 'COMPLETED') {
       return {
         stageId: 'uvz',
-        title: lang === 'en' ? 'Stage 3: Generate Unique Value Zone (UVZ) Options' : '階段 3：AI 生成獨特價值區隔 (UVZ)',
+        title: lang === 'en' ? 'Stage 4: Define Unique Value Zone (UVZ)' : '階段 4：制定獨特價值區隔 (UVZ)',
         detail:
           lang === 'en'
-            ? 'Synthesize differentiated positioning wedges so your product stands apart from generic books.'
-            : '生成具商業差異化的定位策略角度與推薦主張。',
+            ? 'Structure differentiated positioning wedges so your product stands apart from generic books.'
+            : '建立具差異化的市場定位切角與主張。',
         cta: lang === 'en' ? 'Open UVZ Studio' : '前往 UVZ 策略',
       };
     }
     if (workflow?.stageStatuses?.transformation_map !== 'COMPLETED') {
       return {
         stageId: 'transformation_map',
-        title: lang === 'en' ? 'Stage 4: Map Customer Transformation & Titles' : '階段 4：顧客轉變路徑與書名定位',
+        title: lang === 'en' ? 'Stage 5: Map Customer Transformation & Titles' : '階段 5：顧客轉變路徑與書名定位',
         detail:
           lang === 'en'
-            ? 'Synthesize the Before → Bridge → After roadmap and choose a bestseller-grade title & subtitle.'
-            : '建立 Before → Bridge → After 轉變藍圖並選定高轉化書名。',
+            ? 'Structure the Before → Bridge → After roadmap and choose a clear title & subtitle.'
+            : '建立 Before → Bridge → After 轉變藍圖並選定書名定位。',
         cta: lang === 'en' ? 'Open Transformation Map' : '前往轉變藍圖',
       };
     }
     if (verifiedRefs < 1) {
       return {
         stageId: 'reference_library',
-        title: lang === 'en' ? 'Stage 5: Retrieve Grounded Research Sources (ARCE)' : '階段 5：建立來源實證文獻庫 (ARCE)',
+        title: lang === 'en' ? 'Stage 6: Retrieve Grounded Research Sources (ARCE)' : '階段 6：建立來源實證文獻庫 (ARCE)',
         detail:
           lang === 'en'
             ? 'Retrieve and verify real bibliographic references to back claims and satisfy Gate B.'
@@ -103,22 +114,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (!workflow?.gates?.gateB?.isApproved || gateIssues(project, 'gateB').length > 0) {
       return {
         stageId: 'product_charter',
-        title: lang === 'en' ? 'Stage 6: Align & Approve Product Charter (Gate B)' : '階段 6：對齊產品憲章並核准 (Gate B)',
+        title: lang === 'en' ? 'Stage 7: Align & Approve Product Charter (Gate B)' : '階段 7：對齊產品憲章並核准 (Gate B)',
         detail:
           lang === 'en'
-            ? 'Synthesize charter pillars & learning objectives, review requirements, and unlock chapter generation.'
-            : '一鍵對齊四大支柱與學習目標，核准 Gate B 以解鎖章節撰寫。',
+            ? 'Finalize charter pillars & learning objectives, review requirements, and unlock chapter generation.'
+            : '對齊產品支柱與學習目標，核准 Gate B 以解鎖章節撰寫。',
         cta: lang === 'en' ? 'Open Product Charter' : '前往產品憲章',
       };
     }
     if (totalChapters === 0) {
       return {
         stageId: 'outline_builder',
-        title: lang === 'en' ? 'Stage 7: Architect Chapter Outline' : '階段 7：規劃章節大綱架構',
+        title: lang === 'en' ? 'Stage 8: Architect Chapter Outline' : '階段 8：規劃章節大綱架構',
         detail:
           lang === 'en'
-            ? 'Let AI structure 5–7 outcome-driven chapters mapped to your retrieved research sources.'
-            : '由 AI 自動建立 5–7 章具明確交付物與來源對應的大綱結構。',
+            ? 'Structure outcome-driven chapters mapped directly to your retrieved research sources.'
+            : '建立具明確交付物與來源對應的章節大綱結構。',
         cta: lang === 'en' ? 'Open Outline Builder' : '前往章節大綱',
       };
     }
@@ -127,66 +138,66 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         stageId: 'content_studio',
         title:
           lang === 'en'
-            ? `Stage 8: Draft Remaining Chapters (${chaptersDone}/${totalChapters} Done)`
-            : `階段 8：撰寫電子書章節正文（已完成 ${chaptersDone}/${totalChapters}）`,
+            ? `Stage 9: Draft Remaining Chapters (${chaptersDone}/${totalChapters} Done)`
+            : `階段 9：撰寫電子書章節正文（已完成 ${chaptersDone}/${totalChapters}）`,
         detail:
           lang === 'en'
-            ? 'Use Batch Draft Remaining or draft chapter-by-chapter with inline source citations.'
-            : '使用「AI 批量生成剩餘章節」完成全文撰寫與連續記憶同步。',
+            ? 'Draft chapter-by-chapter with inline source citations and passage-level review.'
+            : '完成逐章正文撰寫、連續記憶同步與引用查核。',
         cta: lang === 'en' ? 'Open Content Studio' : '前往長篇內容工廠',
       };
     }
     if ((project.resources || []).length === 0) {
       return {
         stageId: 'workbook_studio',
-        title: lang === 'en' ? 'Stage 9: Generate 3-Piece Companion Toolkit Suite' : '階段 9：生成三件組伴隨實作套件',
+        title: lang === 'en' ? 'Stage 10: Build Companion Toolkit Suite' : '階段 10：製作伴隨實作工具套件',
         detail:
           lang === 'en'
-            ? 'Create high-value workbooks, 30-day checklists, and decision matrices included with the e-book.'
-            : '一鍵生成工作表、30 天檢核清單與速查矩陣提升套裝價值。',
+            ? 'Create practical workbooks, checklists, and decision worksheets included with the product.'
+            : '製作實作工作表、檢核清單與速查範本提升交付實用度。',
         cta: lang === 'en' ? 'Open Companion Toolkit' : '前往伴隨工具套件',
       };
     }
     if (!workflow?.gates?.gateC?.isApproved || gateIssues(project, 'gateC').length > 0) {
       return {
         stageId: 'quality_assurance',
-        title: lang === 'en' ? 'Stage 10: Complete Quality & Citation Audit (Gate C)' : '階段 10：完成出版品質與引用稽核 (Gate C)',
+        title: lang === 'en' ? 'Stage 11: Complete Quality & Citation Audit (Gate C)' : '階段 11：完成出版品質與引用稽核 (Gate C)',
         detail:
           lang === 'en'
-            ? 'Verify passage-level source support and unlock commercial Buyer Learning Bundle export.'
-            : '完成逐段引用核對與 Gate C 核准，解鎖商業買家正式套件匯出。',
+            ? 'Verify passage-level source support and approve Gate C to unlock buyer bundle export.'
+            : '完成逐段引用核對與 Gate C 核准，解鎖買家正式套件匯出。',
         cta: lang === 'en' ? 'Open Quality Audit' : '前往品質審查',
       };
     }
     if (workflow?.stageStatuses?.brand_design !== 'COMPLETED') {
       return {
         stageId: 'brand_design',
-        title: lang === 'en' ? 'Stage 11: Apply Commercial Imprint & Cover Styling' : '階段 11：設定出版視覺品牌與封面排版',
+        title: lang === 'en' ? 'Stage 12: Apply Commercial Imprint & Cover Styling' : '階段 12：設定出版視覺品牌與封面排版',
         detail:
           lang === 'en'
-            ? 'Let AI pair a bestseller typography & 60-30-10 color palette for your exported HTML e-book.'
-            : '套用 AI 推薦配色與出版字體，讓專書、封面與工作表展現精品質感。',
+            ? 'Configure typography and 60-30-10 palette for your exported HTML e-book.'
+            : '套用配色與出版字體，規範專書、封面與工作表排版視覺。',
         cta: lang === 'en' ? 'Open Brand Design' : '前往品牌視覺設計',
       };
     }
     if (workflow?.stageStatuses?.pricing_launch !== 'COMPLETED') {
       return {
         stageId: 'pricing_launch',
-        title: lang === 'en' ? 'Stage 12: Synthesize Pricing & Storefront Sales Copy' : '階段 12：生成商業定價與上市銷售文案',
+        title: lang === 'en' ? 'Stage 13: Finalize Pricing & Storefront Copy' : '階段 13：制定定價與上市銷售文案',
         detail:
           lang === 'en'
-            ? 'Model channel margins and generate sales headlines, FAQ, and launch email sequences.'
-            : '試算平台淨利並生成可直接上架 Gumroad / Etsy 的銷售文案。',
+            ? 'Model channel margins and prepare honest sales copy, FAQ, and launch emails.'
+            : '試算平台淨利並準備誠實透明的上架銷售文案。',
         cta: lang === 'en' ? 'Open Pricing & Launch' : '前往定價與行銷',
       };
     }
     return {
       stageId: 'export_center',
-      title: lang === 'en' ? 'Stage 13: Bundle Ready — Preview & Export Commercial ZIP' : '階段 13：所有階段已就緒 — 預覽並匯出完整商業套件',
+      title: lang === 'en' ? 'Stage 14: Export Buyer Learning Bundle ZIP' : '階段 14：預覽並匯出完整商業套件 ZIP',
       detail:
         lang === 'en'
-          ? 'Download your Buyer Learning Bundle (.zip) with START-HERE.html, Styled E-Book, Workbooks, Executive Summary & Storefront Listing Kit.'
-          : '立即匯出含 START-HERE 入口、精裝電子書、伴隨工作表、執行摘要與上架文案包之完整 ZIP。',
+          ? 'Download your Buyer Learning Bundle (.zip) with START-HERE.html, Styled E-Book, Workbooks, Provenance Records & Storefront Listing Kit.'
+          : '立即匯出含 START-HERE 入口、精裝電子書、伴隨工作表與來源稽核檔之完整 ZIP。',
       cta: lang === 'en' ? 'Open Export Center' : '前往匯出下載中心',
     };
   };
@@ -473,14 +484,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {[
-              { id: 'market_research', title: lang === 'en' ? '1. Market & Top Niches (Gate A)' : '1. 市場情報與選題 (Gate A)', icon: TrendingUp },
-              { id: 'project_brief', title: lang === 'en' ? '2. Project Setup (13 Fields)' : '2. 13項專案設定', icon: Feather },
-              { id: 'reference_library', title: lang === 'en' ? '5. Reference Research' : '5. 來源研究與知識庫', icon: BookOpen },
-              { id: 'product_charter', title: lang === 'en' ? '6. Product Charter (Gate B)' : '6. 產品憲章 (Gate B)', icon: Award },
-              { id: 'content_studio', title: lang === 'en' ? '8. Content Studio' : '8. 長篇內容工廠', icon: Feather },
-              { id: 'workbook_studio', title: lang === 'en' ? '9. Companion Toolkit' : '9. 伴隨工具套件', icon: Layers },
-              { id: 'quality_assurance', title: lang === 'en' ? '10. Quality Audit (Gate C)' : '10. 品質審查 (Gate C)', icon: CheckCircle2 },
-              { id: 'export_center', title: lang === 'en' ? '13. Export Bundle' : '13. 匯出下載中心', icon: Download },
+              { id: 'market_research', title: lang === 'en' ? '1. Market Research & Sources' : '1. 市場研究與資源檢核', icon: TrendingUp },
+              { id: 'topic_selection', title: lang === 'en' ? '2. Topic Selection (Gate A)' : '2. 選題評估與核准 (Gate A)', icon: Sparkles },
+              { id: 'project_brief', title: lang === 'en' ? '3. Project Brief (13 Fields)' : '3. 13項專案設定', icon: Feather },
+              { id: 'reference_library', title: lang === 'en' ? '6. Reference Library' : '6. 來源研究與知識庫', icon: BookOpen },
+              { id: 'product_charter', title: lang === 'en' ? '7. Product Charter (Gate B)' : '7. 產品憲章 (Gate B)', icon: Award },
+              { id: 'content_studio', title: lang === 'en' ? '9. Content Studio' : '9. 長篇內容工廠', icon: Feather },
+              { id: 'quality_assurance', title: lang === 'en' ? '11. Quality Audit (Gate C)' : '11. 品質審查 (Gate C)', icon: CheckCircle2 },
+              { id: 'export_center', title: lang === 'en' ? '14. Export Bundle' : '14. 匯出下載中心', icon: Download },
             ].map((stage) => {
               const Icon = stage.icon;
               const status = project.workflow?.stageStatuses?.[stage.id as StageId];

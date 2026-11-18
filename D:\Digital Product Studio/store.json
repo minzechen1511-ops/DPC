@@ -1,0 +1,65 @@
+{
+  "projects": [],
+  "projectSnapshots": [],
+  "encryptedCredentials": [],
+  "workflowJobs": [],
+  "jobSteps": [],
+  "usageEvents": [
+    {
+      "userId": "local-owner",
+      "projectId": null,
+      "eventKind": "market_research",
+      "provider": "research",
+      "model": "live-http",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "estimatedCostUsd": 0,
+      "costStatus": "actual",
+      "id": "usg_a918fe12833a437582394d059f7d9892",
+      "createdAt": "2026-11-18T09:20:10.301Z"
+    },
+    {
+      "userId": "local-owner",
+      "projectId": null,
+      "eventKind": "market_research",
+      "provider": "research",
+      "model": "live-http",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "estimatedCostUsd": 0,
+      "costStatus": "actual",
+      "id": "usg_ed375d86245747528172b50e9b59d6ab",
+      "createdAt": "2026-11-18T09:20:09.684Z"
+    },
+    {
+      "userId": "local-owner",
+      "projectId": null,
+      "eventKind": "market_research",
+      "provider": "research",
+      "model": "live-http",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "estimatedCostUsd": 0,
+      "costStatus": "actual",
+      "id": "usg_4c321b2d71c64190be925f87c1b4f9d8",
+      "createdAt": "2026-11-18T09:18:37.110Z"
+    },
+    {
+      "userId": "local-owner",
+      "projectId": null,
+      "eventKind": "market_research",
+      "provider": "research",
+      "model": "live-http",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "estimatedCostUsd": 0,
+      "costStatus": "actual",
+      "id": "usg_e774dae014b54adb97e073b07841fabc",
+      "createdAt": "2026-11-18T09:18:15.140Z"
+    }
+  ]
+}

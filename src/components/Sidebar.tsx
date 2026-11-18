@@ -74,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const getStageStatusIcon = (stageId: StageId) => {
     const status =
-      stageId === 'market_research' && project.workflow.gates.gateA.isApproved
+      stageId === 'topic_selection' && project.workflow.gates.gateA.isApproved
         ? 'COMPLETED'
         : project.workflow.stageStatuses[stageId];
     if (status === 'COMPLETED') {
@@ -92,28 +92,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getNextRecommendedStep = (): { id: NavigationItem; label: string } => {
     const gates = project.workflow.gates;
     const statuses = project.workflow.stageStatuses;
+    if ((project.marketResearch?.platformEvidence || []).length === 0) {
+      return { id: 'market_research', label: lang === 'en' ? '1. Gather Market Evidence' : '1. 蒐集市場證據' };
+    }
     if (!gates.gateA.isApproved || !project.marketResearch.selectedTopicId) {
-      return { id: 'market_research', label: lang === 'en' ? '1. Pick Niche (Gate A)' : '1. 選題核准 (Gate A)' };
+      return { id: 'topic_selection', label: lang === 'en' ? '2. Pick Niche (Gate A)' : '2. 選題核准 (Gate A)' };
     }
     if (statuses.project_brief !== 'COMPLETED') {
-      return { id: 'project_brief', label: lang === 'en' ? '2. 13-Field Brief' : '2. 13項專案設定' };
+      return { id: 'project_brief', label: lang === 'en' ? '3. 13-Field Brief' : '3. 13項專案設定' };
     }
     if (!gates.gateB.isApproved) {
       const hasRefs = (project.referenceLibrary.cards || []).some(isRetrievedSource);
       return hasRefs
-        ? { id: 'product_charter', label: lang === 'en' ? '6. Approve Charter (Gate B)' : '6. 核准產品憲章 (Gate B)' }
-        : { id: 'reference_library', label: lang === 'en' ? '5. Add Verified Sources' : '5. 補充真實研究文獻' };
+        ? { id: 'product_charter', label: lang === 'en' ? '7. Approve Charter (Gate B)' : '7. 核准產品憲章 (Gate B)' }
+        : { id: 'reference_library', label: lang === 'en' ? '6. Add Verified Sources' : '6. 補充真實研究文獻' };
     }
     if (project.outline.some((ch) => !ch.isCompleted)) {
-      return { id: 'content_studio', label: lang === 'en' ? '8. Write Chapters' : '8. 撰寫電子書章節' };
+      return { id: 'content_studio', label: lang === 'en' ? '9. Write Chapters' : '9. 撰寫電子書章節' };
     }
     if (!(project.resources || []).some((r) => r.contentMarkdown.trim().length > 150)) {
-      return { id: 'workbook_studio', label: lang === 'en' ? '9. Build Worksheets' : '9. 建立實作工具表' };
+      return { id: 'workbook_studio', label: lang === 'en' ? '10. Build Worksheets' : '10. 建立實作工具表' };
     }
     if (!gates.gateC.isApproved) {
-      return { id: 'quality_assurance', label: lang === 'en' ? '10. Pass QA Audit (Gate C)' : '10. 通過品質稽核 (Gate C)' };
+      return { id: 'quality_assurance', label: lang === 'en' ? '11. Pass QA Audit (Gate C)' : '11. 通過品質稽核 (Gate C)' };
     }
-    return { id: 'export_center', label: lang === 'en' ? '13. Export Product Bundle' : '13. 匯出完整商品包' };
+    return { id: 'export_center', label: lang === 'en' ? '14. Export Product Bundle' : '14. 匯出完整商品包' };
   };
 
   const nextStep = getNextRecommendedStep();
@@ -130,6 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       group: t.groupResearch,
       items: [
         { id: 'market_research', label: t.navMarketResearch, icon: TrendingUp, isStage: true },
+        { id: 'topic_selection', label: t.navTopicSelection, icon: Sparkles, isStage: true },
         { id: 'project_brief', label: t.navProjectBrief, icon: FileText, isStage: true },
         { id: 'uvz', label: t.navUvz, icon: Target, isStage: true },
         { id: 'transformation_map', label: t.navTransformationMap, icon: GitFork, isStage: true },
@@ -264,9 +268,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   .filter((item) => item.label.toLowerCase().includes(query.toLowerCase()))
                   .map((item) => {
                     const Icon = item.icon;
-                    const isActive =
-                      activeView === item.id ||
-                      (item.id === 'market_research' && activeView === 'topic_selection');
+                    const isActive = activeView === item.id;
                     return (
                       <button
                         key={item.id}

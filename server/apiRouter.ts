@@ -7,8 +7,9 @@ import { createAiRouter, DEFAULT_GEMINI_MODEL } from './ai/aiRoutes.ts';
 import { createJobRouter } from './jobs/jobRoutes.ts';
 import { createRateLimiter } from './middleware/rateLimit.ts';
 import { searchReferences, retrieveReference, verifyReferenceRecords } from './referenceResearch.ts';
-import { collectMarketResearch } from './marketResearch.ts';
+import { collectMarketResearch, checkResourceDirectory, checkUrlAccessibility } from './marketResearch.ts';
 import { FirebaseTokenVerifier } from './security/firebaseToken.ts';
+import { isPrivateOrInvalidPublicUrl } from '../src/utils/manualEvidenceReview.ts';
 
 export interface ApiRouterDeps {
   store?: DataStore;
@@ -72,6 +73,34 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
       return res
         .status(502)
         .json({ error: 'Market research failed. Retry after checking source access.' });
+    }
+  });
+
+  router.post('/market/resources/check', researchRateLimit, async (_req: Request, res: Response) => {
+    await recordResearchEvent('market_research');
+    try {
+      return res.json(await checkResourceDirectory());
+    } catch {
+      return res
+        .status(502)
+        .json({ error: 'Resource accessibility check failed.' });
+    }
+  });
+
+  router.post('/market/evidence/inspect-url', researchRateLimit, async (req: Request, res: Response) => {
+    const rawUrl = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+    if (!rawUrl || rawUrl.length > 2000) {
+      return res.status(400).json({ error: 'Provide an HTTPS URL up to 2000 characters.' });
+    }
+    const validation = isPrivateOrInvalidPublicUrl(rawUrl);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.reason || 'Invalid or unsafe URL.' });
+    }
+    await recordResearchEvent('market_research');
+    try {
+      return res.json(await checkUrlAccessibility(rawUrl, 'manual-evidence'));
+    } catch {
+      return res.status(422).json({ error: 'Could not inspect source accessibility.' });
     }
   });
 

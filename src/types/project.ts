@@ -54,6 +54,60 @@ export interface UserPreferences {
   autoApproveNonCritical: boolean;
 }
 
+export type MarketSourceClass =
+  | 'primary_marketplace'
+  | 'secondary_report'
+  | 'supporting_context';
+
+export type MarketAcquisitionMethod =
+  | 'live_collector'
+  | 'manual_observation'
+  | 'file_import';
+
+export type MarketEvidenceType =
+  | 'official_ranking'
+  | 'reported_ranking'
+  | 'estimate'
+  | 'interest_signal'
+  | 'search_result'
+  | 'featured_collection'
+  | 'seller_claim';
+
+export type MarketReviewStatus =
+  | 'unverified'
+  | 'retrieved_checked'
+  | 'manually_reviewed'
+  | 'blocked'
+  | 'rejected';
+
+export type ResourceCollectionMethod =
+  | 'supported_collector'
+  | 'manual_review'
+  | 'import'
+  | 'unavailable';
+
+export type ResourceScopeKind = 'official_chart' | 'published_report' | 'supporting_discovery';
+
+export interface GateAResourceEntry {
+  id: string;
+  publisher: string;
+  resourceName: string;
+  originalURL: string;
+  resolvedURL?: string;
+  scopeKind: ResourceScopeKind;
+  purpose: string;
+  geography: string;
+  categoryCoverage: string;
+  formatCoverage: string;
+  whatItSupports: string;
+  importantLimitations: string;
+  accessStatus: 'unchecked' | 'accessible' | 'redirected' | 'blocked' | 'unavailable';
+  httpStatus?: number | null;
+  lastCheckedAt?: string;
+  lastCheckNote?: string;
+  collectionMethod: ResourceCollectionMethod;
+}
+
 export interface MarketplaceObservation {
   isSample?: boolean;
   priceKnown?: boolean;
@@ -61,7 +115,19 @@ export interface MarketplaceObservation {
   sourceURL?: string;
   evidenceExcerpt?: string;
   id: string;
-  marketplace: 'Amazon Kindle' | 'Apple Books' | 'Google Play Books' | 'Kobo' | 'Gumroad' | 'Payhip' | 'Etsy';
+  marketplace:
+    | 'Amazon Kindle'
+    | 'Apple Books'
+    | 'Google Play Books'
+    | 'Kobo'
+    | 'Gumroad'
+    | 'Payhip'
+    | 'Etsy'
+    | 'NYT Best Sellers'
+    | 'Keepa'
+    | 'Google Trends'
+    | 'Other Research Source';
+  country?: string;
   category: string;
   productTitle: string;
   sellerOrAuthor: string;
@@ -70,17 +136,81 @@ export interface MarketplaceObservation {
   currency: string;
   observedRank?: number;
   rankScope?: string;
+  metricName?: string;
+  metricValue?: number | string;
+  metricUnit?: string;
   reviewCount?: number;
   rating?: number;
   productFormat: string;
   observedAt: string;
+  dataAsOfDate?: string;
+  publicationDate?: string;
+  retrievedAt?: string;
+  excerptLocator?: string;
+  evidenceAttachmentRef?: string;
+  collectionMethodology?: string;
+  keepaProvenance?: 'historical' | 'estimated' | 'subscription_only' | 'authorized_api' | 'not_applicable';
+  evidenceChainId?: string;
+  sourceClass?: MarketSourceClass;
+  acquisitionMethod?: MarketAcquisitionMethod;
+  evidenceType?: MarketEvidenceType;
+  reviewStatus?: MarketReviewStatus;
+  reviewerRationale?: string;
+  reviewedAt?: string;
   evidenceLevel: 'VERIFIED_RANKING' | 'FEATURED_COLLECTION' | 'SEARCH_RESULT' | 'SELLER_CLAIM' | 'PUBLIC_MARKET_INDEX';
   dataLimitations: string;
 }
 
+export type CandidateEvidenceLabel =
+  | 'CURRENT_OFFICIAL_CHART'
+  | 'MANUALLY_REVIEWED_PRIMARY'
+  | 'SECONDARY_REPORTED_RANKING'
+  | 'SUPPORTING_INTEREST_SIGNAL'
+  | 'OPPORTUNITY_HYPOTHESIS'
+  | 'NEEDS_VALIDATION'
+  | 'SAMPLE_DATA';
+
+export interface ScoreFactorAssessment {
+  key: keyof TopicCandidate['scoreBreakdown'];
+  label: string;
+  score: number | null;
+  maxScore: number;
+  status: 'MEASURED' | 'REVIEWED_SIGNAL' | 'UNMEASURED';
+  basis: string;
+  uncertainty: string;
+}
+
+export interface CandidateEvidenceStrength {
+  overallLevel: 'STRONG_CURRENT' | 'MODERATE_REVIEWED' | 'LIMITED_SUPPORTING' | 'INSUFFICIENT';
+  collectorVerifiedCount: number;
+  manuallyReviewedCount: number;
+  independentChainCount: number;
+  credibilityBasis: string;
+  methodologySummary: string;
+  recencySummary: string;
+  scopeFitSummary: string;
+  corroborationSummary: string;
+}
+
+export interface CandidateProductSuitability {
+  readinessStatus: 'HYPOTHESIS_NEEDS_VALIDATION' | 'PARTIALLY_ASSESSED';
+  audienceProblemClarity: string;
+  differentiationHypothesis: string;
+  creatorFitStatus: 'UNMEASURED' | 'USER_DEFINED';
+  creatorFitNote: string;
+  productionEffort: 'LOW' | 'MODERATE' | 'COMPLEX';
+  nextValidationStep: string;
+}
+
 export interface TopicCandidate {
   marketCategory?: string;
-  evidenceStatus?: 'CURRENT_CHART' | 'SAMPLE';
+  evidenceStatus?: 'CURRENT_CHART' | 'REVIEWED_FALLBACK' | 'SAMPLE';
+  evidenceLabel?: CandidateEvidenceLabel;
+  evidenceStrength?: CandidateEvidenceStrength;
+  productSuitability?: CandidateProductSuitability;
+  factorAssessments?: ScoreFactorAssessment[];
+  independentChainIds?: string[];
+  researchGapNote?: string;
   id: string;
   title: string;
   subtitle: string;
@@ -477,6 +607,7 @@ export interface DigitalProductProject {
   };
   marketResearch: {
     researchDate: string;
+    resourceDirectory?: GateAResourceEntry[];
     sourceReports?: Array<{ marketplace: string; url: string; status: string; message: string; checkedAt: string; count: number }>;
     platformEvidence: MarketplaceObservation[];
     topicCandidates: TopicCandidate[];

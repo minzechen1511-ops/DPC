@@ -55,7 +55,26 @@ export async function buildLearningBundle(rawProject: DigitalProductProject, sou
   add('resources/executive-summary.html', learningDocument(`${title} — Executive Summary & Action Playbook`, render(executiveSummaryMd), project.brand));
   add('research/reference-library.md',compileReferenceLibraryMarkdown(project));
   add('research/source-records.json',JSON.stringify(project.referenceLibrary.cards,null,2));
-  add('research/marketplace-evidence.json',JSON.stringify(project.marketResearch,null,2));
+  const { isCurrentMarketEvidence, isReviewedFallbackEvidence } = await import('./marketDiscoveryEngine.ts');
+  const marketObs = project.marketResearch?.platformEvidence || [];
+  const marketSummary = {
+    liveCollectorCount: marketObs.filter((o) => isCurrentMarketEvidence(o)).length,
+    manuallyReviewedCount: marketObs.filter((o) => isReviewedFallbackEvidence(o)).length,
+    sampleCount: marketObs.filter((o) => Boolean(o.isSample)).length,
+    rejectedOrBlockedCount: marketObs.filter((o) => o.reviewStatus === 'rejected' || o.reviewStatus === 'blocked').length,
+    gateAIssues: gateIssues(project, 'gateA'),
+  };
+  add(
+    'research/marketplace-evidence.json',
+    JSON.stringify(
+      {
+        ...project.marketResearch,
+        provenanceSummary: marketSummary,
+      },
+      null,
+      2
+    )
+  );
   add('resources/companion-toolkits.md',compileCompanionResourcesMarkdown(project));
   const launchMd = compileLaunchAssetsMarkdown(project);
   add('publisher/sales-assets.md', launchMd);
@@ -115,7 +134,7 @@ export async function buildLearningBundle(rawProject: DigitalProductProject, sou
   add('publisher/storefront-listing.html', learningDocument(`${title} — Storefront Listing Kit`, storefrontHtml, project.brand));
 
   add('publisher/project-backup.json',JSON.stringify(project,null,2));
-  add('review/publication-review.json',JSON.stringify({ reviewed, issues, sourceCheck:sourceCheck || null, gates:project.workflow.gates, chapters:project.outline.map(ch=>({id:ch.id,title:ch.title,...auditChapter(ch,project.referenceLibrary.cards)})), resources:project.resources.map(resource=>({id:resource.id,title:resource.title,...auditChapter(resourceEvidenceDocument(resource),project.referenceLibrary.cards)})) },null,2));
+  add('review/publication-review.json',JSON.stringify({ reviewed, issues, marketResearchProvenance: marketSummary, sourceCheck:sourceCheck || null, gates:project.workflow.gates, chapters:project.outline.map(ch=>({id:ch.id,title:ch.title,...auditChapter(ch,project.referenceLibrary.cards)})), resources:project.resources.map(resource=>({id:resource.id,title:resource.title,...auditChapter(resourceEvidenceDocument(resource),project.referenceLibrary.cards)})) },null,2));
   const evidenceDocuments = [...project.outline.map(ch => ({ title: ch.title, document: ch })), ...project.resources.map(resource => ({ title: resource.title, document: resourceEvidenceDocument(resource) }))];
   const claimMatrix = evidenceDocuments.flatMap(item => evidencePassages(item.document).map(passage => ({ document: item.title, passage: passage.text, heading: passage.heading, referenceIds: passage.referenceIds, ...assessPassage(passage,item.document,project.referenceLibrary.cards), reviews: (item.document.citationReviews || []).filter(review => review.passageKey === passage.key), sources: passage.referenceIds.map(id => { const card=project.referenceLibrary.cards.find(card=>card.id===id); return { id, title:card?.sourceTitle, author:card?.author, date:card?.publicationDate, doi:card?.doi, url:card?.sourceURL, excerpt:card?.verificationQuote, locator:card?.verificationLocator, retrieval:card?.retrieval }; }) })));
   add('research/claim-evidence-matrix.json',JSON.stringify(claimMatrix,null,2));

@@ -1,8 +1,24 @@
-import type { DigitalProductProject, MarketplaceObservation, ProductFormat, TopicCandidate } from '../types/project.ts';
+import type {
+  CandidateEvidenceLabel,
+  CandidateEvidenceStrength,
+  CandidateProductSuitability,
+  DigitalProductProject,
+  GateAResourceEntry,
+  MarketplaceObservation,
+  ProductFormat,
+  ScoreFactorAssessment,
+  TopicCandidate,
+} from '../types/project.ts';
 import { rankAndBadgeCandidates } from './scoring.ts';
 import { BLANK_PROJECT } from '../data/demoProject.ts';
 import { Language } from './i18n.ts';
 import { apiFetch } from '../services/apiClient.ts';
+import {
+  inferObservationDefaults,
+  isPrivateOrInvalidPublicUrl,
+  isResourceHomepageUrl,
+} from './manualEvidenceReview.ts';
+import { mergeResourceDirectory } from './marketResourceDirectory.ts';
 
 export interface MarketCategoryDef {
   id: string;
@@ -18,9 +34,9 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     id: 'ALL',
     labelEn: 'All Categories',
     labelZh: '全部熱門類別',
-    descriptionEn: 'Broad scan across all digital product domains and commerce marketplaces',
+    descriptionEn: 'Broad scan across educational digital product domains and commerce marketplaces',
     descriptionZh: '全面涵蓋知識手冊、實作工具、管理系統與數位規劃表',
-    marketplaces: ['Amazon Kindle', 'Gumroad', 'Etsy', 'Apple Books', 'Payhip'],
+    marketplaces: ['Amazon Kindle', 'Apple Books', 'NYT Best Sellers', 'Keepa', 'Google Trends', 'Gumroad', 'Etsy', 'Payhip'],
   },
   {
     id: 'productivity_systems',
@@ -28,31 +44,31 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     labelZh: 'Notion 系統與一人公司生產力',
     descriptionEn: 'Operating systems, client onboarding portals, SOPs, and creator dashboards',
     descriptionZh: '一人事業工作空間、客戶接案流程、SOP 與個人生產力管理庫',
-    marketplaces: ['Gumroad', 'Payhip', 'Etsy'],
+    marketplaces: ['Amazon Kindle', 'Apple Books', 'Gumroad', 'Payhip', 'Etsy'],
   },
   {
     id: 'wellness_habits',
     labelEn: 'Wellness, Habits & Mental Health',
     labelZh: '身心健康、微習慣與抗倦怠',
-    descriptionEn: 'Burnout recovery journals, somatic trackers, GoodNotes reset workbooks',
+    descriptionEn: 'Burnout recovery journals, habit trackers, GoodNotes reset workbooks',
     descriptionZh: '自律微習慣、抗倦怠自癒手冊、GoodNotes 可填寫數位筆記',
-    marketplaces: ['Etsy', 'Amazon Kindle', 'Apple Books'],
+    marketplaces: ['Amazon Kindle', 'Apple Books', 'NYT Best Sellers', 'Etsy'],
   },
   {
     id: 'personal_finance',
     labelEn: 'Personal Finance & Real Estate',
     labelZh: '個人理財、房產與資產配置',
-    descriptionEn: 'Mortgage calculators, first-time buyer blueprints, closing fee guides',
-    descriptionZh: '首購族避坑指南、房貸精算工具表、資產配置與預算管理套件',
-    marketplaces: ['Apple Books', 'Amazon Kindle', 'Gumroad'],
+    descriptionEn: 'Cashflow planners, debt payoff guides, first-time buyer educational kits',
+    descriptionZh: '首購族避坑指南、收支盤點表、資產配置與預算管理套件',
+    marketplaces: ['Apple Books', 'Amazon Kindle', 'Keepa', 'Gumroad'],
   },
   {
     id: 'freelance_career',
     labelEn: 'Freelance Growth & Client Proposals',
     labelZh: '接案變現、報價談判與合約工具',
-    descriptionEn: 'Value pricing calculators, proposal decks, scope creep addendums',
-    descriptionZh: '高報價談判話術、防合約扯皮條款、三層客戶提案範本',
-    marketplaces: ['Payhip', 'Gumroad'],
+    descriptionEn: 'Value pricing worksheets, proposal templates, scope guardrails',
+    descriptionZh: '高報價談判架構、防合約扯皮條款、三層客戶提案範本',
+    marketplaces: ['Amazon Kindle', 'Payhip', 'Gumroad'],
   },
   {
     id: 'budget_living',
@@ -60,13 +76,12 @@ export const MARKET_CATEGORIES: MarketCategoryDef[] = [
     labelZh: '平價生活、家庭餐桌與節流食譜',
     descriptionEn: 'Zero-waste dinner systems, grocery inflation sheets, pantry inventory guides',
     descriptionZh: '抗通膨食材輪替矩陣、每週採買精算表、零浪費省錢料理計畫',
-    marketplaces: ['Amazon Kindle', 'Gumroad', 'Etsy'],
+    marketplaces: ['Amazon Kindle', 'Apple Books', 'Gumroad', 'Etsy'],
   },
 ];
 
 /**
- * Standard Multi-Platform Market Observations across Amazon Kindle, Gumroad, Etsy, Apple Books, and Payhip
- * Legacy illustrative fixtures. Never used by live research or accepted by gates.
+ * Legacy illustrative fixtures. Never used by live research or accepted by Gate A.
  */
 const DEMO_OBSERVATIONS: MarketplaceObservation[] = [
   {
@@ -85,7 +100,7 @@ const DEMO_OBSERVATIONS: MarketplaceObservation[] = [
     productFormat: 'Kindle Ebook',
     observedAt: '2026-11-09',
     evidenceLevel: 'VERIFIED_RANKING',
-    dataLimitations: 'Public ranking index reflects velocity, verified live on Amazon search index.',
+    dataLimitations: 'Illustrative sample fixture only.',
   },
   {
     id: 'OBS-02',
@@ -103,7 +118,7 @@ const DEMO_OBSERVATIONS: MarketplaceObservation[] = [
     productFormat: 'Notion Workspace + PDF Playbook',
     observedAt: '2026-11-08',
     evidenceLevel: 'FEATURED_COLLECTION',
-    dataLimitations: 'Creator-reported sales tier benchmarked against category top decile on Gumroad Discover.',
+    dataLimitations: 'Illustrative sample fixture only.',
   },
   {
     id: 'OBS-03',
@@ -121,7 +136,7 @@ const DEMO_OBSERVATIONS: MarketplaceObservation[] = [
     productFormat: 'Digital PDF Bundle + Fillable Journal',
     observedAt: '2026-11-09',
     evidenceLevel: 'VERIFIED_RANKING',
-    dataLimitations: 'Etsy Bestseller badge verified directly on Etsy live digital listings.',
+    dataLimitations: 'Illustrative sample fixture only.',
   },
   {
     id: 'OBS-04',
@@ -139,7 +154,7 @@ const DEMO_OBSERVATIONS: MarketplaceObservation[] = [
     productFormat: 'Interactive EPUB + Calculator Tool',
     observedAt: '2026-11-07',
     evidenceLevel: 'VERIFIED_RANKING',
-    dataLimitations: 'Apple Books chart ranking reflects 7-day verified purchase velocity.',
+    dataLimitations: 'Illustrative sample fixture only.',
   },
   {
     id: 'OBS-05',
@@ -154,33 +169,24 @@ const DEMO_OBSERVATIONS: MarketplaceObservation[] = [
     rankScope: 'Trending in Career',
     reviewCount: 680,
     rating: 4.9,
-    productFormat: 'Google Docs / Word Templates + Video Walkthrough',
+    productFormat: 'Google Docs / Word Templates + Walkthrough',
     observedAt: '2026-11-06',
     evidenceLevel: 'FEATURED_COLLECTION',
-    dataLimitations: 'Direct sales platform verified catalog item with active transaction records.',
-  },
-  {
-    id: 'OBS-06',
-    marketplace: 'Gumroad',
-    category: 'Food & Cooking > Meal Planning Systems',
-    productTitle: 'The $75 Weekly Family Dinner Matrix (Printable PDF + Notion)',
-    sellerOrAuthor: 'Sarah Jenkins',
-    productURL: 'https://gumroad.com/discover?query=family+dinner+meal+planner',
-    currentPrice: 19.0,
-    currency: 'USD',
-    observedRank: 12,
-    rankScope: 'Trending in Food',
-    reviewCount: 520,
-    rating: 4.9,
-    productFormat: 'PDF Ebook + Notion + Printable Sheets',
-    observedAt: '2026-11-08',
-    evidenceLevel: 'FEATURED_COLLECTION',
-    dataLimitations: 'Estimated annual recurring revenue verified via Gumroad seller analytics.',
+    dataLimitations: 'Illustrative sample fixture only.',
   },
 ];
 
-// Illustrative fixtures only. These are never accepted as live ranking evidence.
-export const SAMPLE_OBSERVATIONS: MarketplaceObservation[] = DEMO_OBSERVATIONS.map(observation => ({ ...observation, isSample: true, evidenceLevel: 'SEARCH_RESULT', dataLimitations: 'Illustrative sample; product, rank, price and reviews are not live verified.' }));
+// Illustrative fixtures only. Never accepted as real or reviewed evidence.
+export const SAMPLE_OBSERVATIONS: MarketplaceObservation[] = DEMO_OBSERVATIONS.map((observation) => ({
+  ...observation,
+  isSample: true,
+  reviewStatus: 'unverified',
+  acquisitionMethod: 'manual_observation',
+  evidenceType: 'search_result',
+  sourceClass: 'supporting_context',
+  evidenceLevel: 'SEARCH_RESULT',
+  dataLimitations: 'Sample data only; product, rank, price, and reviews are not live-verified observations.',
+}));
 
 export interface MarketSyncOptions {
   category?: string;
@@ -190,34 +196,108 @@ export interface MarketSyncOptions {
 }
 
 export const EVIDENCE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+export const ALLOWED_APPLE_FEED_URLS = new Set([
+  'https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json',
+  'https://rss.marketingtools.apple.com/api/v2/us/books/top-paid/100/books.json',
+]);
 export const ALLOWED_AMAZON_CHART_PATTERN = /^https:\/\/www\.amazon\.com\/Best-Sellers-Kindle-Store(?:-[A-Za-z-]+)?\/zgbs\/digital-text(?:\/[0-9]+)?$/;
 
 export function isCurrentMarketEvidence(observation: MarketplaceObservation, now = Date.now()): boolean {
-  const age = now - Date.parse(observation.observedAt);
+  if (observation.isSample) return false;
+  if (observation.reviewStatus === 'rejected' || observation.reviewStatus === 'blocked') return false;
+  // Require authentic live-collector origin (manual records must go through isReviewedFallbackEvidence)
+  const timestampRaw = observation.dataAsOfDate || observation.observedAt;
+  const age = now - Date.parse(timestampRaw);
   const rank = observation.observedRank;
   const source = observation.sourceURL || '';
-  const allowedSource = (observation.collector === 'apple-chart-v1' && source === 'https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json' && /^https:\/\/books\.apple\.com\//.test(observation.productURL)) ||
-    (observation.collector === 'amazon-chart-v1' && ALLOWED_AMAZON_CHART_PATTERN.test(source) && /^https:\/\/www\.amazon\.com\/dp\/[A-Z0-9]{10}$/.test(observation.productURL));
-  return Boolean(!observation.isSample && allowedSource && observation.evidenceLevel === 'VERIFIED_RANKING' && Number.isInteger(rank) && rank! > 0 && rank! <= 100 && age >= 0 && age <= EVIDENCE_MAX_AGE_MS && observation.evidenceExcerpt);
+  const allowedSource =
+    (observation.collector === 'apple-chart-v1' &&
+      ALLOWED_APPLE_FEED_URLS.has(source) &&
+      /^https:\/\/books\.apple\.com\//.test(observation.productURL)) ||
+    (observation.collector === 'amazon-chart-v1' &&
+      ALLOWED_AMAZON_CHART_PATTERN.test(source) &&
+      /^https:\/\/www\.amazon\.com\/dp\/[A-Z0-9]{10}$/.test(observation.productURL));
+  return Boolean(
+    allowedSource &&
+      observation.evidenceLevel === 'VERIFIED_RANKING' &&
+      Number.isInteger(rank) &&
+      rank! > 0 &&
+      rank! <= 100 &&
+      Number.isFinite(age) &&
+      age >= -5 * 60_000 &&
+      age <= EVIDENCE_MAX_AGE_MS &&
+      (observation.evidenceExcerpt || '').trim().length >= 5
+  );
 }
+
+export function isReviewedFallbackEvidence(observation: MarketplaceObservation): boolean {
+  if (observation.isSample) return false;
+  // Live collector records are checked by isCurrentMarketEvidence (with 48h window)
+  if (observation.collector === 'apple-chart-v1' || observation.collector === 'amazon-chart-v1') return false;
+  const defaults = inferObservationDefaults(observation);
+  if (defaults.acquisitionMethod === 'live_collector') return false;
+  if (observation.reviewStatus !== 'manually_reviewed') return false;
+  if (!observation.reviewedAt || !Number.isFinite(Date.parse(observation.reviewedAt))) return false;
+  if (!observation.reviewerRationale || observation.reviewerRationale.trim().length < 20) return false;
+  if (!observation.evidenceExcerpt || observation.evidenceExcerpt.trim().length < 20) return false;
+  const hasLocator =
+    Boolean((observation.excerptLocator || '').trim()) ||
+    Boolean((observation.evidenceAttachmentRef || '').trim());
+  if (!hasLocator) return false;
+
+  const urlToCheck = (observation.sourceURL || observation.productURL || '').trim();
+  if (!urlToCheck || !isPrivateOrInvalidPublicUrl(urlToCheck).valid || isResourceHomepageUrl(urlToCheck)) {
+    return false;
+  }
+
+  // Seller claims and bare search placement alone do not establish demand evidence for Gate A
+  if (defaults.evidenceType === 'seller_claim' || defaults.evidenceType === 'search_result') {
+    return false;
+  }
+
+  return true;
+}
+
+export function isGateAQualifiedEvidence(observation: MarketplaceObservation, now = Date.now()): boolean {
+  return isCurrentMarketEvidence(observation, now) || isReviewedFallbackEvidence(observation);
+}
+
+const FICTION_CATEGORY_PATTERN = /\b(fiction|romance|fantasy|sci-fi|science fiction|mystery|thriller|suspense|horror|manga|comics|graphic novel|poetry|drama|paranormal|erotica|young adult fiction|juvenile fiction|children's fiction|crime & mystery|historical fiction|literary|memoir & biography|novels)\b/i;
+
 export function observationCategory(observation: MarketplaceObservation): string {
-  const text = `${observation.category} ${observation.productTitle}`.toLowerCase();
-  if (/cook|meal|food|recipe|kitchen|pantry|budget living/.test(text)) return 'budget_living';
-  if (/health|habit|wellness|psychology|burnout|self-help|mindset|fitness|dieting|sleep|stress|anxiety|meditation/.test(text)) return 'wellness_habits';
-  if (/finance|money|invest|real estate|wealth|retire|tax|mortgage|debt/.test(text)) return 'personal_finance';
-  if (/freelance|career|proposal|education|teaching|coaching|negotiat|interview|resume|leadership|consulting/.test(text)) return 'freelance_career';
-  if (/business|productiv|notion|management|computer|technology|software|system|workflow|automation|ai\b|operating/.test(text)) return 'productivity_systems';
+  const catLower = `${observation.category || ''}`.toLowerCase();
+  const fullText = `${observation.category || ''} ${observation.productTitle || ''}`.toLowerCase();
+
+  if (FICTION_CATEGORY_PATTERN.test(catLower)) {
+    return 'other';
+  }
+  if (/\b(novel|a thriller|a mystery|fantasy series|romance novel|litrpg|manga)\b/i.test(observation.productTitle || '')) {
+    return 'other';
+  }
+
+  if (/cook|meal|food|recipe|kitchen|pantry|budget living|nutrition/.test(fullText)) return 'budget_living';
+  if (/health|habit|wellness|psychology|burnout|self-help|mindset|fitness|dieting|sleep|stress|anxiety|meditation|atomic habits|behavior/.test(fullText)) {
+    return 'wellness_habits';
+  }
+  if (/finance|money|invest|real estate|wealth|retire|tax|mortgage|debt|budgeting|cashflow/.test(fullText)) {
+    return 'personal_finance';
+  }
+  if (/freelance|career|proposal|education|teaching|coaching|negotiat|interview|resume|leadership|consulting|pricing/.test(fullText)) {
+    return 'freelance_career';
+  }
+  if (/business|productiv|notion|management|computer|technology|software|system|workflow|automation|\bai\b|operating|time management/.test(fullText)) {
+    return 'productivity_systems';
+  }
   return 'other';
 }
 
 interface NicheBlueprint {
   title: string;
   subtitle: string;
-  targetAudience: string;
+  targetAudienceHypothesis: string;
   coreProblem: string;
   bigPromise: string;
   suggestedFormat: ProductFormat;
-  formatNotes: string;
   priceTestRange: { test: number; regular: number; premium: number };
   differentiationAngle: string;
   potentialCompanions: string[];
@@ -226,145 +306,464 @@ interface NicheBlueprint {
 
 const NICHE_BLUEPRINTS: Record<string, NicheBlueprint> = {
   productivity_systems: {
-    title: 'Solo Operator Systems & AI Workflow Playbook',
-    subtitle: 'Original execution manual, SOP architecture, and decision toolkit for solo creators and lean operators',
-    targetAudience: 'Solo founders, freelancers, and knowledge workers overwhelmed by fragmented tools and manual routines',
-    coreProblem: 'Operators lose hours each week context-switching across unstandardized notes, tasks, and client handoffs without repeatable systems.',
-    bigPromise: 'Build a lightweight, evidence-grounded operating rhythm that cuts weekly admin friction and standardizes repeatable delivery.',
+    title: 'Solo Operator Systems & Workflow Playbook',
+    subtitle: 'Original execution manual, SOP architecture, and decision toolkit for solo operators',
+    targetAudienceHypothesis: 'Solo operators and freelancers seeking structured daily workflows (validate exact buyer persona in Stage 3)',
+    coreProblem: 'Operators lose time switching across unstandardized notes, tasks, and client handoffs without repeatable checklists.',
+    bigPromise: 'Build a lightweight, structured operating cadence using repeatable SOP templates and weekly review scorecards.',
     suggestedFormat: 'ebook_toolkit',
-    formatNotes: 'Ebook + SOP Templates & Operating Checklist Bundle',
     priceTestRange: { test: 15, regular: 29, premium: 49 },
-    differentiationAngle: 'Pairs concise architectural principles with copy-ready SOP checklists and measurable weekly cadence audits rather than generic productivity theory.',
-    potentialCompanions: ['Weekly Operating Cadence Worksheet', 'Client Onboarding & Handoff SOP Pack', 'Time-Leak & Automation Audit Sheet', '30-Day Systems Implementation Tracker'],
+    differentiationAngle: 'Pairs concise architectural principles with copy-ready SOP checklists and measurable weekly cadence audits.',
+    potentialCompanions: ['Weekly Operating Cadence Worksheet', 'Client Onboarding & Handoff SOP Pack', 'Time-Leak Audit Sheet', '30-Day Systems Implementation Tracker'],
     chapters: [
-      { title: 'Diagnosing Operational Friction & Tool Sprawl', objective: 'Identify high-frequency workflow bottlenecks and quantify weekly time recovery opportunities.', deliverable: 'Workflow Friction Audit Worksheet', milestone: 'Document top 3 recurring operational bottlenecks with baseline weekly hours.' },
-      { title: 'Single-Source Capture & Prioritization Architecture', objective: 'Design a minimal capture-to-action triage loop that prevents neglected backlogs.', deliverable: 'Daily Triage & Priority Matrix', milestone: 'Run 5 consecutive daily triage cycles without orphaned tasks.' },
+      { title: 'Diagnosing Operational Friction & Tool Sprawl', objective: 'Identify recurring workflow bottlenecks and categorize time drains.', deliverable: 'Workflow Friction Audit Worksheet', milestone: 'Document top 3 recurring bottlenecks and baseline time spent.' },
+      { title: 'Single-Source Capture & Prioritization Architecture', objective: 'Design a minimal capture-to-action triage loop that prevents neglected backlogs.', deliverable: 'Daily Triage & Priority Matrix', milestone: 'Test 5 consecutive daily triage cycles without orphaned tasks.' },
       { title: 'Repeatable Client & Project SOP Standardization', objective: 'Convert complex recurring deliverables into checklist-driven standard operating procedures.', deliverable: 'Reusable 1-Page SOP Builder', milestone: 'Publish and test 2 core SOP checklists on active work.' },
-      { title: 'Safe Automation & AI Delegation Guardrails', objective: 'Separate deterministic rules from assisted drafting while preserving human quality verification.', deliverable: 'Automation & Verification Guardrail Checklist', milestone: 'Automate or standardize 1 weekly recurring workflow with verified outputs.' },
-      { title: 'Weekly Review, KPI Telemetry & Continuous Calibration', objective: 'Sustain long-term system reliability through a 20-minute Friday review protocol.', deliverable: '20-Minute Weekly Review Scoreboard', milestone: 'Complete a full 4-week operating calibration cycle.' },
+      { title: 'Safe Automation & Quality Delegation Guardrails', objective: 'Separate deterministic rules from assisted drafting while preserving human quality verification.', deliverable: 'Verification Guardrail Checklist', milestone: 'Document review criteria for 1 recurring workflow.' },
+      { title: 'Weekly Review & Continuous Calibration', objective: 'Sustain long-term system reliability through a 20-minute Friday review protocol.', deliverable: '20-Minute Weekly Review Scoreboard', milestone: 'Complete a 4-week operating calibration log.' },
     ],
   },
   wellness_habits: {
     title: 'Sustainable Energy & Habit Reset Workbook',
-    subtitle: 'Practical behavioral routines, burnout recovery protocols, and daily self-tracking worksheets',
-    targetAudience: 'High-output professionals and caregivers seeking steady focus and restorative routines without extreme willpower',
-    coreProblem: 'All-or-nothing wellness plans collapse during busy workweeks, leaving readers cycling through exhaustion and guilt.',
-    bigPromise: 'Install realistic keystone habits for sleep, focus, and stress recovery using gradual behavioral design and reflection logs.',
+    subtitle: 'Practical behavioral routines, stress boundary scripts, and daily self-tracking worksheets',
+    targetAudienceHypothesis: 'Working adults and caregivers interested in structured habit and focus routines (validate buyer willingness directly)',
+    coreProblem: 'Rigid all-or-nothing habit plans often fail during busy weeks, leading to abandoned routines.',
+    bigPromise: 'Practice realistic keystone routines for sleep hygiene, focus blocks, and daily reflection using structured worksheets.',
     suggestedFormat: 'workbook',
-    formatNotes: 'Interactive Ebook + Fillable Habit & Energy Tracker',
     priceTestRange: { test: 12, regular: 24, premium: 39 },
-    differentiationAngle: 'Centers on minimum-viable daily baselines, friction reduction, and cited behavioral science rather than rigid 5 a.m. perfectionism.',
-    potentialCompanions: ['Energy & Stress Trigger Self-Audit', 'Minimum-Viable Daily Routine Builder', '14-Day Sleep & Focus Stabilization Log', 'Burnout Recovery Boundary Script Pack'],
+    differentiationAngle: 'Centers on minimum-viable daily baselines, friction reduction, and cited behavioral science rather than extreme routines.',
+    potentialCompanions: ['Energy & Stress Trigger Self-Audit', 'Minimum-Viable Daily Routine Builder', '14-Day Sleep & Focus Stabilization Log', 'Boundary Script Pack'],
     chapters: [
-      { title: 'Mapping Energy Leaks & Nervous System Load', objective: 'Pinpoint hidden daily stressors and cognitive overload patterns before changing routines.', deliverable: '7-Day Energy & Stressor Audit Sheet', milestone: 'Establish baseline sleep, focus, and recovery scores across one full week.' },
-      { title: 'Designing Minimum-Viable Keystone Habits', objective: 'Anchor tiny, resilient habits to existing cues so momentum survives hectic days.', deliverable: 'Habit Stacking & Cue Design Canvas', milestone: 'Maintain a 2-minute baseline version of 2 keystone habits for 7 days.' },
-      { title: 'Attention Protection & Digital Wind-Down Boundaries', objective: 'Reduce fragmented attention and late-evening stimulation through environment redesign.', deliverable: 'Workday Shutdown & Evening Wind-Down Checklist', milestone: 'Execute a 5-day screen-taper protocol before sleep.' },
-      { title: 'Sustainable Movement, Hydration & Midday Recovery', objective: 'Integrate brief physical resets between deep-work blocks to prevent afternoon crashes.', deliverable: '90-Minute Ultradian Reset Menu', milestone: 'Adopt 2 midday recovery micro-breaks per workday.' },
-      { title: 'Relapse Prevention & 30-Day Habit Calibration', objective: 'Recover rapidly from missed days using pre-committed fallback rules.', deliverable: '30-Day Habit Continuity & Reflection Scoreboard', milestone: 'Complete a monthly review and adjust habit difficulty for the next cycle.' },
+      { title: 'Mapping Energy Leaks & Daily Load', objective: 'Pinpoint recurring daily stressors and attention fragmentation patterns before changing routines.', deliverable: '7-Day Energy & Stressor Audit Sheet', milestone: 'Establish baseline sleep, focus, and recovery notes across one week.' },
+      { title: 'Designing Minimum-Viable Keystone Habits', objective: 'Anchor small, repeatable habits to existing daily cues.', deliverable: 'Habit Stacking & Cue Design Canvas', milestone: 'Test a 2-minute baseline version of 2 habits for 7 days.' },
+      { title: 'Attention Protection & Evening Wind-Down Boundaries', objective: 'Reduce fragmented attention and late-evening stimulation through environment redesign.', deliverable: 'Workday Shutdown Checklist', milestone: 'Execute a 5-day evening wind-down checklist.' },
+      { title: 'Midday Recovery Micro-Breaks', objective: 'Integrate brief recovery pauses between focused work blocks.', deliverable: 'Midday Reset Menu', milestone: 'Adopt 2 scheduled midday breaks per workday.' },
+      { title: 'Relapse Prevention & 30-Day Habit Calibration', objective: 'Recover cleanly from missed days using pre-committed fallback rules.', deliverable: '30-Day Habit Continuity Log', milestone: 'Complete a monthly reflection and adjust habit difficulty.' },
     ],
   },
   personal_finance: {
     title: 'Clarity-First Household Cashflow & Debt Reduction Guide',
-    subtitle: 'Structured budgeting framework, expense audit sheets, and milestone calculators for resilient finances',
-    targetAudience: 'Households and early-career earners wanting predictable monthly savings and debt payoff clarity without complex jargon',
-    coreProblem: 'Rising living costs and fragmented subscriptions erode monthly savings while intimidating spreadsheets deter consistent tracking.',
-    bigPromise: 'Build a transparent 30-day cashflow system, eliminate hidden leaks, and map a realistic emergency-fund and debt payoff runway.',
+    subtitle: 'Structured budgeting framework, expense audit sheets, and milestone worksheets for household clarity',
+    targetAudienceHypothesis: 'Households and early-career earners seeking clear expense-tracking templates (educational tool, not financial advice)',
+    coreProblem: 'Rising living costs and fragmented recurring subscriptions complicate monthly saving and debt prioritization.',
+    bigPromise: 'Organize a transparent 30-day cashflow baseline, audit recurring expenses, and compare structured payoff sequences.',
     suggestedFormat: 'ebook_toolkit',
-    formatNotes: 'Ebook + Cashflow & Payoff Calculator Toolkit',
     priceTestRange: { test: 15, regular: 29, premium: 49 },
-    differentiationAngle: 'Combines plain-language financial literacy with visual decision trees and printable cashflow audit worksheets (educational only, not licensed advice).',
-    potentialCompanions: ['Zero-Guilt Monthly Cashflow Ledger', 'Subscription & Fixed-Cost Pruning Worksheet', 'Emergency Buffer & Debt Snowball Planner', 'Annual Irregular-Expense Sinking Fund Matrix'],
+    differentiationAngle: 'Combines plain-language household budgeting concepts with printable cashflow audit worksheets and clear educational boundaries.',
+    potentialCompanions: ['Monthly Cashflow Ledger', 'Subscription & Fixed-Cost Pruning Worksheet', 'Emergency Buffer & Debt Sequence Planner', 'Irregular-Expense Sinking Fund Matrix'],
     chapters: [
-      { title: 'The Honest 30-Day Cashflow Baseline', objective: 'Reconstruct real net inflow, fixed obligations, and variable spending without judgment.', deliverable: 'Baseline Cashflow Snapshot Table', milestone: 'Categorize 100% of the past 30 days of spending.' },
-      { title: 'Pruning Silent Leaks & High-Impact Fixed Costs', objective: 'Identify recurring subscriptions, fee drains, and negotiable bills with immediate ROI.', deliverable: 'Expense Pruning & Negotiation Checklist', milestone: 'Document specific monthly recurring savings opportunities.' },
-      { title: 'Resilient Sinking Funds & Emergency Reserves', objective: 'Smooth predictable annual expenses so car repairs and renewals never derail budgets.', deliverable: 'Sinking Fund Allocation Schedule', milestone: 'Automate or ring-fence starter reserves for top 3 irregular expenses.' },
-      { title: 'Structured Debt Payoff vs. Savings Sequencing', objective: 'Compare avalanche and snowball math clearly to choose a sustainable payoff order.', deliverable: 'Debt Priority & Interest Comparison Sheet', milestone: 'Select and document a primary payoff sequence with target payoff dates.' },
-      { title: 'Quarterly Money Check-In & Inflation Resilience', objective: 'Maintain financial alignment in 15 minutes a month through lightweight check-ins.', deliverable: 'Monthly 15-Minute Money Review Protocol', milestone: 'Run your first post-setup monthly review and rebalance targets.' },
+      { title: 'The Honest 30-Day Cashflow Baseline', objective: 'Reconstruct actual net inflow, fixed obligations, and variable spending clearly.', deliverable: 'Baseline Cashflow Snapshot Table', milestone: 'Categorize the past 30 days of recurring and variable spending.' },
+      { title: 'Auditing Recurring Leaks & Fixed Costs', objective: 'Identify unused subscriptions, fee drains, and negotiable household bills.', deliverable: 'Expense Pruning Checklist', milestone: 'List recurring charges and review renewal dates.' },
+      { title: 'Sinking Funds & Emergency Reserves', objective: 'Plan ahead for predictable irregular annual expenses.', deliverable: 'Sinking Fund Allocation Schedule', milestone: 'Define target reserve categories for top 3 irregular expenses.' },
+      { title: 'Comparing Debt Payoff Sequencing Methods', objective: 'Compare avalanche and snowball math clearly using structured examples.', deliverable: 'Debt Priority Comparison Sheet', milestone: 'Select and document a comparison plan to test.' },
+      { title: 'Monthly 15-Minute Money Check-In', objective: 'Maintain visibility through a brief monthly review ritual.', deliverable: 'Monthly 15-Minute Review Protocol', milestone: 'Run one monthly cashflow reconciliation check-in.' },
     ],
   },
   freelance_career: {
-    title: 'High-Trust Client Proposal & Value Pricing Playbook',
-    subtitle: 'Scope architecture, discovery scripts, and 3-tier proposal templates for independent consultants',
-    targetAudience: 'Independent freelancers, educators, and boutique consultants stuck in hourly pricing and endless scope revisions',
-    coreProblem: 'Skilled independents undercharge and lose qualified leads because proposals emphasize hours instead of buyer outcomes and clear boundaries.',
-    bigPromise: 'Present structured 3-tier options, qualify client budgets upfront, and protect margins with clear scope-change addendums.',
+    title: 'Structured Client Proposal & Scope Playbook',
+    subtitle: 'Scope architecture, discovery checklists, and 3-tier proposal templates for independent operators',
+    targetAudienceHypothesis: 'Independent freelancers and consultants looking to standardize project scoping (validate demand directly)',
+    coreProblem: 'Unclear scope definitions and ad-hoc proposals frequently create revision friction and under-scoped engagements.',
+    bigPromise: 'Present structured 3-tier scope options, run consistent discovery checklists, and document clear revision boundaries.',
     suggestedFormat: 'template_bundle',
-    formatNotes: 'Ebook + Proposal, Discovery & Scope Contract Templates',
     priceTestRange: { test: 19, regular: 39, premium: 59 },
-    differentiationAngle: 'Delivers ready-to-adapt proposal structures, boundary clauses, and discovery question trees grounded in real client buying psychology.',
-    potentialCompanions: ['3-Tier Value Proposal Template', '20-Minute Discovery Qualification Script', 'Scope-Creep Prevention & Change-Order Addendum', 'Client Onboarding & Milestone Sign-Off Checklist'],
+    differentiationAngle: 'Focuses on transparent project scoping workflows, boundary clauses, and reusable 3-tier proposal templates.',
+    potentialCompanions: ['3-Tier Proposal Template', 'Discovery Qualification Checklist', 'Scope-Change Addendum Template', 'Client Milestone Sign-Off Sheet'],
     chapters: [
-      { title: 'Shifting From Hourly Labor to Outcome Positioning', objective: 'Reframe technical deliverables into measurable business value for decision-makers.', deliverable: 'Offer Outcome & ROI Translation Worksheet', milestone: 'Rewrite your core service offer around 3 buyer outcomes.' },
-      { title: 'Discovery Calls That Surface Real Budget & Urgency', objective: 'Use structured diagnostic questions to uncover cost of inaction before quoting.', deliverable: 'Structured Discovery Call Scorecard', milestone: 'Run the discovery script on your next 3 prospect conversations.' },
-      { title: 'Structuring Irresistible 3-Tier Proposals', objective: 'Design Essential, Core, and Accelerated options that anchor value cleanly.', deliverable: 'Fill-in-the-Blank 3-Tier Proposal Blueprint', milestone: 'Assemble a reusable master proposal template for your niche.' },
-      { title: 'Scope Boundaries, Revisions & Payment Milestones', objective: 'Eliminate unpaid scope creep with explicit exclusions and change-order triggers.', deliverable: 'Scope Guardrail & Change-Order Clause Sheet', milestone: 'Update your standard service agreement with milestone acceptance rules.' },
-      { title: 'Post-Delivery Case Studies & Referral Flywheels', objective: 'Turn successful engagements into documented proof and warm repeat business.', deliverable: 'Client Wrap-Up & Testimonial Request Kit', milestone: 'Capture one structured outcome summary from a completed project.' },
+      { title: 'Framing Deliverables Around Client Objectives', objective: 'Translate technical tasks into clearly scoped client deliverables and criteria.', deliverable: 'Offer Scope & Deliverable Matrix', milestone: 'Draft 3 clearly bounded service tiers.' },
+      { title: 'Structured Discovery Call Question Trees', objective: 'Surface project constraints, timelines, and decision criteria before quoting.', deliverable: 'Discovery Call Scorecard', milestone: 'Test the checklist before preparing the next proposal.' },
+      { title: 'Building Clear 3-Tier Proposals', objective: 'Present Essential, Core, and Extended scopes cleanly without ambiguity.', deliverable: 'Reusable 3-Tier Proposal Blueprint', milestone: 'Assemble one master proposal template.' },
+      { title: 'Scope Boundaries, Revisions & Milestones', objective: 'Document revision limits and milestone sign-off rules upfront.', deliverable: 'Scope Guardrail Checklist', milestone: 'Update proposal terms with explicit acceptance milestones.' },
+      { title: 'Post-Delivery Review & Wrap-Up Kit', objective: 'Close engagements cleanly with organized handoff checklists.', deliverable: 'Project Handoff & Review Sheet', milestone: 'Execute the wrap-up checklist on a completed engagement.' },
     ],
   },
   budget_living: {
-    title: 'Anti-Inflation Family Meal System & Pantry Matrix',
-    subtitle: 'Zero-waste weekly dinner planning, unit-cost grocery shopping lists, and batch-prep guides',
-    targetAudience: 'Busy households looking to cut weekly food waste and grocery spend while keeping weeknight dinners varied and nutritious',
-    coreProblem: 'Impulsive midweek takeout and unused produce quietly inflate household food budgets and create daily dinner fatigue.',
-    bigPromise: 'Cut grocery waste with a modular pantry rotation, 20-minute batch prep blocks, and repeatable budget-conscious family menus.',
+    title: 'Budget Family Meal System & Pantry Matrix',
+    subtitle: 'Weekly dinner planning grids, grocery comparison sheets, and batch-prep checklists',
+    targetAudienceHypothesis: 'Busy households looking to reduce weekly grocery waste and organize weeknight cooking (validate buyer pricing)',
+    coreProblem: 'Last-minute takeout and unused groceries increase weekly food spending and daily planning stress.',
+    bigPromise: 'Organize modular pantry-first dinner rotations and consolidated weekly shopping lists with printable checklists.',
     suggestedFormat: 'ebook_toolkit',
-    formatNotes: 'Ebook + Printable Meal Matrix & Grocery Cost Sheets',
     priceTestRange: { test: 9, regular: 19, premium: 29 },
-    differentiationAngle: 'Replaces rigid 100-ingredient gourmet recipes with interchangeable cross-utilization templates built around affordable staples.',
-    potentialCompanions: ['Pantry-First Inventory & Rotation Sheet', 'Weekly 5-Dinner Cross-Utilization Planner', 'Unit-Price Grocery Comparison Cheat Sheet', '45-Minute Sunday Prep Workflow Card'],
+    differentiationAngle: 'Emphasizes interchangeable ingredient cross-utilization worksheets built around common grocery staples.',
+    potentialCompanions: ['Pantry-First Inventory Sheet', 'Weekly 5-Dinner Cross-Utilization Planner', 'Unit-Price Comparison Sheet', 'Weekend Batch Prep Sequence Card'],
     chapters: [
-      { title: 'The Pantry-First Audit & Hidden Food Waste Reset', objective: 'Inventory existing staples and identify the top recurring causes of spoiled groceries.', deliverable: 'Freezer & Pantry Inventory Map', milestone: 'Build a 1-week menu using at least 50% existing pantry items.' },
-      { title: 'The 5-Base Cross-Utilization Menu Architecture', objective: 'Plan varied dinners that share core proteins, produce, and aromatics across the week.', deliverable: 'Interchangeable Meal Matrix Template', milestone: 'Draft a 7-day plan with under 18 unique grocery line items.' },
-      { title: 'Smart Store Navigation & Unit-Price Comparison', objective: 'Compare bulk, store-brand, and seasonal alternatives using true per-serving cost.', deliverable: 'Per-Serving Cost & Substitution Guide', milestone: 'Track receipt totals across two consecutive grocery trips.' },
-      { title: '45-Minute Weekend Prep for 15-Minute Weeknights', objective: 'Batch-wash, portion, and pre-cook foundational components safely.', deliverable: '45-Minute Batch Prep Sequence Card', milestone: 'Complete one 45-minute prep session covering 3 weeknight meals.' },
-      { title: 'Leftover Reinvention & Monthly Household Savings Review', objective: 'Turn surplus cooked ingredients into planned lunches and measure real monthly savings.', deliverable: 'Monthly Grocery Savings & Favorite Meals Log', milestone: 'Quantify 30-day spend reduction and lock top 10 family staple meals.' },
+      { title: 'Pantry Audit & Food Waste Baseline', objective: 'Inventory existing staples and identify common sources of spoiled produce.', deliverable: 'Freezer & Pantry Inventory Map', milestone: 'Build a 1-week menu starting from existing pantry staples.' },
+      { title: 'Interchangeable Ingredient Menu Architecture', objective: 'Plan varied dinners that share core proteins, grains, and vegetables across the week.', deliverable: 'Cross-Utilization Meal Matrix', milestone: 'Draft a 7-day plan consolidating overlapping ingredients.' },
+      { title: 'Unit-Price Shopping & Substitution Lists', objective: 'Compare per-unit cost and seasonal alternatives cleanly.', deliverable: 'Per-Serving Cost & Substitution Guide', milestone: 'Compare two consecutive weekly grocery receipts.' },
+      { title: 'Weekend Prep Checklists for Weeknights', objective: 'Pre-wash, portion, and store foundational ingredients safely.', deliverable: 'Weekend Prep Sequence Card', milestone: 'Complete one timed weekend prep checklist.' },
+      { title: 'Planned Leftovers & Monthly Review', objective: 'Repurpose surplus cooked items and track monthly grocery spend.', deliverable: 'Monthly Grocery & Favorite Meals Log', milestone: 'Review 4 weeks of shopping logs and favorite recipes.' },
     ],
   },
 };
 
-export function deriveSynchronizedCandidates(observations: MarketplaceObservation[] = [], options?: MarketSyncOptions): TopicCandidate[] {
-  const eligible = observations.filter(o => isCurrentMarketEvidence(o) && observationCategory(o) !== 'other')
-    .filter(o => !options?.focusMarketplace || options.focusMarketplace === 'ALL' || o.marketplace === options.focusMarketplace)
-    .filter(o => !options?.category || options.category === 'ALL' || observationCategory(o) === options.category)
-    .filter(o => !options?.searchQuery || `${o.productTitle} ${o.category} ${o.sellerOrAuthor}`.toLowerCase().includes(options.searchQuery.toLowerCase()));
+function computeCandidateEvidenceAssessment(
+  sources: MarketplaceObservation[],
+  category: string,
+  now: number
+): {
+  evidenceStatus: 'CURRENT_CHART' | 'REVIEWED_FALLBACK';
+  evidenceLabel: CandidateEvidenceLabel;
+  evidenceStrength: CandidateEvidenceStrength;
+  productSuitability: CandidateProductSuitability;
+  factorAssessments: ScoreFactorAssessment[];
+  independentChainIds: string[];
+  scoreBreakdown: TopicCandidate['scoreBreakdown'];
+  confidenceRating: TopicCandidate['confidenceRating'];
+  canReceiveVerifiedBadge: boolean;
+  recommendationReason: string;
+} {
+  const sorted = [...sources].sort((a, b) => (a.observedRank || 999) - (b.observedRank || 999));
+  const collectorVerified = sorted.filter((s) => isCurrentMarketEvidence(s, now));
+  const manualReviewed = sorted.filter((s) => isReviewedFallbackEvidence(s));
+
+  // Deduplicate overlapping reports sharing an underlying dataset chain
+  const independentChainIds = Array.from(
+    new Set(sorted.map((s) => (s.evidenceChainId || s.id).trim()))
+  );
+
+  // Representative top observation per independent chain so duplicate articles cannot double-count
+  const bestPerChain = independentChainIds.map((chainId) => {
+    const matching = sorted.filter((s) => (s.evidenceChainId || s.id).trim() === chainId);
+    return matching[0];
+  });
+
+  const bestLive = collectorVerified[0];
+  const hasPrimaryManual = manualReviewed.some(
+    (s) =>
+      inferObservationDefaults(s).sourceClass === 'primary_marketplace' &&
+      inferObservationDefaults(s).evidenceType === 'official_ranking'
+  );
+  const hasReportedRank = manualReviewed.some(
+    (s) => inferObservationDefaults(s).evidenceType === 'reported_ranking'
+  );
+
+  let evidenceLabel: CandidateEvidenceLabel;
+  let evidenceStatus: 'CURRENT_CHART' | 'REVIEWED_FALLBACK';
+  let demandSignal = 0;
+  let demandBasis = '';
+  let demandStatus: ScoreFactorAssessment['status'] = 'UNMEASURED';
+  let demandUncertainty = '';
+
+  if (collectorVerified.length > 0 && bestLive) {
+    evidenceLabel = 'CURRENT_OFFICIAL_CHART';
+    evidenceStatus = 'CURRENT_CHART';
+    const rankScore = bestLive.observedRank ? Math.max(4, 26 - Math.ceil(bestLive.observedRank / 4)) : 10;
+    const chainBonus = Math.min(3, Math.max(0, independentChainIds.length - 1));
+    demandSignal = Math.min(25, rankScore + chainBonus);
+    demandStatus = 'MEASURED';
+    demandBasis = `${collectorVerified.length} collector-verified official chart position(s) across ${independentChainIds.length} independent evidence chain(s); top rank #${bestLive.observedRank} (${bestLive.marketplace}).`;
+    demandUncertainty = 'Point-in-time chart position only; unit sales volume, revenue, pricing elasticity, and conversion are NOT measured.';
+  } else if (hasPrimaryManual) {
+    evidenceLabel = 'MANUALLY_REVIEWED_PRIMARY';
+    evidenceStatus = 'REVIEWED_FALLBACK';
+    const ranked = manualReviewed.filter((s) => s.observedRank && s.observedRank > 0);
+    const topRank = ranked[0]?.observedRank;
+    demandSignal = topRank ? Math.min(18, Math.max(6, 20 - Math.ceil(topRank / 5))) : 10;
+    demandStatus = 'REVIEWED_SIGNAL';
+    demandBasis = `Manually reviewed primary marketplace observation(s) (${manualReviewed.length} record(s), ${independentChainIds.length} independent chain(s)). Not collector-verified.`;
+    demandUncertainty = 'Captured via manual observation or import; verify currency and marketplace scope before assuming active velocity.';
+  } else if (hasReportedRank) {
+    evidenceLabel = 'SECONDARY_REPORTED_RANKING';
+    evidenceStatus = 'REVIEWED_FALLBACK';
+    const ranked = manualReviewed.filter((s) => s.observedRank && s.observedRank > 0);
+    const topRank = ranked[0]?.observedRank;
+    demandSignal = topRank ? Math.min(14, Math.max(5, 16 - Math.ceil(topRank / 6))) : 8;
+    demandStatus = 'REVIEWED_SIGNAL';
+    demandBasis = `Secondary reported ranking (${manualReviewed.length} record(s), ${independentChainIds.length} unique chain(s)). Editorial or combined print/ebook scopes do not isolate digital marketplace rank.`;
+    demandUncertainty = 'Secondary report / combined-format scope; cannot be treated as a current digital bestseller proof.';
+  } else {
+    evidenceLabel = 'SUPPORTING_INTEREST_SIGNAL';
+    evidenceStatus = 'REVIEWED_FALLBACK';
+    demandSignal = Math.min(10, 4 + independentChainIds.length * 2);
+    demandStatus = 'REVIEWED_SIGNAL';
+    demandBasis = `Supporting interest or estimate signal (${manualReviewed.length} reviewed record(s), ${independentChainIds.length} unique chain(s)).`;
+    demandUncertainty = 'Interest indices or third-party estimates indicate topic attention only, not verified purchasing demand.';
+  }
+
+  const oldestDataDate = sorted
+    .map((s) => Date.parse(s.dataAsOfDate || s.observedAt))
+    .filter((ms) => Number.isFinite(ms))
+    .sort((a, b) => a - b)[0];
+  const ageHours = Number.isFinite(oldestDataDate)
+    ? Math.max(0, Math.round((now - oldestDataDate) / (60 * 60 * 1000)))
+    : null;
+
+  const hasCombinedPrintScope = sorted.some((s) =>
+    /combined|print/i.test(`${s.rankScope || ''} ${s.productFormat || ''}`)
+  );
+
+  const evidenceStrength: CandidateEvidenceStrength = {
+    overallLevel:
+      collectorVerified.length > 0 && independentChainIds.length >= 1
+        ? 'STRONG_CURRENT'
+        : hasPrimaryManual || hasReportedRank
+        ? 'MODERATE_REVIEWED'
+        : 'LIMITED_SUPPORTING',
+    collectorVerifiedCount: collectorVerified.length,
+    manuallyReviewedCount: manualReviewed.length,
+    independentChainCount: independentChainIds.length,
+    credibilityBasis:
+      collectorVerified.length > 0
+        ? `Live collector-verified official chart feed (${[...new Set(collectorVerified.map((s) => s.marketplace))].join(', ')})`
+        : manualReviewed.length > 0
+        ? `Human-inspected ${evidenceLabel.toLowerCase().replaceAll('_', ' ')} (${[...new Set(manualReviewed.map((s) => s.marketplace))].join(', ')})`
+        : 'Unverified',
+    methodologySummary: [...new Set(bestPerChain.map((s) => s.collectionMethodology || s.collector || s.acquisitionMethod || 'manual_observation'))].join('; '),
+    recencySummary:
+      ageHours === null
+        ? 'Data-as-of date unavailable'
+        : ageHours <= 48
+        ? `Data within ${ageHours}h window of retrieval`
+        : `Data age ~${Math.round(ageHours / 24)}d (review recency before relying on snapshot)`,
+    scopeFitSummary: hasCombinedPrintScope
+      ? `Includes combined print/ebook or curated report scope mapped to ${category.replaceAll('_', ' ')} — isolate digital applicability carefully.`
+      : `Educational category match (${category.replaceAll('_', ' ')}); general store ranks do not measure niche buyer conversion.`,
+    corroborationSummary:
+      independentChainIds.length < sorted.length
+        ? `${sorted.length} record(s) collapsed into ${independentChainIds.length} independent evidence chain(s) so shared datasets are not double-counted.`
+        : `${independentChainIds.length} distinct evidence chain(s) linked without duplicate dataset inflation.`,
+  };
+
+  const blueprint = NICHE_BLUEPRINTS[category];
+  const productSuitability: CandidateProductSuitability = {
+    readinessStatus: 'HYPOTHESIS_NEEDS_VALIDATION',
+    audienceProblemClarity: blueprint
+      ? `Draft concept hypothesis addresses: ${blueprint.coreProblem}`
+      : 'Educational concept hypothesis drafted; target problem needs direct reader validation.',
+    differentiationHypothesis: blueprint
+      ? blueprint.differentiationAngle
+      : 'Original worked examples, cited explanations, and companion worksheets.',
+    creatorFitStatus: 'UNMEASURED',
+    creatorFitNote:
+      'Creator workflow capability is production coordination; domain expertise, credentials, and customer outcomes are NOT pre-assumed and must be supplied or researched intentionally.',
+    productionEffort: 'MODERATE',
+    nextValidationStep:
+      collectorVerified.length > 0
+        ? 'Inspect top 3 ranked listings manually for pricing, table-of-contents gaps, and negative reader reviews before locking Project Brief.'
+        : 'Capture at least one primary digital marketplace chart or run direct buyer interviews to validate willingness to pay before committing production time.',
+  };
+
+  // Strict honesty rubric: ONLY directly measured/reviewed demand receives numeric points.
+  // Unmeasured dimensions remain 0 with explicit UNMEASURED status & uncertainty disclosures.
+  const factorAssessments: ScoreFactorAssessment[] = [
+    {
+      key: 'demandSignal',
+      label: 'Demand signal',
+      score: demandSignal,
+      maxScore: 25,
+      status: demandStatus,
+      basis: demandBasis,
+      uncertainty: demandUncertainty,
+    },
+    {
+      key: 'problemUrgency',
+      label: 'Problem urgency',
+      score: null,
+      maxScore: 15,
+      status: 'UNMEASURED',
+      basis: 'No customer interview, survey, or conversion dataset recorded yet.',
+      uncertainty: 'Unmeasured — confirm problem urgency directly with target readers.',
+    },
+    {
+      key: 'competitionEntry',
+      label: 'Competition entry',
+      score: null,
+      maxScore: 15,
+      status: 'UNMEASURED',
+      basis: 'Competitor pricing distribution, review depth, and saturation are not systematically measured.',
+      uncertainty: 'Unmeasured — manually inspect competing listings and reviews before positioning.',
+    },
+    {
+      key: 'differentiation',
+      label: 'Differentiation',
+      score: null,
+      maxScore: 15,
+      status: 'UNMEASURED',
+      basis: 'Proposed differentiation angle is an unvalidated editorial hypothesis.',
+      uncertainty: 'Unmeasured — verify whether buyers value the proposed companion toolkit angle.',
+    },
+    {
+      key: 'creatorFit',
+      label: 'Creator fit',
+      score: null,
+      maxScore: 10,
+      status: 'UNMEASURED',
+      basis: 'Creator coordinates production workflows; subject expertise is not pre-assumed.',
+      uncertainty: 'Unmeasured — assess source availability and review capacity in Reference Library.',
+    },
+    {
+      key: 'audienceReach',
+      label: 'Audience reach',
+      score: null,
+      maxScore: 10,
+      status: 'UNMEASURED',
+      basis: 'No existing owned audience, distribution channel, or ad CAC test recorded.',
+      uncertainty: 'Unmeasured — no audience has been approved or measured yet.',
+    },
+    {
+      key: 'digitalFit',
+      label: 'Digital-product fit',
+      score: null,
+      maxScore: 5,
+      status: 'UNMEASURED',
+      basis: 'Format suitability inferred conceptually only; digital delivery willingness untested.',
+      uncertainty: 'Unmeasured — validate preferred format (ebook vs templates/worksheets) with buyers.',
+    },
+    {
+      key: 'costRisk',
+      label: 'Cost / risk',
+      score: null,
+      maxScore: 5,
+      status: 'UNMEASURED',
+      basis: 'Time, licensing, and acquisition cost risk not yet quantified.',
+      uncertainty: 'Unmeasured — estimate production budget and price elasticity directly.',
+    },
+  ];
+
+  const scoreBreakdown: TopicCandidate['scoreBreakdown'] = {
+    demandSignal,
+    problemUrgency: 0,
+    competitionEntry: 0,
+    differentiation: 0,
+    creatorFit: 0,
+    audienceReach: 0,
+    digitalFit: 0,
+    costRisk: 0,
+  };
+
+  const canReceiveVerifiedBadge = collectorVerified.length > 0;
+  const confidenceRating: TopicCandidate['confidenceRating'] =
+    collectorVerified.length > 0 && independentChainIds.length >= 2
+      ? 'HIGH'
+      : 'MEDIUM';
+
+  const recommendationReason =
+    collectorVerified.length > 0
+      ? `${collectorVerified.length} collector-verified official chart record(s) across ${independentChainIds.length} independent evidence chain(s) (top observed rank #${bestLive.observedRank}). Only demand signal is scored from observed rank; urgency, competition, differentiation, creator fit, audience reach, and cost risk remain unmeasured hypotheses.`
+      : `${manualReviewed.length} manually reviewed fallback evidence record(s) across ${independentChainIds.length} chain(s) (${evidenceLabel.toLowerCase().replaceAll('_', ' ')}). Not collector-verified and not a proven current bestseller; validate pricing and buyer demand directly before publishing.`;
+
+  return {
+    evidenceStatus,
+    evidenceLabel,
+    evidenceStrength,
+    productSuitability,
+    factorAssessments,
+    independentChainIds,
+    scoreBreakdown,
+    confidenceRating,
+    canReceiveVerifiedBadge,
+    recommendationReason,
+  };
+}
+
+export function deriveSynchronizedCandidates(
+  observations: MarketplaceObservation[] = [],
+  options?: MarketSyncOptions,
+  now = Date.now()
+): TopicCandidate[] {
+  const eligible = observations
+    .filter((o) => isGateAQualifiedEvidence(o, now) && observationCategory(o) !== 'other')
+    .filter((o) => !options?.focusMarketplace || options.focusMarketplace === 'ALL' || o.marketplace === options.focusMarketplace)
+    .filter((o) => !options?.category || options.category === 'ALL' || observationCategory(o) === options.category)
+    .filter(
+      (o) =>
+        !options?.searchQuery ||
+        `${o.productTitle} ${o.category} ${o.sellerOrAuthor}`
+          .toLowerCase()
+          .includes(options.searchQuery.toLowerCase())
+    );
+
   const groups = new Map<string, MarketplaceObservation[]>();
-  for (const obs of eligible) { const category = observationCategory(obs); groups.set(category, [...(groups.get(category) || []), obs]); }
+  for (const obs of eligible) {
+    const category = observationCategory(obs);
+    groups.set(category, [...(groups.get(category) || []), obs]);
+  }
+
+  const badgeEligibility = new Map<string, boolean>();
+
   const candidates: TopicCandidate[] = [...groups.entries()].map(([category, sources]) => {
-    const sortedSources = [...sources].sort((a, b) => (a.observedRank || 100) - (b.observedRank || 100));
-    const best = sortedSources[0];
-    const label = MARKET_CATEGORIES.find(c => c.id === category)?.labelEn || category;
+    const sortedSources = [...sources].sort((a, b) => (a.observedRank || 999) - (b.observedRank || 999));
+    const label = MARKET_CATEGORIES.find((c) => c.id === category)?.labelEn || category;
     const blueprint = NICHE_BLUEPRINTS[category];
+    const assessment = computeCandidateEvidenceAssessment(sortedSources, category, now);
+    const id = `NICHE-${category}`;
+    badgeEligibility.set(id, assessment.canReceiveVerifiedBadge);
+
     return {
-      id: `NICHE-${category}`,
+      id,
       marketCategory: category,
-      evidenceStatus: 'CURRENT_CHART',
+      evidenceStatus: assessment.evidenceStatus,
+      evidenceLabel: assessment.evidenceLabel,
+      evidenceStrength: assessment.evidenceStrength,
+      productSuitability: assessment.productSuitability,
+      factorAssessments: assessment.factorAssessments,
+      independentChainIds: assessment.independentChainIds,
       title: blueprint?.title || `${label}: Practical Learning Toolkit`,
-      subtitle: blueprint?.subtitle || 'Original product concept informed by current marketplace chart observations',
-      targetAudience: blueprint?.targetAudience || `Readers researching ${label.toLowerCase()}; validate the specific buyer with interviews.`,
-      coreProblem: blueprint?.coreProblem || `Identify and validate a specific learning obstacle in ${label.toLowerCase()}.`,
-      bigPromise: blueprint?.bigPromise || 'Learn, practice, and evaluate a clearly scoped skill; outcomes require validation.',
+      subtitle: blueprint?.subtitle || 'Original product hypothesis informed by linked Gate A evidence',
+      targetAudience:
+        blueprint?.targetAudienceHypothesis ||
+        `Readers researching ${label.toLowerCase()}; audience remains a hypothesis until validated directly.`,
+      coreProblem:
+        blueprint?.coreProblem || `Define and validate a concrete learner bottleneck in ${label.toLowerCase()}.`,
+      bigPromise:
+        blueprint?.bigPromise || 'Practice and evaluate a clearly scoped workflow; buyer outcomes require direct validation.',
       suggestedFormat: blueprint?.suggestedFormat || 'ebook_toolkit',
       priceTestRange: blueprint?.priceTestRange || { test: 9, regular: 19, premium: 29 },
-      marketEvidenceSummary: sortedSources.slice(0, 5).map(o => `${o.marketplace}: #${o.observedRank} — ${o.productTitle} (${o.observedAt}; ${o.rankScope})`).join(' · '),
+      marketEvidenceSummary: sortedSources
+        .slice(0, 6)
+        .map((o) => {
+          const rankPart = o.observedRank ? `#${o.observedRank}` : o.metricValue ? `${o.metricName || 'Metric'}: ${o.metricValue} ${o.metricUnit || ''}`.trim() : 'Manual note';
+          return `[${o.id}] ${o.marketplace}: ${rankPart} — ${o.productTitle} (as of ${o.dataAsOfDate || o.observedAt}; ${o.rankScope || o.category})`;
+        })
+        .join(' · '),
       competitiveDensity: 'MEDIUM',
-      differentiationAngle: blueprint?.differentiationAngle || 'Develop original worked examples, cited explanations, and practical exercises; do not reproduce marketplace books.',
+      differentiationAngle:
+        blueprint?.differentiationAngle ||
+        'Develop original worked examples, cited explanations, and practical exercises; do not reproduce marketplace books.',
       creationComplexity: 'MODERATE',
-      potentialCompanions: blueprint?.potentialCompanions || [`${label} practice workbook`, 'Decision worksheet', 'Progress and reflection log'],
-      confidenceRating: 'MEDIUM',
+      potentialCompanions: blueprint?.potentialCompanions || [
+        `${label} practice workbook`,
+        'Decision worksheet',
+        'Progress and reflection log',
+      ],
+      confidenceRating: assessment.confidenceRating,
       opportunityScore: 0,
-      scoreBreakdown: { demandSignal: Math.max(1, 26 - Math.ceil(best.observedRank! / 4)), problemUrgency: 0, competitionEntry: 0, differentiation: 0, creatorFit: 0, audienceReach: 0, digitalFit: 0, costRisk: 0 },
-      recommendationReason: `${sources.length} current chart observation(s) captured across live charts (top signal #${best.observedRank}). Only demand is scored; competition, creator fit, pricing and outcome claims are unvalidated. A new concept is not itself a bestseller.`,
-      sourceObservationIds: sortedSources.map(o => o.id),
+      scoreBreakdown: assessment.scoreBreakdown,
+      recommendationReason: assessment.recommendationReason,
+      researchGapNote:
+        assessment.evidenceStatus === 'CURRENT_CHART'
+          ? 'Observed chart ranks establish marketplace visibility, not unit economics or creator-audience fit.'
+          : 'Based on manually reviewed fallback records rather than a current live collector chart; review source scope and validate buyer willingness.',
+      sourceObservationIds: sortedSources.map((o) => o.id),
     };
   });
-  const ranked = rankAndBadgeCandidates(candidates).map(c => ({...c, badge: c.badge === 'BEST_OVERALL' ? c.badge : undefined}));
-  // User preference changes display order only, never evidence scores or verification status.
-  if (options?.prioritizedObservationId) ranked.sort((a,b) => Number(b.sourceObservationIds.includes(options.prioritizedObservationId!)) - Number(a.sourceObservationIds.includes(options.prioritizedObservationId!)));
+
+  // Ranking preserves transparent scoreBreakdown, and NEVER grants verified badge without collector-verified evidence
+  const ranked = rankAndBadgeCandidates(candidates).map((c) => ({
+    ...c,
+    badge: c.badge === 'BEST_OVERALL' && badgeEligibility.get(c.id) ? c.badge : undefined,
+  }));
+
+  // User display preference changes display sort order ONLY — never scores, evidenceStrength, or badges!
+  if (options?.prioritizedObservationId) {
+    ranked.sort(
+      (a, b) =>
+        Number(b.sourceObservationIds.includes(options.prioritizedObservationId!)) -
+        Number(a.sourceObservationIds.includes(options.prioritizedObservationId!))
+    );
+  }
+
   return ranked;
 }
-export function getLinkedObservationForCandidate(candidate: TopicCandidate, observations: MarketplaceObservation[] = []): MarketplaceObservation | null {
-  return observations.find(o => candidate.sourceObservationIds.includes(o.id)) || null;
+
+export function getLinkedObservationForCandidate(
+  candidate: TopicCandidate,
+  observations: MarketplaceObservation[] = []
+): MarketplaceObservation | null {
+  return observations.find((o) => candidate.sourceObservationIds.includes(o.id)) || null;
 }
+
 export async function runAutomatedMarketDiscovery(options?: MarketSyncOptions) {
   const response = await apiFetch('/api/market/research');
   if (!response.ok) {
@@ -373,22 +772,78 @@ export async function runAutomatedMarketDiscovery(options?: MarketSyncOptions) {
   }
   const data = await response.json();
   const observations: MarketplaceObservation[] = data.observations || [];
-  return { observations, candidates: deriveSynchronizedCandidates(observations, options), sources: data.sources || [], checkedAt: data.checkedAt };
+  const resourceDirectory: GateAResourceEntry[] = mergeResourceDirectory(data.resourceDirectory);
+  return {
+    observations,
+    candidates: deriveSynchronizedCandidates(observations, options),
+    sources: data.sources || [],
+    resourceDirectory,
+    checkedAt: data.checkedAt,
+  };
 }
-export function propagateTopicToDownstream(project: DigitalProductProject, selectedTopicId: string, lang: Language = 'en'): DigitalProductProject {
-  const candidate = project.marketResearch.topicCandidates.find(c => c.id === selectedTopicId);
+
+export async function checkSeedResourceDirectory(): Promise<{
+  checkedAt: string;
+  resources: GateAResourceEntry[];
+}> {
+  const response = await apiFetch('/api/market/resources/check', { method: 'POST' });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Resource accessibility check failed.');
+  }
+  return response.json();
+}
+
+export function propagateTopicToDownstream(
+  project: DigitalProductProject,
+  selectedTopicId: string,
+  lang: Language = 'en'
+): DigitalProductProject {
+  const candidate = project.marketResearch.topicCandidates.find((c) => c.id === selectedTopicId);
   if (!candidate) return project;
-  if (project.marketResearch.selectedTopicId === selectedTopicId && project.charter.productTitle === candidate.title) return project;
+  if (
+    project.marketResearch.selectedTopicId === selectedTopicId &&
+    project.charter.productTitle === candidate.title
+  ) {
+    return project;
+  }
+
   const next = structuredClone(BLANK_PROJECT);
   const blueprint = candidate.marketCategory ? NICHE_BLUEPRINTS[candidate.marketCategory] : undefined;
   const defaultChapters = [
-    { title: 'Foundations and learning goals', objective: `Establish baseline clarity and measurable outcomes in ${candidate.marketCategory?.replaceAll('_', ' ') || 'this domain'}.`, deliverable: 'Baseline Readiness Worksheet', milestone: 'Document starting metrics and key goals.' },
-    { title: 'Core concepts and evidence', objective: 'Examine evidence-backed principles and common misconceptions before implementation.', deliverable: 'Evidence & Myth-Busting Checklist', milestone: 'Map core principles to verified research sources.' },
-    { title: 'Worked example and guided practice', objective: 'Walk through a realistic end-to-end scenario step by step.', deliverable: 'Guided Scenario Workbook', milestone: 'Complete the worked example using your own inputs.' },
-    { title: 'Independent application and review', objective: 'Apply the method independently and evaluate results against clear criteria.', deliverable: 'Self-Audit & Calibration Scorecard', milestone: 'Complete the exercise and compare it with the stated learning objective.' },
+    {
+      title: 'Foundations and learning goals',
+      objective: `Establish baseline clarity and measurable outcomes in ${candidate.marketCategory?.replaceAll('_', ' ') || 'this domain'}.`,
+      deliverable: 'Baseline Readiness Worksheet',
+      milestone: 'Document starting metrics and key goals.',
+    },
+    {
+      title: 'Core concepts and evidence',
+      objective: 'Examine evidence-backed principles and common misconceptions before implementation.',
+      deliverable: 'Evidence & Myth-Busting Checklist',
+      milestone: 'Map core principles to verified research sources.',
+    },
+    {
+      title: 'Worked example and guided practice',
+      objective: 'Walk through a realistic end-to-end scenario step by step.',
+      deliverable: 'Guided Scenario Workbook',
+      milestone: 'Complete the worked example using your own inputs.',
+    },
+    {
+      title: 'Independent application and review',
+      objective: 'Apply the method independently and evaluate results against clear criteria.',
+      deliverable: 'Self-Audit & Calibration Scorecard',
+      milestone: 'Complete the exercise and compare it with the stated learning objective.',
+    },
   ];
   const chapterSpecs = blueprint?.chapters || defaultChapters;
-  const structuralPillars = chapterSpecs.map(c => c.title);
+  const structuralPillars = chapterSpecs.map((c) => c.title);
+
+  // Preserve creator's real self-reported background if already provided; NEVER invent expertise or customer results
+  const existingCreatorName = (project.intake?.creatorName || '').trim();
+  const existingExperience = (project.intake?.relevantExperience || '').trim();
+  const existingExpertise = (project.intake?.expertise || '').trim();
+
   return {
     ...next,
     projectId: project.projectId,
@@ -403,6 +858,9 @@ export function propagateTopicToDownstream(project: DigitalProductProject, selec
     intake: {
       ...next.intake,
       projectName: candidate.title,
+      creatorName: existingCreatorName,
+      relevantExperience: existingExperience,
+      expertise: existingExpertise,
       productIdea: `${candidate.title} — ${candidate.subtitle}`,
       targetAudience: candidate.targetAudience,
       problemsSolved: candidate.coreProblem,
@@ -413,13 +871,15 @@ export function propagateTopicToDownstream(project: DigitalProductProject, selec
         regular: candidate.priceTestRange.regular,
         premiumBundle: candidate.priceTestRange.premium,
         currency: 'USD',
-        rationale: `Pre-populated 3-tier launch ladder grounded in ${candidate.marketCategory?.replaceAll('_', ' ') || 'digital product'} packaging (${candidate.suggestedFormat}); adjust after buyer validation.`,
+        rationale: `Draft 3-tier price test range for ${candidate.suggestedFormat}; validate buyer willingness directly before launch.`,
       },
     },
     uvz: {
       ...next.uvz,
-      buyerProblems: [candidate.coreProblem, 'Overwhelm from scattered, non-actionable advice without templates'],
+      buyerProblems: [candidate.coreProblem],
       potentialSolutions: [candidate.bigPromise, candidate.differentiationAngle],
+      creatorExpertiseFit:
+        'Workflow and production coordination led by the creator; factual claims must be grounded in retrieved Gate B research sources rather than assumed expertise.',
       differentiationOpportunities: candidate.potentialCompanions,
     },
     transformationMap: {
@@ -427,19 +887,19 @@ export function propagateTopicToDownstream(project: DigitalProductProject, selec
       beforeState: {
         ...next.transformationMap.beforeState,
         currentPains: [candidate.coreProblem],
-        anxietiesAndFrustrations: ['Piecing together generic tips without an actionable roadmap'],
+        anxietiesAndFrustrations: ['Unstructured workflow or scattered instructions without companion worksheets'],
       },
       bridgeProcess: {
         ...next.transformationMap.bridgeProcess,
         coreMethodology: candidate.differentiationAngle,
         signatureFrameworkName: candidate.title,
-        keyMilestones: chapterSpecs.map(c => `${c.title}: ${c.deliverable}`),
+        keyMilestones: chapterSpecs.map((c) => `${c.title}: ${c.deliverable}`),
         practicalTools: candidate.potentialCompanions,
       },
       afterState: {
         ...next.transformationMap.afterState,
         tangibleOutcomes: [candidate.bigPromise],
-        completedDeliverables: chapterSpecs.map(c => c.deliverable),
+        completedDeliverables: chapterSpecs.map((c) => c.deliverable),
       },
       bigPromise: candidate.bigPromise,
     },
@@ -449,7 +909,7 @@ export function propagateTopicToDownstream(project: DigitalProductProject, selec
       regularPrice: candidate.priceTestRange.regular,
       bundlePrice: candidate.priceTestRange.premium,
       currency: 'USD',
-      rationale: `Entry test tier ($${candidate.priceTestRange.test}) lowers friction, Core ($${candidate.priceTestRange.regular}) anchors the main guide, and VIP Bundle ($${candidate.priceTestRange.premium}) monetizes companion templates & trackers.`,
+      rationale: `Hypothesis test pricing ($${candidate.priceTestRange.test} / $${candidate.priceTestRange.regular} / $${candidate.priceTestRange.premium}); subject to market and margin calibration.`,
     },
     charter: {
       ...next.charter,
@@ -460,8 +920,11 @@ export function propagateTopicToDownstream(project: DigitalProductProject, selec
       centralPromise: candidate.bigPromise,
       deliveryFormat: candidate.suggestedFormat,
       structuralPillars,
-      learningObjectives: chapterSpecs.map(c => c.objective),
-      explicitDisclaimers: ['Educational material; validate source claims and consult qualified professionals where needed.'],
+      learningObjectives: chapterSpecs.map((c) => c.objective),
+      explicitDisclaimers: [
+        'Educational material; validate source claims and consult qualified professionals where needed.',
+        'Market research informs this concept hypothesis; no sales or buyer outcomes are guaranteed.',
+      ],
       isApproved: false,
     },
     outline: chapterSpecs.map((spec, index) => ({

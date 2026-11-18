@@ -263,28 +263,41 @@ export const StudioCalibrationRadar: React.FC<{
  */
 export const ScoreSpectrumBars: React.FC<{
   breakdown: TopicCandidate['scoreBreakdown'];
+  factorAssessments?: TopicCandidate['factorAssessments'];
   lang?: Language;
-}> = ({ breakdown, lang = 'en' }) => {
-  const rows = [
+}> = ({ breakdown, factorAssessments, lang = 'en' }) => {
+  const byKey = new Map((factorAssessments || []).map((f) => [f.key, f]));
+
+  const rows: Array<{
+    key: keyof TopicCandidate['scoreBreakdown'];
+    label: string;
+    val: number;
+    max: number;
+    color: string;
+  }> = [
     {
+      key: 'demandSignal',
       label: lang === 'en' ? 'Demand Signal' : '市場需求',
       val: breakdown.demandSignal,
       max: 25,
       color: '#0284c7',
     },
     {
+      key: 'problemUrgency',
       label: lang === 'en' ? 'Urgency' : '痛點急迫',
       val: breakdown.problemUrgency,
       max: 15,
       color: '#0f766e',
     },
     {
+      key: 'competitionEntry',
       label: lang === 'en' ? 'Entry Window' : '切入空間',
       val: breakdown.competitionEntry,
       max: 15,
       color: '#059669',
     },
     {
+      key: 'differentiation',
       label: lang === 'en' ? 'Differentiation' : '差異化度',
       val: breakdown.differentiation,
       max: 15,
@@ -295,14 +308,22 @@ export const ScoreSpectrumBars: React.FC<{
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {rows.map((r) => {
-        const pct = Math.max(0, Math.min(100, Math.round((r.val / r.max) * 100)));
+        const assessment = byKey.get(r.key);
+        const isUnmeasured = assessment ? assessment.status === 'UNMEASURED' : r.key !== 'demandSignal' && r.val === 0;
+        const pct = isUnmeasured ? 0 : Math.max(0, Math.min(100, Math.round((r.val / r.max) * 100)));
         return (
-          <div key={r.label} className="p-3 bg-slate-50/90 rounded-lg border border-slate-200/80 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-medium text-slate-600">{r.label}</span>
-              <span className="font-mono font-bold text-slate-900 tabular-nums">
-                {r.val}/{r.max}
-              </span>
+          <div key={r.key} className="p-3 bg-slate-50/90 rounded-lg border border-slate-200/80 space-y-1.5">
+            <div className="flex items-center justify-between gap-1 text-xs">
+              <span className="font-medium text-slate-600 truncate">{r.label}</span>
+              {isUnmeasured ? (
+                <span className="font-mono text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                  {lang === 'en' ? 'Unmeasured' : '未實測'}
+                </span>
+              ) : (
+                <span className="font-mono font-bold text-slate-900 tabular-nums">
+                  {r.val}/{r.max}
+                </span>
+              )}
             </div>
             <div className="w-full h-2 bg-slate-200/70 rounded-sm overflow-hidden">
               <div

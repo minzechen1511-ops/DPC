@@ -1,33 +1,35 @@
 # Marketplace research and learning bundles
 
-Run Node.js 24, `bun install --frozen-lockfile`, then `npm run dev`. Validate with `npm test`, `npm run lint` and `npm run build`.
+Verified local runtime: **Node v22.23.2** and **Bun 1.4.4** (`bun install --frozen-lockfile`, `npm run dev`, `npm test`, `npm run lint`, `npm run build`). Server binds to `0.0.0.0` on `PORT` (default `3000`).
 
-## Live evidence
+## Gate A Resource Directory & Live Collectors
 
-`GET /api/market/research` checks five fixed public source URLs. It uses the inherited HTTPS proxy and TLS trust, refuses redirects and arbitrary URL input, limits response size, times out after 15 seconds, coalesces concurrent requests, and caches successful research for 15 minutes (unavailable results for one minute).
+`GET /api/market/research` and `POST /api/market/resources/check` run strictly on the server using `EnvHttpProxyAgent` / `Agent` with public DNS lookup validation (blocking private/loopback/link-local IPs), TLS verification, 3 MB response limits, and 15-second timeouts.
 
-- Apple Books: official US top-paid-books feed. Capture position and feed update time. Reject feeds older than 48 hours; never infer prices, reviews, sales or revenue.
-- Amazon Kindle: public Best Sellers chart. Extract only explicitly numbered chart cards with ASIN product links. Captchas, access restrictions and layout changes produce an unavailable/no-ranking status. Do not bypass them.
-- Gumroad, Etsy, Payhip: inspect public discovery/marketplace access and report status. No supported public ranking collector exists here. Search placement, featured products, seller statements, reviews and marketplace-wide popularity never become verified bestseller records.
+Seeded Gate A research resources:
 
-Required outbound hosts: `rss.applemarketingtools.com`, `books.apple.com`, `www.amazon.com`, `gumroad.com`, `www.etsy.com`, `payhip.com`. Source-site and proxy restrictions still apply. This cloud instance returned HTTP 403 for the required destinations during development; live data was not validated here. Add required domains through environment settings. No paid marketplace API credentials are configured or requested by this implementation.
+1. **Apple Books US Top Paid (`https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json`)**: Official chart collector. Handles the canonical 301 relocation to `https://rss.marketingtools.apple.com/api/v2/us/books/top-paid/100/books.json` safely, preserves `dataAsOfDate` (`feed.updated`) separately from HTTP `retrievedAt`, rejects feeds older than 48 hours, and never infers sales, price, or reviews.
+2. **Amazon Kindle Best Sellers (`https://www.amazon.com/Best-Sellers-Kindle-Store/zgbs/digital-text` + educational subcharts)**: Official chart collector. Requires explicitly numbered rank badges (`.zg-bdg-text`) paired with canonical `/dp/{ASIN}` links. Robot checks, CAPTCHAs, or missing rank structures fail cleanly without fabricating substitutes.
+3. **The New York Times Best Sellers (`https://www.nytimes.com/books/best-sellers/`)**: Secondary editorial report. Preserves exact list scope (e.g., combined print-and-ebook lists are never treated as digital-only marketplace rankings).
+4. **Keepa (`https://keepa.com/`)**: Secondary historical/tracking report requiring explicit provenance (`historical`, `estimated`, `subscription_only`, or `authorized_api`).
+5. **Supporting Interest & Discovery (`Google Trends`, `Etsy digital_downloads`, `Etsy Seller Handbook`, `Gumroad Discover`, `Payhip Marketplace`)**: Supporting context only. Discovery placement, featured badges, and self-reported creator claims never become collector-verified rankings.
 
-Gate A accepts only supported source provenance and rankings captured within 48 hours. Fiction and unknown categories are excluded from educational niche proposals. Category, marketplace, query and prioritized observation filters operate on the exact MTRE observations, not a fixed candidate catalog. Only observed demand is scored; user preference changes order without inflating evidence. A proposed original product is not a bestseller, and rankings do not guarantee its sales.
+An HTTP 200 check proves network reachability only; it never verifies page claims or bestseller status.
 
-## Review chain
+## Manual Evidence Review & CSV/JSON Import
 
-Selecting a different niche initializes an empty topic-specific manuscript plan; it does not invent research, author credentials, references, manuscripts, sales results or gate approvals. Export the previous project's backup before switching niches.
+When external platforms block automated fetchers or provide context reports (NYT, Keepa, Google Trends, creator listings), use **Manual Evidence Review**:
 
-A: select a niche with current source-linked ranking evidence.
-B: approve A, define chapter objectives, retrieve original source text, retain exact excerpts and matching bibliography, explain relevance for each chapter, then explicitly approve the charter after a server source check. See [reference research and support](reference-research-and-support.md).
-C: approve B, complete substantive chapters and companions, review support for each cited passage against the retrieved excerpt, remove unresolved claims, and document image rights and paragraph placement. Source checks are repeated at approval and buyer export. Recheck before approval. Marketplace evidence can expire, invalidating readiness even after a prior approval.
+- Homepage URLs (`keepa.com/`, `trends.google.com/trends/`, `nytimes.com/books/best-sellers/`, etc.) and private network URLs are rejected.
+- Every record retains separate **Source Class**, **Acquisition Method** (`live_collector`, `manual_observation`, `file_import`), **Evidence Type**, and **Review Status** (`unverified`, `retrieved_checked`, `manually_reviewed`, `blocked`, `rejected`).
+- Manual entries and CSV/JSON imports always enter `unverified`, cannot be approved by a checkbox alone without an inspected excerpt, locator/attachment, and written rationale (>= 20 chars), and are never relabeled as live collector-verified.
+- Multiple articles derived from the same dataset share one `evidenceChainId` and collapse cleanly when evaluating Gate A recommendations so duplicated coverage never inflates scores.
 
-Upstream research and strategy changes revoke downstream approvals. Manuscript, illustration and resource changes revoke C. Existing imported/sample approvals cannot bypass the current policy at approval or bundle review time. These checks establish review completeness, not independent scientific or legal certification.
+## Evidence Strength vs. Product Suitability
 
-## Bundle
+Gate A separates **A. Evidence Strength** (credibility, recency, scope fit, and independent evidence chains) from **B. Product Suitability** (unvalidated audience/problem hypothesis and `UNMEASURED` creator fit). Only directly observed or human-reviewed demand contributes points (`demandSignal`, max 25); unmeasured factors remain labeled `Unmeasured` (`0`) until directly researched. Fiction and unknown categories are excluded. Legacy `isSample` records are excluded from real counts and cannot satisfy Gate A.
 
-Open `START-HERE.html` after extracting the complete ZIP. It links the complete e-book, individual chapter readers, chapter practice worksheets, progress CSV, authored companion tools and topic source reading room. Research records, source-access reports, author project backup, publication review and a SHA-256 manifest are included. Actual licensed image bytes are included separately and embedded in the book; no paid original publications or nonexistent ePubs/videos/spreadsheets are claimed.
+## Review Chain & Bundles
 
-The e-book uses real cited numeric tables for quantitative charts, manuscript lists for explicitly conceptual diagrams and author-supplied original/licensed PNG/JPEG/WebP images for pictures. Insert an exact paragraph anchor, source reference, alt text, caption, credit and rights in Content Studio. Pictures and figures appear beside related text on large screens and stack on narrow screens. Missing evidence is marked; no illustrative figure proves an empirical claim.
-
-Unapproved or incomplete projects remain downloadable as **author review** bundles for continued work. Buyer delivery status requires all current A/B/C checks and explicit C approval. Individual downloads are working author files.
+1. Upstream evidence edits or revocations invalidate affected Gate A, B, and C approvals.
+2. Bundle exports (`research/marketplace-evidence.json`, `review/publication-review.json`, and `START-HERE.html`) preserve live collector counts, manually reviewed counts, sample counts, and full observation provenance alongside integrity hashes (`manifest.json`).
