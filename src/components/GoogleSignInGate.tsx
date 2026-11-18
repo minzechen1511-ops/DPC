@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import {
   TrendingUp,
@@ -14,6 +14,7 @@ import { auth, googleProvider } from '../firebase.ts';
 import { StudioLogo } from './StudioLogo.tsx';
 import { Language } from '../utils/i18n.ts';
 import { ScientificWorkflowDiagram } from './ScientificVisuals.tsx';
+import { checkGeminiConfiguration, checkSignInDomain, DomainAccess } from '../utils/signInSetup.ts';
 
 interface GoogleSignInGateProps {
   lang: Language;
@@ -28,6 +29,25 @@ export const GoogleSignInGate: React.FC<GoogleSignInGateProps> = ({
 }) => {
   const [signingIn, setSigningIn] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(initialError);
+  const [domainAccess, setDomainAccess] = useState<DomainAccess | 'checking'>('checking');
+  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [checkingSetup, setCheckingSetup] = useState(false);
+  const hostname = window.location.hostname;
+  const projectId = auth.app.options.projectId || '';
+  const consoleUrl = `https://console.firebase.google.com/project/${encodeURIComponent(projectId)}/authentication/settings`;
+
+  const refreshSetup = async () => {
+    setCheckingSetup(true);
+    const [domain, gemini] = await Promise.all([
+      checkSignInDomain(auth.app.options.apiKey || '', window.location.href),
+      checkGeminiConfiguration(),
+    ]);
+    setDomainAccess(domain);
+    setGeminiConfigured(gemini);
+    setCheckingSetup(false);
+  };
+
+  useEffect(() => { void refreshSetup(); }, []);
 
   const handleGoogleSignIn = async () => {
     setSigningIn(true);
@@ -44,7 +64,16 @@ export const GoogleSignInGate: React.FC<GoogleSignInGateProps> = ({
       }
     } catch (err: any) {
       const code = err?.code || '';
-      if (code === 'auth/popup-closed-by-user') {
+      if (code === 'auth/unauthorized-domain') {
+        setDomainAccess('unauthorized');
+        setErrorMsg(lang === 'en'
+          ? `Google sign-in is blocked because ${hostname} is not authorized in Firebase. Follow the domain setup instructions below, then reload this Studio page.`
+          : `Firebase 尚未授權 ${hostname}，因此無法使用 Google 登入。請依下方網域設定說明操作，再重新載入此工作室頁面。`);
+      } else if (code === 'auth/operation-not-allowed') {
+        setErrorMsg(lang === 'en'
+          ? 'Enable the Google sign-in provider in Firebase Authentication > Sign-in method.'
+          : '請在 Firebase Authentication > 登入方式啟用 Google 登入供應商。');
+      } else if (code === 'auth/popup-closed-by-user') {
         setErrorMsg(
           lang === 'en'
             ? 'Sign-in window closed before completing authentication.'
@@ -158,14 +187,14 @@ export const GoogleSignInGate: React.FC<GoogleSignInGateProps> = ({
 
             <h1 className="text-3xl sm:text-4xl xl:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
               {lang === 'en'
-                ? 'Research, Author & Package Profitable Digital Products in One Studio'
-                : '一站式實證研究、撰寫並打包高變現商業數位商品'}
+                ? 'Research, Author & Package Digital Products in One Studio'
+                : '一站式實證研究、撰寫並打包數位商品'}
             </h1>
 
             <p className="text-base lg:text-lg text-slate-600 leading-relaxed max-w-5xl">
               {lang === 'en'
-                ? 'Sign in with your Google account to unlock live marketplace discovery, evidence-backed chapter generation using our managed Gemini token, and cloud-synced multi-project workspaces.'
-                : '登入您的 Google 帳戶即可啟用全套實證數位商品研發產線：直接調用伺服器端託管 Gemini Token 生成高精度電子書與實作工具包，並於雲端安全隔離同步。'}
+                ? 'Sign in with Google for your cloud workspace and marketplace research. AI generation uses a separately configured server-side Gemini API key.'
+                : '使用 Google 登入雲端工作區並進行市場研究。AI 內容生成使用另外設定於伺服器端的 Gemini API 金鑰。'}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -204,8 +233,8 @@ export const GoogleSignInGate: React.FC<GoogleSignInGateProps> = ({
                 </h2>
                 <p className="text-sm text-slate-600 leading-relaxed">
                   {lang === 'en'
-                    ? 'Your projects are isolated to your Google account in Cloud Firestore, with instant access to server-side Gemini AI generation.'
-                    : '所有專案將嚴格隔離並同步保存於您個人的雲端工作區，登入後即可立即使用 Gemini 進行商品開發。'}
+                    ? 'Your Google sign-in identifies your Cloud Firestore workspace. It does not provide a Gemini API key or transfer your Gemini subscription quota.'
+                    : 'Google 登入用於識別您的 Cloud Firestore 工作區，不會提供 Gemini API 金鑰，也不會轉移您的 Gemini 訂閱額度。'}
                 </p>
               </div>
 
@@ -218,6 +247,43 @@ export const GoogleSignInGate: React.FC<GoogleSignInGateProps> = ({
                   <span>{errorMsg}</span>
                 </div>
               )}
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm space-y-3 break-words" aria-live="polite">
+                <p className="font-semibold">
+                  {lang === 'en' ? 'Sign-in domain: ' : '登入網域：'}
+                  <span className="font-mono">{hostname}</span>
+                </p>
+                {domainAccess === 'unauthorized' ? (
+                  <div className="space-y-2 text-amber-950">
+                    <p>{lang === 'en'
+                      ? `Domain authorization required. In Firebase project ${projectId}, open Authentication → Settings → Authorized domains → Add domain and add exactly:`
+                      : `需要授權此網域。請在 Firebase 專案 ${projectId} 開啟 Authentication → 設定 → 已授權網域 → 新增網域，加入：`}</p>
+                    <code className="block font-bold select-all">{hostname}</code>
+                    <p>{lang === 'en'
+                      ? 'Enter only the hostname, without http://, a port or a path. A project owner/admin must make this change. Keep existing domains. If you also use localhost, add it separately. After saving, reload this Studio page to reset Firebase’s cached domain check.'
+                      : '僅填主機名稱，不含 http://、連接埠或路徑。需要專案擁有者／管理員設定，並保留現有網域。若也使用 localhost，請另外加入。儲存後請重新載入此工作室頁面，以重設 Firebase 快取的網域檢查。'}</p>
+                    <a href={consoleUrl} target="_blank" rel="noopener noreferrer" className="underline font-semibold">
+                      {lang === 'en' ? 'Open Firebase domain settings' : '開啟 Firebase 網域設定'}
+                    </a>
+                  </div>
+                ) : <p>{domainAccess === 'authorized'
+                  ? (lang === 'en' ? 'This hostname is on Firebase’s live allowlist. Account sign-in still needs to complete.' : '此主機名稱已在 Firebase 的即時授權清單中，仍需完成帳戶登入。')
+                  : (lang === 'en' ? 'Domain authorization has not been confirmed. You can retry the check or attempt sign-in.' : '尚未確認網域授權狀態，可重新檢查或嘗試登入。')}</p>}
+                <p>{geminiConfigured === true
+                  ? (lang === 'en' ? 'Server Gemini API key: configured; model access and quota still require a connection test after sign-in.' : '伺服器 Gemini API 金鑰：已設定；登入後仍需測試模型權限與額度。')
+                  : geminiConfigured === false
+                    ? (lang === 'en' ? 'Server Gemini API key: missing. Configure GEMINI_API_KEY in the server .env or deployment secrets, then restart/redeploy. Never put it in browser code.' : '伺服器 Gemini API 金鑰：未設定。請於伺服器 .env 或部署密鑰設定 GEMINI_API_KEY，再重新啟動／部署。請勿放入瀏覽器程式碼。')
+                    : (lang === 'en' ? 'Server Gemini API key: configuration could not be confirmed.' : '伺服器 Gemini API 金鑰：無法確認設定。')}</p>
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="block underline">
+                  {lang === 'en' ? 'Manage Gemini API keys in Google AI Studio' : '在 Google AI Studio 管理 Gemini API 金鑰'}
+                </a>
+                <button type="button" onClick={() => void refreshSetup()} disabled={checkingSetup} className="underline font-semibold disabled:opacity-60">
+                  {checkingSetup ? (lang === 'en' ? 'Checking setup…' : '正在檢查設定…') : (lang === 'en' ? 'Recheck setup' : '重新檢查設定')}
+                </button>
+                <button type="button" onClick={() => window.location.reload()} className="block underline font-semibold">
+                  {lang === 'en' ? 'Reload Studio after changing domain settings' : '變更網域設定後重新載入工作室'}
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -261,13 +327,13 @@ export const GoogleSignInGate: React.FC<GoogleSignInGateProps> = ({
               <div className="pt-4 border-t border-slate-100 text-xs text-slate-600 space-y-2">
                 <p>
                   {lang === 'en'
-                    ? '✓ Managed server-side Gemini 4 token — zero manual API key setup required'
-                    : '✓ 內建伺服器端 Gemini 4 Token — 無需自行申請或貼上 API 金鑰'}
+                    ? 'Google sign-in and server Gemini API credentials are configured separately.'
+                    : 'Google 登入與伺服器 Gemini API 憑證需要分別設定。'}
                 </p>
                 <p>
                   {lang === 'en'
-                    ? '✓ Gate A / B / C quality verification & instant commercial ZIP export'
-                    : '✓ Gate A / B / C 商業品質稽核與即開即賣 ZIP 套件匯出'}
+                    ? 'Gate A / B / C reviews determine export readiness.'
+                    : 'Gate A / B / C 覆核決定匯出就緒狀態。'}
                 </p>
               </div>
             </div>

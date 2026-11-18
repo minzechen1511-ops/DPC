@@ -37,6 +37,14 @@ Copy `.env.example` and keep secrets strictly in server-side environment variabl
 
 All research fetches (`/api/market/research`, `/api/market/resources/check`, `/api/market/evidence/inspect-url`, `/api/references/*`) run server-side with private-network SSRF checks, TLS verification, 15s timeouts, 3 MB response limits, and explicit redirect restrictions.
 
+### Google sign-in and Gemini setup
+
+Firebase Google sign-in identifies the user and authorizes Studio API requests. It does **not** provide a Gemini API key or inherit a Gemini app subscription. Gemini generation separately requires `GEMINI_API_KEY` on the server. Get/manage a key in [Google AI Studio](https://aistudio.google.com/apikey), configure it in your local `.env` or deployment secrets, and restart/redeploy. Never put it in a `VITE_` variable, client project, browser storage, Git, or a chat message. A configured key still needs a successful **AI Settings → Test Connection** to establish model access and quota.
+
+For `auth/unauthorized-domain`, open [this project's Firebase Authentication settings](https://console.firebase.google.com/project/melodic-mechanism-8klwk/authentication/settings) using an account with project administration access. Under **Authorized domains**, add the hostname used to open the Studio. For `http://127.0.0.1:3102/`, add exactly `127.0.0.1`; add `localhost` separately if used. Do not include a protocol, port or path, and preserve existing entries. New deployments need their actual hostname authorized too. Changing `authDomain` in client code does not update this allowlist.
+
+The sign-in screen reads Firebase's public live domain configuration and the server's `/api/health` credential-presence flag. **Recheck setup** refreshes both checks. After changing authorized domains, **reload the Studio page** before retrying sign-in: Firebase Auth caches its own origin validation result for the current page session. A failed diagnostic remains unknown; an allowed hostname is not proof of completed sign-in, and a present key is not proof of successful AI generation. See [the verified local diagnosis](audit/auth/LOGIN-REPORT.md). Firebase's [official troubleshooting guide](https://firebase.google.com/docs/auth/faq-and-troubleshooting) describes authorized-domain failures.
+
 ### Codex / External Sandbox Environment Settings (Owner Action Required Outside App Code)
 
 Editing application files does **not** alter external Codex container networking or setup scripts. Apply these settings directly in your Codex environment configuration:

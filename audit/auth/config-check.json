@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-11-18T13:16:30.049Z",
+  "projectId": "melodic-mechanism-8klwk",
+  "requestedEndpoint": "https://identitytoolkit.googleapis.com/v1/projects?key=[public-client-key-redacted]",
+  "status": 200,
+  "authorizedDomains": [
+    "melodic-mechanism-8klwk.firebaseapp.com",
+    "melodic-mechanism-8klwk.web.app",
+    "ais-dev-vdpfbf4ldv2d5ilgmzmbvc-758989687130.asia-east1.run.app",
+    "ais-pre-vdpfbf4ldv2d5ilgmzmbvc-758989687130.asia-east1.run.app",
+    "ais-mob-vdpfbf4ldv2d5ilgmzmbvc-758989687130.asia-east1.run.app"
+  ],
+  "reportedUrl": "http://127.0.0.1:3102/",
+  "reportedHostAuthorized": false,
+  "health": {
+    "status": 200,
+    "app": "Digital Product Studio",
+    "authRequired": true,
+    "geminiConfigured": false
+  },
+  "firebaseConsole": "Signed-in browser account could not access this project; no configuration was changed."
+}

@@ -222,8 +222,8 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
           </h1>
           <p className="text-sm text-slate-600 mt-1 max-w-4xl">
             {lang === 'en'
-              ? 'All AI generation runs through the studio server using the managed Gemini token linked to your verified Google session. No manual API key setup is required.'
-              : '所有內容生成、市場情報與文案撰寫均由伺服器端透過託管 Gemini Token 安全執行，登入您的 Google 帳戶即可直接使用，無需手動輸入或管理 API 金鑰。'}
+              ? 'Google sign-in authorizes access to your workspace. AI generation uses the server’s separate GEMINI_API_KEY, configured in server environment variables or deployment secrets. Your Google login does not supply an API key or Gemini subscription quota.'
+              : 'Google 登入用於授權存取您的工作區。AI 內容生成使用伺服器另外設定的 GEMINI_API_KEY，需於伺服器環境變數或部署密鑰中設定。Google 登入不會提供 API 金鑰或 Gemini 訂閱額度。'}
           </p>
         </div>
 
@@ -259,8 +259,8 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-bold text-slate-900">
                 {lang === 'en'
-                  ? 'Google Account + Managed Gemini Token Active'
-                  : 'Google 帳戶驗證與託管 Gemini Token 已啟用'}
+                  ? 'Server Gemini connection — verify with Test Connection'
+                  : '伺服器 Gemini 連線 — 請使用「測試連線」驗證'}
               </h2>
               <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
                 GEMINI API
@@ -268,8 +268,8 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
             </div>
             <p className="text-sm text-slate-600 leading-relaxed">
               {lang === 'en'
-                ? 'Authenticated requests are signed with your Google session token and executed server-side via @google/genai.'
-                : '您的工作區請求會經由已驗證的 Google 帳戶權杖授權，並於後端安全調用 @google/genai 生成內容。'}
+                ? 'Firebase ID tokens authorize Studio API requests. The backend uses its own Gemini API key to generate content. Key configuration alone does not establish model access or available quota.'
+                : 'Firebase ID 權杖用於授權 Studio API 請求；後端使用自己的 Gemini API 金鑰生成內容。設定金鑰不代表已確認模型權限或可用額度。'}
             </p>
           </div>
         </div>
