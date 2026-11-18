@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
   onSnapshot,
   query,
   runTransaction,
@@ -18,10 +19,21 @@ import type { DigitalProductProject } from '../types/project.ts';
 import { sanitizeProjectForExport } from '../utils/projectSanitizer.ts';
 import { migrateProjectSchema } from '../utils/projectMigration.ts';
 import type { Language } from '../utils/i18n.ts';
+import {
+  assertExpectedRevision,
+  ProjectRevisionConflictError,
+  isProjectRevisionConflictError,
+} from '../utils/projectSaveQueue.ts';
+
+export { ProjectRevisionConflictError, isProjectRevisionConflictError };
 
 export interface FirestoreProjectRecord {
   project: DigitalProductProject;
   revision: number;
+}
+
+export interface SaveProjectOptions {
+  expectedRevision?: number;
 }
 
 const VALID_ID_REGEX = /^[a-zA-Z0-9_\-]+$/;
@@ -106,6 +118,34 @@ export async function ensureUserProfile(
   }
 }
 
+export async function fetchProjectFromFirestore(
+  uid: string,
+  projectId: string
+): Promise<FirestoreProjectRecord | null> {
+  const safeProjectId = normalizeId(projectId);
+  const path = `users/${uid}/projects/${safeProjectId}`;
+  const ref = doc(db, 'users', uid, 'projects', safeProjectId);
+  try {
+    const snap = await getDocFromServer(ref);
+    if (!snap.exists()) {
+      return null;
+    }
+    const raw = snap.data();
+    const rev = typeof raw.revision === 'number' ? raw.revision : 1;
+    const normalized = sanitizeProjectForExport(
+      migrateProjectSchema({
+        ...raw,
+        projectId: String(raw.projectId || snap.id),
+        createdAt: toIsoString(raw.createdAt),
+        updatedAt: toIsoString(raw.updatedAt),
+      })
+    );
+    return { project: normalized, revision: rev };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+  }
+}
+
 export function subscribeUserProjects(
   uid: string,
   onProjects: (records: FirestoreProjectRecord[]) => void,
@@ -147,7 +187,8 @@ export function subscribeUserProjects(
 
 export async function saveProjectToFirestore(
   uid: string,
-  project: DigitalProductProject
+  project: DigitalProductProject,
+  options: SaveProjectOptions = {}
 ): Promise<{ project: DigitalProductProject; revision: number }> {
   const safeProjectId = normalizeId(project.projectId);
   const path = `users/${uid}/projects/${safeProjectId}`;
@@ -192,17 +233,25 @@ export async function saveProjectToFirestore(
   try {
     const revision = await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
+      const existingRevision = snap.exists()
+        ? typeof snap.data().revision === 'number'
+          ? snap.data().revision
+          : 1
+        : null;
+      const nextRev = assertExpectedRevision(
+        safeProjectId,
+        existingRevision,
+        options.expectedRevision
+      );
       if (!snap.exists()) {
         tx.set(ref, {
           ...payloadFields,
-          revision: 1,
+          revision: nextRev,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        return 1;
+        return nextRev;
       }
-      const existing = snap.data();
-      const nextRev = (typeof existing.revision === 'number' ? existing.revision : 1) + 1;
       const { projectId: _pid, ownerId: _oid, ...mutableFields } = payloadFields;
       tx.update(ref, {
         ...mutableFields,
@@ -214,6 +263,9 @@ export async function saveProjectToFirestore(
 
     return { project: sanitized, revision };
   } catch (error) {
+    if (isProjectRevisionConflictError(error)) {
+      throw error;
+    }
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }

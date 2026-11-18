@@ -4,6 +4,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { createApiRouter } from './apiRouter.ts';
+import { resolveDefaultDataDir } from './config.ts';
 import { BLANK_PROJECT } from '../src/data/demoProject.ts';
 import type { FirebaseTokenVerifier } from './security/firebaseToken.ts';
 
@@ -37,6 +38,13 @@ function withTestServer(fn: (baseUrl: string) => Promise<void>) {
     });
   });
 }
+
+test('resolveDefaultDataDir falls back to .local-data when a Windows drive path is supplied on non-Windows', () => {
+  if (process.platform !== 'win32') {
+    const resolved = resolveDefaultDataDir({ DPC_DATA_DIR: 'D:\\Digital Product Studio' });
+    assert.equal(resolved, path.resolve(process.cwd(), '.local-data'));
+  }
+});
 
 test('desktop .exe endpoints and legacy SaaS endpoints are removed (404)', async () => {
   await withTestServer(async (baseUrl) => {

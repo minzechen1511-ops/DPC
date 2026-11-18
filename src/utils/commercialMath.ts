@@ -69,7 +69,7 @@ export interface ProfitabilityResult {
   annualizedNetProfit: number;
   profitMarginPercent: number;
   netPerSale: number;
-  breakEvenUnits: number;
+  breakEvenUnits: number | null;
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -93,14 +93,15 @@ export function calculateProfitability(input: ProfitabilityInput): Profitability
   const blendedAov = intro * introShare + regular * regularShare + bundle * bundleShare;
   const grossMonthlyRevenue = monthlyUnits * blendedAov;
   const perSaleFee = blendedAov > 0 ? blendedAov * feeRate + fixedFee : 0;
-  const netPerSale = Math.max(0, blendedAov - perSaleFee);
+  const netPerSale = blendedAov - perSaleFee;
   const monthlyPlatformFees = monthlyUnits * perSaleFee;
   const totalFixedCosts = overhead + acquisitionCost;
   const netMonthlyProfit = grossMonthlyRevenue - monthlyPlatformFees - totalFixedCosts;
   const annualizedNetProfit = netMonthlyProfit * 12;
   const profitMarginPercent =
     grossMonthlyRevenue > 0 ? (netMonthlyProfit / grossMonthlyRevenue) * 100 : 0;
-  const breakEvenUnits = netPerSale > 0 ? Math.ceil(totalFixedCosts / netPerSale) : 0;
+  const breakEvenUnits =
+    netPerSale > 0 ? (totalFixedCosts > 0 ? Math.ceil(totalFixedCosts / netPerSale) : 0) : null;
   const effectiveCacPerSale =
     monthlyUnits > 0 ? Number((acquisitionCost / monthlyUnits).toFixed(2)) : null;
 

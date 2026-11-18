@@ -7,6 +7,7 @@ import type { ReferenceVerificationReport } from '../types/research.ts';
 import { createManualObservationRecord, applyManualReviewDecision } from './manualEvidenceReview.ts';
 import { deriveSynchronizedCandidates } from './marketDiscoveryEngine.ts';
 import { approveGate, gateIssues, revokeApprovals } from './gatePolicy.ts';
+import { calculateOverallProgress, checkStagePrerequisites, computeOutlineStageStatus } from './workflowEngine.ts';
 import { chapterResearchFingerprint, sourceFingerprint } from './sourceEvidence.ts';
 import { evidencePassages, makeSupportReview, resourceEvidenceDocument } from './citationEvidence.ts';
 import { calculateProfitability } from './commercialMath.ts';
@@ -201,7 +202,7 @@ test('End-to-end 14-stage release audit: Gate A->B->C, invalidation, backup/rest
   project.transformationMap.bridgeProcess.keyMilestones = ['Baseline audit', '3-step sprint', 'Weekly review'];
   project.transformationMap.afterState.tangibleOutcomes = ['Verified weekly deliverable completion'];
 
-  // Stage 6 & 7: Reference Library + Product Charter + Outline Builder
+  // Stage 6 & 7: Reference Library + Product Charter -> Approve Gate B BEFORE Stage 8 Outline Builder
   const card = makeRetrievedCard('REF-2024-01');
   project.referenceLibrary.cards = [card];
   project.charter = {
@@ -214,7 +215,17 @@ test('End-to-end 14-stage release audit: Gate A->B->C, invalidation, backup/rest
     signatureFramework: 'Weekly Reset Method',
     learningObjectives: ['Audit weekly bottlenecks', 'Execute a structured 3-step weekly sprint'],
   };
+  project.outline = [];
+  assert.equal(checkStagePrerequisites('outline_builder', project).canRun, false);
 
+  // Approve Gate B explicitly before creating an outline
+  assert.deepEqual(gateIssues(project, 'gateB'), []);
+  project = approveGate(project, 'gateB');
+  assert.equal(project.workflow.gates.gateB.isApproved, true);
+  assert.equal(checkStagePrerequisites('outline_builder', project).canRun, true);
+
+  // Stage 8: Outline Builder (now unlocked by Gate B) updates outline_builder status & progress
+  const progressBeforeOutline = calculateOverallProgress(project);
   const chapter1Base = {
     id: 'ch_1',
     order: 1,
@@ -246,6 +257,17 @@ Apply this framework immediately using the companion worksheet so every weekly c
     isLocked: false,
   };
 
+  project.outline = [chapter1Base];
+  project.workflow.stageStatuses.outline_builder = computeOutlineStageStatus(
+    project.outline,
+    project.referenceLibrary.cards
+  );
+  assert.equal(project.workflow.stageStatuses.outline_builder, 'COMPLETED');
+  assert.ok(calculateOverallProgress(project) > progressBeforeOutline);
+
+  // Gate C must reject chapters missing explicit chapter-level source relevance
+  assert.ok(gateIssues(project, 'gateC').some((issue) => issue.includes('relevance to the current chapter objective')));
+
   card.chapterRelevance = [
     {
       chapterId: chapter1Base.id,
@@ -254,12 +276,6 @@ Apply this framework immediately using the companion worksheet so every weekly c
       reviewedAt: new Date().toISOString(),
     },
   ];
-  project.outline = [chapter1Base];
-
-  // Approve Gate B explicitly
-  assert.deepEqual(gateIssues(project, 'gateB'), []);
-  project = approveGate(project, 'gateB');
-  assert.equal(project.workflow.gates.gateB.isApproved, true);
 
   // Stage 9 & 10: Content Studio & Workbook Studio + Passage-level Citation & Editorial Reviews
   const chPassages = evidencePassages(project.outline[0]);

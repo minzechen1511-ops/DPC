@@ -5,7 +5,8 @@ import { evidencePassages, resourceEvidenceDocument } from '../utils/citationEvi
 import { apiFetch } from './apiClient.ts';
 export async function verifyProjectReferences(project: DigitalProductProject): Promise<{ valid:boolean; message:string; report?:ReferenceVerificationReport }> {
  const requiredIds=new Set([...project.outline.flatMap(ch=>[...ch.mappedReferenceIds,...evidencePassages(ch).flatMap(p=>p.referenceIds)]),...project.resources.flatMap(resource=>evidencePassages(resourceEvidenceDocument(resource)).flatMap(p=>p.referenceIds))]);
- const cards=project.referenceLibrary.cards.filter(card=>requiredIds.has(card.id)&&isRetrievedSource(card));
+ const retrievedCards=project.referenceLibrary.cards.filter(isRetrievedSource);
+ const cards=requiredIds.size>0 ? retrievedCards.filter(card=>requiredIds.has(card.id)) : retrievedCards;
  if(!cards.length)return {valid:false,message:'Retrieve and review relevant source text before approving this gate.'};
  try{
   const response=await apiFetch('/api/references/verify',{method:'POST',body:JSON.stringify({cards})});

@@ -25,8 +25,12 @@ const EPHEMERAL_DEV_CRED_KEY = crypto
   .digest('hex');
 
 export function resolveDefaultDataDir(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.DPC_DATA_DIR && env.DPC_DATA_DIR.trim()) {
-    return path.resolve(env.DPC_DATA_DIR.trim());
+  const configured = env.DPC_DATA_DIR?.trim();
+  if (configured) {
+    if (process.platform !== 'win32' && /^[a-zA-Z]:[\\/]/.test(configured)) {
+      return path.resolve(process.cwd(), '.local-data');
+    }
+    return path.resolve(configured);
   }
   return path.resolve(process.cwd(), '.local-data');
 }

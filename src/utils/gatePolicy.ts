@@ -22,14 +22,13 @@ export function gateIssues(project: DigitalProductProject, gate: GateKey): strin
   if (!project.workflow.gates.gateA.isApproved) issues.push('Approve Gate A before approving the product strategy.');
   if (!project.charter.productTitle.trim() || !project.charter.targetAudience.trim() || !project.charter.learningObjectives.length) issues.push('Complete the charter title, target audience and learning objectives.');
   if (!project.referenceLibrary.cards.some(reviewedSource)) issues.push('Retrieve a relevant source body or public page, retain a matching exact excerpt and bibliography, and review its relevance; a manual verification checkbox is insufficient.');
+  if (gate === 'gateB') return issues;
+  if (!project.workflow.gates.gateB.isApproved || !project.charter.isApproved) issues.push('Approve Gate B before the final quality review.');
+  if (!project.outline.length) issues.push('Create the manuscript chapters.');
   for (const chapter of project.outline) {
     const relevant = project.referenceLibrary.cards.some(card => chapter.mappedReferenceIds.includes(card.id) && isRetrievedSource(card) && card.chapterRelevance?.some(link => link.chapterId === chapter.id && link.rationale.trim().length >= 20 && Boolean(link.reviewedAt) && link.chapterFingerprint === chapterResearchFingerprint(chapter)));
     if (!relevant) issues.push(`${chapter.title}: map a retrieved source and explicitly explain its relevance to the current chapter objective.`);
   }
-  if (!project.outline.length) issues.push('Define a chapter research plan before approving Gate B.');
-  if (gate === 'gateB') return issues;
-  if (!project.workflow.gates.gateB.isApproved || !project.charter.isApproved) issues.push('Approve Gate B before the final quality review.');
-  if (!project.outline.length) issues.push('Create the manuscript chapters.');
   for (const chapter of project.outline) {
     const count = countManuscriptWords(chapter.contentMarkdown || '');
     if (!chapter.isCompleted || count < Math.max(100, Math.floor(chapter.targetWordCount / 2))) issues.push(`${chapter.title}: finish a substantive manuscript (at least half the target length).`);

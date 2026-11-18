@@ -8,3 +8,11 @@ coverage/
 !.env.example
 .local-data/
 .playwright-cli/
+store.json
+vault.key
+**/store.json
+**/vault.key
+*.sqlite
+*.sqlite3
+*Digital Product Studio*/
+

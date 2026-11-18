@@ -1,5 +1,5 @@
 import { verifyProjectReferences } from './services/referenceVerification.ts';
-import { chapterResearchFingerprint, isRetrievedSource } from './utils/sourceEvidence.ts';
+import { isRetrievedSource } from './utils/sourceEvidence.ts';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
@@ -17,7 +17,7 @@ import { approveGate, revokeApprovals, gateIssues } from './utils/gatePolicy.ts'
 import { Header, LocalSaveStatus } from './components/Header.tsx';
 import { Sidebar, NavigationItem } from './components/Sidebar.tsx';
 import { GoogleSignInGate } from './components/GoogleSignInGate.tsx';
-import { calculateOverallProgress } from './utils/workflowEngine.ts';
+import { calculateOverallProgress, computeOutlineStageStatus } from './utils/workflowEngine.ts';
 import { Language } from './utils/i18n.ts';
 import {
   runAutomatedMarketDiscovery,
@@ -38,10 +38,13 @@ import {
 import { auth } from './firebase.ts';
 import {
   ensureUserProfile,
+  fetchProjectFromFirestore,
   subscribeUserProjects,
   saveProjectToFirestore,
   deleteProjectFromFirestore,
+  isProjectRevisionConflictError,
 } from './services/firestoreProjects.ts';
+import { SerializedProjectSaveQueue } from './utils/projectSaveQueue.ts';
 import { StudioLogo } from './components/StudioLogo.tsx';
 
 // Views
@@ -94,6 +97,14 @@ export default function App() {
   const skipAutosaveProjectIdRef = useRef<string | null>(null);
   const cloudHydratedRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
+  const dirtyProjectIdRef = useRef<string | null>(null);
+  const saveStatusRef = useRef<LocalSaveStatus>('saved');
+  const saveQueueRef = useRef(
+    new SerializedProjectSaveQueue<
+      DigitalProductProject,
+      { project: DigitalProductProject; revision: number }
+    >()
+  );
   const currentProjectRef = useRef(project);
   const langRef = useRef(lang);
 
@@ -102,12 +113,17 @@ export default function App() {
   }, [project]);
 
   useEffect(() => {
+    saveStatusRef.current = saveStatus;
+  }, [saveStatus]);
+
+  useEffect(() => {
     langRef.current = lang;
     saveStoredLang(lang);
   }, [lang]);
 
   const updateRevision = useCallback((projectId: string, revision: number) => {
     revisionsRef.current = { ...revisionsRef.current, [projectId]: revision };
+    saveQueueRef.current.setRevision(projectId, revision);
     setRevisions((prev) => ({ ...prev, [projectId]: revision }));
   }, []);
 
@@ -133,6 +149,8 @@ export default function App() {
 
       if (!user) {
         cloudHydratedRef.current = false;
+        dirtyProjectIdRef.current = null;
+        saveQueueRef.current.reset();
         revisionsRef.current = {};
         setRevisions({});
         setSavedProjects([]);
@@ -165,26 +183,62 @@ export default function App() {
           authUser.uid,
           (records) => {
             if (cancelled) return;
+            const currentId = currentProjectRef.current.projectId;
+            const hasUnsavedCurrent =
+              dirtyProjectIdRef.current === currentId ||
+              saveQueueRef.current.hasPending(currentId) ||
+              saveStatusRef.current === 'conflict';
+            const knownCurrentRev = revisionsRef.current[currentId];
+            const remoteCurrentRecord = records.find((r) => r.project.projectId === currentId);
+            const hasRemoteConflictOnActive =
+              Boolean(
+                hasUnsavedCurrent &&
+                  remoteCurrentRecord &&
+                  knownCurrentRev !== undefined &&
+                  remoteCurrentRecord.revision > knownCurrentRev
+              );
+
             const nextRevs: Record<string, number> = {};
             const cloudList = records.map((r) => {
-              nextRevs[r.project.projectId] = r.revision;
+              const rev =
+                r.project.projectId === currentId && hasRemoteConflictOnActive
+                  ? knownCurrentRev!
+                  : r.revision;
+              nextRevs[r.project.projectId] = rev;
+              saveQueueRef.current.setRevision(r.project.projectId, rev);
               return sanitizeProjectForStorage(r.project);
             });
             revisionsRef.current = nextRevs;
             setRevisions(nextRevs);
 
-            if (cloudList.length > 0) {
-              const currentId = currentProjectRef.current.projectId;
-              const match = cloudList.find((p) => p.projectId === currentId) || cloudList[0];
-              skipAutosaveProjectIdRef.current = match.projectId;
+            if (hasRemoteConflictOnActive) {
               setSavedProjects(cloudList);
-              setProject(match);
-              setSaveStatus('saved');
+              setSaveStatus('conflict');
+              setWorkspaceError(
+                langRef.current === 'en'
+                  ? 'A newer revision exists in Cloud Firestore. Reload from Cloud before overwriting.'
+                  : '雲端已有較新版次（於其他工作階段更新），請先重新載入雲端版本以免覆寫。'
+              );
+              cloudHydratedRef.current = true;
+              setCloudBusy(false);
+              return;
+            }
+
+            if (cloudList.length > 0) {
+              const match = cloudList.find((p) => p.projectId === currentId) || cloudList[0];
+              if (!hasUnsavedCurrent || match.projectId !== currentId) {
+                skipAutosaveProjectIdRef.current = match.projectId;
+                dirtyProjectIdRef.current = null;
+                setProject(match);
+                setSaveStatus('saved');
+              }
+              setSavedProjects(cloudList);
             } else {
               const fresh = currentProjectRef.current.isBlankProject
                 ? currentProjectRef.current
                 : createFreshBlankProject();
               skipAutosaveProjectIdRef.current = fresh.projectId;
+              dirtyProjectIdRef.current = null;
               setSavedProjects([fresh]);
               setProject(fresh);
               setSaveStatus('saved');
@@ -228,14 +282,40 @@ export default function App() {
       if (targetProject.isBlankProject && !revisionsRef.current[targetProject.projectId]) {
         return;
       }
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+
+      const initialExpected =
+        revisionsRef.current[targetProject.projectId] !== undefined
+          ? revisionsRef.current[targetProject.projectId]
+          : 0;
 
       setSaveStatus('saving');
       setWorkspaceError(null);
       try {
-        const result = await saveProjectToFirestore(authUser.uid, targetProject);
+        const result = await saveQueueRef.current.enqueue(
+          targetProject,
+          (snapshot, expectedRevision) =>
+            saveProjectToFirestore(authUser.uid, snapshot, { expectedRevision }),
+          initialExpected
+        );
         updateRevision(result.project.projectId, result.revision);
+        if (dirtyProjectIdRef.current === result.project.projectId) {
+          dirtyProjectIdRef.current = null;
+        }
         setSaveStatus('saved');
       } catch (err: any) {
+        if (isProjectRevisionConflictError(err)) {
+          setSaveStatus('conflict');
+          setWorkspaceError(
+            langRef.current === 'en'
+              ? `Save blocked by revision conflict (expected r${err.expectedRevision}, cloud is at r${err.actualRevision}). Reload from Cloud to inspect the latest version.`
+              : `版次衝突，已阻止舊資料覆蓋雲端（本機預期 r${err.expectedRevision}，雲端為 r${err.actualRevision}）。請先點擊重新載入雲端版本。`
+          );
+          return;
+        }
         setSaveStatus('error');
         setWorkspaceError(err?.message || 'Could not save project to Cloud Firestore.');
       }
@@ -251,6 +331,8 @@ export default function App() {
       skipAutosaveProjectIdRef.current = null;
       return;
     }
+
+    dirtyProjectIdRef.current = project.projectId;
 
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current);
@@ -804,8 +886,14 @@ export default function App() {
   };
 
   const handleSwitchProject = (target: DigitalProductProject) => {
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    dirtyProjectIdRef.current = null;
     skipAutosaveProjectIdRef.current = target.projectId;
     setProject(sanitizeProjectForStorage(target));
+    setSaveStatus('saved');
     setWorkflowError('');
     setWorkspaceError(null);
     if (authUser) {
@@ -841,6 +929,7 @@ export default function App() {
     setWorkspaceError(null);
     try {
       await deleteProjectFromFirestore(authUser.uid, projectId);
+      saveQueueRef.current.clearProject(projectId);
       const nextRevs = { ...revisionsRef.current };
       delete nextRevs[projectId];
       revisionsRef.current = nextRevs;
@@ -972,9 +1061,35 @@ export default function App() {
     setPendingLegacyProjects([]);
   };
 
-  const handleRefreshCloud = async () => {
+  const handleReloadFromCloud = async () => {
     if (!authUser) return;
-    await persistProjectNow(project);
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    const targetId = currentProjectRef.current.projectId;
+    dirtyProjectIdRef.current = null;
+    saveQueueRef.current.clearProject(targetId);
+    setCloudBusy(true);
+    setWorkspaceError(null);
+    try {
+      const record = await fetchProjectFromFirestore(authUser.uid, targetId);
+      if (record) {
+        skipAutosaveProjectIdRef.current = record.project.projectId;
+        updateRevision(record.project.projectId, record.revision);
+        setProject(sanitizeProjectForStorage(record.project));
+        setSavedProjects((prev) =>
+          prev.some((p) => p.projectId === record.project.projectId)
+            ? prev.map((p) => (p.projectId === record.project.projectId ? record.project : p))
+            : [record.project, ...prev]
+        );
+      }
+      setSaveStatus('saved');
+    } catch (err: any) {
+      setWorkspaceError(err?.message || 'Failed to reload latest project revision from Cloud Firestore.');
+    } finally {
+      setCloudBusy(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -1100,28 +1215,43 @@ export default function App() {
         return (
           <ReferenceLibraryView
             onAddSource={(source, chapterIds) =>
-              setProject((prev) =>
-                revokeApprovals(
+              setProject((prev) => {
+                const nextCards = [...prev.referenceLibrary.cards, source];
+                const nextOutline = prev.outline.map((ch) =>
+                  chapterIds.includes(ch.id)
+                    ? { ...ch, mappedReferenceIds: [...new Set([...ch.mappedReferenceIds, source.id])] }
+                    : ch
+                );
+                const revoked = revokeApprovals(
                   {
                     ...prev,
                     isBlankProject: false,
                     updatedAt: new Date().toISOString(),
                     referenceLibrary: {
                       ...prev.referenceLibrary,
-                      cards: [...prev.referenceLibrary.cards, source],
+                      cards: nextCards,
                       verifiedCount:
                         prev.referenceLibrary.cards.filter(isRetrievedSource).length +
                         Number(isRetrievedSource(source)),
                     },
-                    outline: prev.outline.map((ch) =>
-                      chapterIds.includes(ch.id)
-                        ? { ...ch, mappedReferenceIds: [...new Set([...ch.mappedReferenceIds, source.id])] }
-                        : ch
-                    ),
+                    outline: nextOutline,
                   },
                   'gateB'
-                )
-              )
+                );
+                return {
+                  ...revoked,
+                  workflow: {
+                    ...revoked.workflow,
+                    stageStatuses: {
+                      ...revoked.workflow.stageStatuses,
+                      outline_builder:
+                        nextOutline.length > 0
+                          ? computeOutlineStageStatus(nextOutline, nextCards)
+                          : revoked.workflow.stageStatuses.outline_builder,
+                    },
+                  },
+                };
+              })
             }
             project={project}
             setActiveView={setActiveView}
@@ -1146,18 +1276,22 @@ export default function App() {
             project={project}
             setActiveView={setActiveView}
             onUpdateOutline={(out) =>
-              setProject((prev) =>
-                revokeApprovals(
+              setProject((prev) => {
+                const revoked = revokeApprovals(
                   { ...prev, isBlankProject: false, updatedAt: new Date().toISOString(), outline: out },
-                  out.length !== prev.outline.length ||
-                    out.some((ch) => {
-                      const old = prev.outline.find((item) => item.id === ch.id);
-                      return !old || chapterResearchFingerprint(old) !== chapterResearchFingerprint(ch);
-                    })
-                    ? 'gateB'
-                    : 'gateC'
-                )
-              )
+                  'gateC'
+                );
+                return {
+                  ...revoked,
+                  workflow: {
+                    ...revoked.workflow,
+                    stageStatuses: {
+                      ...revoked.workflow.stageStatuses,
+                      outline_builder: computeOutlineStageStatus(out, prev.referenceLibrary.cards),
+                    },
+                  },
+                };
+              })
             }
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
@@ -1303,7 +1437,7 @@ export default function App() {
             onLoadProject={handleLoadProjectIntoStore}
             setActiveView={setActiveView}
             revisions={revisions}
-            onRefreshProjects={handleRefreshCloud}
+            onRefreshProjects={handleReloadFromCloud}
             localBusy={cloudBusy}
             workspaceError={workspaceError}
             pendingLegacyCount={pendingLegacyProjects.length}
@@ -1397,7 +1531,7 @@ export default function App() {
           saveStatus={saveStatus}
           activeRevision={revisions[project.projectId]}
           onRetrySave={() => void persistProjectNow(project)}
-          onReloadProject={() => void handleRefreshCloud()}
+          onReloadProject={() => void handleReloadFromCloud()}
           userEmail={authUser.email}
           userDisplayName={authUser.displayName}
           userPhotoUrl={authUser.photoURL}
@@ -1416,8 +1550,17 @@ export default function App() {
             </p>
           )}
           {workspaceError && (
-            <div role="alert" className="mb-3 p-3.5 bg-rose-50 text-rose-900 border border-rose-200 rounded-lg text-sm font-medium">
+            <div role="alert" className="mb-3 p-3.5 bg-rose-50 text-rose-900 border border-rose-200 rounded-lg text-sm font-medium flex flex-wrap items-center justify-between gap-3">
               <span>{workspaceError}</span>
+              {saveStatus === 'conflict' && (
+                <button
+                  type="button"
+                  onClick={() => void handleReloadFromCloud()}
+                  className="px-3.5 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-semibold shrink-0"
+                >
+                  {lang === 'en' ? 'Reload Latest from Cloud' : '重新載入雲端最新版本'}
+                </button>
+              )}
             </div>
           )}
           <div className="flex-1 w-full">

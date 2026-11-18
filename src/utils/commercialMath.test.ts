@@ -56,6 +56,42 @@ test('calculateProfitability incorporates acquisition cost and effective CAC per
   assert.equal(result.breakEvenUnits, Math.ceil(700 / 28.8));
 });
 
+test('calculateProfitability preserves negative contribution margin and returns null breakEvenUnits when fees exceed price', () => {
+  const lossPerSale = calculateProfitability({
+    introductoryPrice: 0.25,
+    regularPrice: 0.25,
+    bundlePrice: 0.25,
+    monthlyVisitors: 1000,
+    conversionRatePercent: 5,
+    bundleSharePercent: 0,
+    introSharePercent: 0,
+    platformFeePercent: 5,
+    fixedFeePerSale: 0.5,
+    monthlyOverheadUsd: 100,
+  });
+
+  // perSaleFee = 0.25 * 0.05 + 0.50 = 0.5125 -> netPerSale = -0.2625 -> -0.26
+  assert.equal(lossPerSale.blendedAverageOrderValue, 0.25);
+  assert.equal(lossPerSale.netPerSale, -0.26);
+  assert.ok(lossPerSale.netMonthlyProfit < 0);
+  assert.equal(lossPerSale.breakEvenUnits, null);
+
+  const zeroPrice = calculateProfitability({
+    introductoryPrice: 0,
+    regularPrice: 0,
+    bundlePrice: 0,
+    monthlyVisitors: 1000,
+    conversionRatePercent: 2,
+    bundleSharePercent: 0,
+    introSharePercent: 0,
+    platformFeePercent: 5,
+    fixedFeePerSale: 0.5,
+    monthlyOverheadUsd: 50,
+  });
+  assert.equal(zeroPrice.netPerSale, 0);
+  assert.equal(zeroPrice.breakEvenUnits, null);
+});
+
 test('sanitizeProjectForStorage strips API keys while preserving project data and saved list operations', () => {
   const withSecret = {
     ...structuredClone(BLANK_PROJECT),

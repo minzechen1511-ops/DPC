@@ -31,7 +31,7 @@ Copy `.env.example` and keep secrets strictly in server-side environment variabl
 
 - `NODE_ENV` — `"development"` or `"production"`
 - `PORT` — HTTP listen port (default `3000`, bound on `0.0.0.0`)
-- `DPC_DATA_DIR` — Optional override directory for server workflow SQLite/JSON storage
+- `DPC_DATA_DIR` — Optional override directory for server workflow storage (`store.json`, `vault.key`). Keep this strictly outside version control (defaults to gitignored `.local-data/`) and never commit `store.json` or `vault.key`.
 - `GEMINI_API_KEY` — Server-side Google Gemini API key injected into AI Studio / Cloud Run secrets
 - `HTTPS_PROXY` / `HTTP_PROXY` — Inherited automatically by `undici.EnvHttpProxyAgent` for outbound research requests
 

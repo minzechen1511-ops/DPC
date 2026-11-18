@@ -111,7 +111,10 @@ export async function buildLearningBundle(rawProject: DigitalProductProject, sou
     </div>
     <h2>Channel Margin Scenarios (Assumes 1,200 visits/mo @ 2.5% conversion, $25/mo overhead, $0 paid CAC)</h2>
     <table><thead><tr><th>Platform</th><th>Blended AOV</th><th>Net / Sale</th><th>Eff. CAC / Sale</th><th>Monthly Net Profit</th><th>Margin %</th></tr></thead><tbody>
-    ${channelModels.map(({ preset, model }) => `<tr><td><strong>${escapeHtml(preset.name)}</strong><br><small>${escapeHtml(preset.notes)}</small></td><td>$${model.blendedAverageOrderValue}</td><td>$${model.netPerSale}</td><td>${model.effectiveCacPerSale === null ? '—' : `$${model.effectiveCacPerSale}`}</td><td>$${model.netMonthlyProfit}</td><td>${model.profitMarginPercent}%</td></tr>`).join('')}
+    ${channelModels.map(({ preset, model }) => {
+      const fmtSigned = (n: number) => (n < 0 ? `-$${Math.abs(n).toFixed(2)}` : `$${n.toFixed(2)}`);
+      return `<tr><td><strong>${escapeHtml(preset.name)}</strong><br><small>${escapeHtml(preset.notes)}</small></td><td>$${model.blendedAverageOrderValue.toFixed(2)}</td><td>${fmtSigned(model.netPerSale)}</td><td>${model.effectiveCacPerSale === null ? '—' : `$${model.effectiveCacPerSale.toFixed(2)}`}</td><td>${fmtSigned(model.netMonthlyProfit)}</td><td>${model.profitMarginPercent}%</td></tr>`;
+    }).join('')}
     </tbody></table>
     <div class="notice">Model Assumptions &amp; Commercial Unknowns: Channel figures above are illustrative sensitivity scenarios only, not predicted sales. Traffic volume, visitor-to-buyer conversion, price elasticity across tiers, refund/chargeback rates, local VAT/sales tax on non-MoR channels, and paid acquisition costs remain unmeasured until validated live.</div>
     ${render(launchMd)}`;

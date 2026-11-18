@@ -474,22 +474,37 @@ Return JSON with exact keys:
               {metrics.effectiveCacPerSale === null ? '—' : `$${metrics.effectiveCacPerSale.toFixed(2)}`}
             </strong>
           </div>
-          <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200">
-            <span className="text-xs font-semibold text-emerald-800 block">{lang === 'en' ? 'Net Monthly Profit' : '月淨利潤'}</span>
-            <strong className="text-xl font-bold font-mono tabular-nums text-emerald-700 mt-0.5 block">
-              ${metrics.netMonthlyProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className={`p-4 rounded-xl border ${metrics.netMonthlyProfit < 0 ? 'bg-rose-50/70 border-rose-200' : 'bg-emerald-50/70 border-emerald-200'}`}>
+            <span className={`text-xs font-semibold block ${metrics.netMonthlyProfit < 0 ? 'text-rose-800' : 'text-emerald-800'}`}>
+              {lang === 'en' ? 'Net Monthly Profit' : '月淨利潤'}
+            </span>
+            <strong className={`text-xl font-bold font-mono tabular-nums mt-0.5 block ${metrics.netMonthlyProfit < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+              {metrics.netMonthlyProfit < 0 ? '-' : ''}$
+              {Math.abs(metrics.netMonthlyProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </strong>
           </div>
-          <div className="p-4 rounded-xl bg-sky-50/70 border border-sky-200">
-            <span className="text-xs font-semibold text-sky-800 block">{lang === 'en' ? 'Annualized Net' : '年化淨利預測'}</span>
-            <strong className="text-xl font-bold font-mono tabular-nums text-sky-700 mt-0.5 block">
-              ${metrics.annualizedNetProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className={`p-4 rounded-xl border ${metrics.annualizedNetProfit < 0 ? 'bg-rose-50/60 border-rose-200' : 'bg-sky-50/70 border-sky-200'}`}>
+            <span className={`text-xs font-semibold block ${metrics.annualizedNetProfit < 0 ? 'text-rose-800' : 'text-sky-800'}`}>
+              {lang === 'en' ? 'Annualized Net' : '年化淨利預測'}
+            </span>
+            <strong className={`text-xl font-bold font-mono tabular-nums mt-0.5 block ${metrics.annualizedNetProfit < 0 ? 'text-rose-700' : 'text-sky-700'}`}>
+              {metrics.annualizedNetProfit < 0 ? '-' : ''}$
+              {Math.abs(metrics.annualizedNetProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </strong>
           </div>
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <div className={`p-4 rounded-xl border ${metrics.breakEvenUnits === null ? 'bg-rose-50/70 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
             <span className="text-xs font-medium text-slate-600 block">{lang === 'en' ? 'Net Margin / Break-Even' : '淨利率 / 損益兩平'}</span>
-            <strong className="text-base font-bold font-mono tabular-nums text-slate-900 block mt-1">
-              {metrics.profitMarginPercent}% · {metrics.breakEvenUnits} {lang === 'en' ? 'sales' : '套'}
+            <strong className={`text-base font-bold font-mono tabular-nums block mt-1 ${metrics.breakEvenUnits === null ? 'text-rose-700' : 'text-slate-900'}`}>
+              {metrics.profitMarginPercent}% ·{' '}
+              {metrics.breakEvenUnits === null
+                ? metrics.netPerSale < 0
+                  ? lang === 'en'
+                    ? 'Unattainable (loss/sale)'
+                    : '無法損益兩平（單筆虧損）'
+                  : lang === 'en'
+                  ? 'N/A ($0 margin)'
+                  : '不適用（零邊際利潤）'
+                : `${metrics.breakEvenUnits} ${lang === 'en' ? 'sales' : '套'}`}
             </strong>
           </div>
         </div>

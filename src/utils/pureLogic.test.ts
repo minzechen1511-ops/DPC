@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateOpportunityScore, rankAndBadgeCandidates } from './scoring.ts';
 import { validateSevenPartCard, analyzeReferenceLibrary } from './referenceParser.ts';
-import { checkStagePrerequisites, calculateOverallProgress } from './workflowEngine.ts';
+import { checkStagePrerequisites, calculateOverallProgress, computeOutlineStageStatus } from './workflowEngine.ts';
 import { compileManuscriptMarkdown } from './markdownCompiler.ts';
 import { deriveSynchronizedCandidates, SAMPLE_OBSERVATIONS } from './marketDiscoveryEngine.ts';
 import { TopicCandidate, ReferenceCard, DigitalProductProject } from '../types/project.ts';
+import { BLANK_PROJECT } from '../data/demoProject.ts';
 
 test('scoring logic calculates correct rubric total out of 100', () => {
   const breakdown: TopicCandidate['scoreBreakdown'] = {
@@ -180,4 +181,59 @@ test('analyzeReferenceLibrary correctly computes verified counts', () => {
 test('sample and empty marketplace observations never produce live recommendations', () => {
   assert.deepEqual(deriveSynchronizedCandidates(SAMPLE_OBSERVATIONS), []);
   assert.deepEqual(deriveSynchronizedCandidates([]), []);
+});
+
+test('computeOutlineStageStatus updates stage status and increases calculateOverallProgress after saving an outline', () => {
+  const project = structuredClone(BLANK_PROJECT) as DigitalProductProject;
+  project.outline = [];
+  project.workflow.stageStatuses.outline_builder = computeOutlineStageStatus(project.outline, []);
+  assert.equal(project.workflow.stageStatuses.outline_builder, 'NOT_STARTED');
+  const progressBefore = calculateOverallProgress(project);
+
+  project.outline = [
+    {
+      id: 'CH-01',
+      order: 1,
+      title: 'Actionable Blueprint Chapter 1',
+      objective: 'Build a verified baseline workflow',
+      subtopics: ['Step 1: Audit inputs'],
+      targetWordCount: 1500,
+      practicalDeliverable: 'Baseline audit sheet',
+      mappedReferenceIds: [],
+      exampleScenarios: [],
+      completionMilestone: 'Completed sheet',
+      isCompleted: false,
+      isLocked: false,
+    },
+  ];
+  project.workflow.stageStatuses.outline_builder = computeOutlineStageStatus(project.outline, []);
+  assert.equal(project.workflow.stageStatuses.outline_builder, 'COMPLETED');
+  const progressAfter = calculateOverallProgress(project);
+  assert.ok(progressAfter > progressBefore, `Expected progress ${progressAfter} > ${progressBefore}`);
+
+  // If references exist in library and chapter has none mapped yet, status should be PARTIAL
+  project.referenceLibrary.cards = [
+    {
+      id: 'REF-1',
+      title: 'Ref 1',
+      sourceTitle: 'Source 1',
+      publisherOrOrg: 'Org',
+      sourceURL: 'https://example.org',
+      retrievedAt: '2026-11-18',
+      status: 'VERIFIED_FULL_TEXT',
+      qualityScore: 90,
+      description: 'Desc',
+      contentOutline: ['O'],
+      practicalFramework: { name: 'F', editorialOrigin: 'E', actionSteps: [] },
+      researchSummary: 'Summary',
+      editorialNotes: { targetChapters: [], exerciseSuggestions: [], worksheetIntegration: '', verificationNotes: '' },
+      brandGuidelines: { toneApplication: '', visualDirection: '', audienceFraming: '' },
+      pillars: [],
+      supportedClaims: [],
+      rightsNotes: '',
+    },
+  ];
+  assert.equal(computeOutlineStageStatus(project.outline, project.referenceLibrary.cards), 'PARTIAL');
+  project.outline[0].mappedReferenceIds = ['REF-1'];
+  assert.equal(computeOutlineStageStatus(project.outline, project.referenceLibrary.cards), 'COMPLETED');
 });

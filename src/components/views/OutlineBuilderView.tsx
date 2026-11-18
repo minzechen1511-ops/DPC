@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ListTree, CheckCircle2, Plus, Trash2, Sparkles, BarChart3 } from 'lucide-react';
+import { ListTree, CheckCircle2, Plus, Trash2, Sparkles, BarChart3, Lock, ArrowRight } from 'lucide-react';
 import { DigitalProductProject, ChapterOutlineItem } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 import { generateTextWithAi } from '../../services/aiService.ts';
 import { countManuscriptWords } from '../../utils/textMetrics.ts';
+import { checkStagePrerequisites } from '../../utils/workflowEngine.ts';
 import { buildOutlineSynthesisPrompt, parseOutlineSynthesisResponse } from '../../utils/stageSynthesis.ts';
 
 interface OutlineBuilderViewProps {
@@ -24,6 +25,7 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
   const t = translations[lang];
   const { outline } = project;
   const chapters = outline || [];
+  const prereq = checkStagePrerequisites('outline_builder', project);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
   const [focusNote, setFocusNote] = useState('');
@@ -115,9 +117,9 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            disabled={aiBusy}
+            disabled={aiBusy || !prereq.canRun}
             onClick={handleDraftOutlineWithAi}
-            className="px-4 py-2.5 text-sm font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors flex items-center gap-2"
+            className="px-4 py-2.5 text-sm font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
             <span>
@@ -129,8 +131,9 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
 
           <button
             type="button"
+            disabled={!prereq.canRun}
             onClick={handleAddChapter}
-            className="px-4 py-2.5 text-sm font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors flex items-center gap-2"
+            className="px-4 py-2.5 text-sm font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
             <span>{lang === 'en' ? 'Add Chapter' : '新增章節'}</span>
@@ -145,6 +148,34 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
           </button>
         </div>
       </div>
+
+      {!prereq.canRun && (
+        <div role="status" className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5 text-sm text-amber-950">
+            <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div>
+              <strong className="block">
+                {lang === 'en'
+                  ? 'Gate B Strategy Approval Required Before Editing Outline'
+                  : '編輯章節大綱前需先完成 Stage 7 Gate B 產品憲章核准'}
+              </strong>
+              <span className="text-xs text-amber-900">
+                {lang === 'en'
+                  ? 'Approve Stage 7 Product Charter (Gate B) first to unlock outline editing and AI synthesis. Chapter relevance and citations are audited at Gate C.'
+                  : prereq.reason || '需先在 Gate B 核准 Product Charter (產品憲章)，才能解鎖大綱編輯與章節撰寫。'}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveView('product_charter')}
+            className="px-4 py-2 rounded-xl bg-amber-900 hover:bg-amber-950 text-white text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+          >
+            <span>{lang === 'en' ? 'Go to Stage 7 (Gate B)' : '前往 Stage 7 產品憲章 (Gate B)'}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Synthesise.ai Curriculum Guidance Bar */}
       <div className="lab-panel p-4 sm:p-5 bg-gradient-to-r from-teal-50/60 via-white to-sky-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -226,8 +257,9 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
             </p>
             <button
               type="button"
+              disabled={!prereq.canRun}
               onClick={handleAddChapter}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl inline-flex items-center gap-2"
+              className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl inline-flex items-center gap-2 disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
               <span>{lang === 'en' ? 'Create Chapter 1' : '建立第一章'}</span>
@@ -290,10 +322,14 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
                   </div>
                   <p className="text-xs text-slate-600">
                     {lang === 'en'
-                      ? 'Changing the title, objective or subtopics requires a new Gate B relevance review. Changing target length requires Gate C review.'
-                      : '修改標題、學習目標或子章節後需重新進行 Gate B 審查；修改目標字數需進行 Gate C 審查。'}
+                      ? 'Changing the title, objective, subtopics, or target length requires a new Gate C relevance and quality review.'
+                      : '修改標題、學習目標、子章節或目標字數後，需於 Gate C 重新進行文獻關聯與品質審查。'}
                   </p>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-semibold">
+                  <button
+                    type="submit"
+                    disabled={!prereq.canRun}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-semibold disabled:opacity-50"
+                  >
                     {lang === 'en' ? 'Save chapter plan' : '儲存章節規劃'}
                   </button>
                 </form>
@@ -318,9 +354,10 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
                   )}
                   <button
                     type="button"
+                    disabled={!prereq.canRun}
                     aria-label={lang === 'en' ? `Remove ${ch.id}` : `刪除 ${ch.id}`}
                     onClick={() => handleDeleteChapter(ch.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg disabled:opacity-40"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

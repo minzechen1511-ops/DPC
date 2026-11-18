@@ -1,4 +1,4 @@
-import { DigitalProductProject, StageId, StageStatus } from '../types/project.ts';
+import { ChapterOutlineItem, DigitalProductProject, ReferenceCard, StageId, StageStatus } from '../types/project.ts';
 
 export const STAGE_ORDER: StageId[] = [
   'market_research',
@@ -248,6 +248,31 @@ export function checkStagePrerequisites(
     default:
       return { canRun: true };
   }
+}
+
+/**
+ * Computes outline_builder stage completion status from the current outline and reference library.
+ */
+export function computeOutlineStageStatus(
+  outline: ChapterOutlineItem[],
+  cards: ReferenceCard[] = []
+): StageStatus {
+  if (!outline || outline.length === 0) {
+    return 'NOT_STARTED';
+  }
+  const availableCardIds = new Set(cards.map((card) => card.id));
+  const allChaptersReady = outline.every((ch) => {
+    const hasTitle = Boolean(ch.title?.trim());
+    const hasObjective = Boolean(ch.objective?.trim());
+    const hasSubtopics = Array.isArray(ch.subtopics) && ch.subtopics.some((s) => s.trim().length > 0);
+    const hasTargetWords = Number(ch.targetWordCount) >= 100;
+    const hasMappedSource =
+      availableCardIds.size === 0 ||
+      (Array.isArray(ch.mappedReferenceIds) &&
+        ch.mappedReferenceIds.some((id) => availableCardIds.has(id)));
+    return hasTitle && hasObjective && hasSubtopics && hasTargetWords && hasMappedSource;
+  });
+  return allChaptersReady ? 'COMPLETED' : 'PARTIAL';
 }
 
 /**
