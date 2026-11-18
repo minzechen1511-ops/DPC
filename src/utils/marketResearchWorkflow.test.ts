@@ -1,3 +1,4 @@
+import { SYNTHETIC_IMPORT_CSV as SAMPLE_IMPORT_CSV_TEMPLATE } from '../../tests/marketImportFixtures.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { MarketplaceObservation } from '../types/project.ts';
@@ -17,7 +18,6 @@ import {
   isPrivateOrInvalidPublicUrl,
   isResourceHomepageUrl,
   parseImportedObservations,
-  SAMPLE_IMPORT_CSV_TEMPLATE,
 } from './manualEvidenceReview.ts';
 import { approveGate, gateIssues, revokeApprovals } from './gatePolicy.ts';
 import { buildLearningBundle } from './learningBundle.ts';
@@ -519,7 +519,7 @@ test('13. Multi-source comparison matrix handles corroborating, complementary, c
   assert.equal(dupRow.relationship, 'duplicates_dataset');
   assert.equal(trendsRow.relationship, 'complements');
   assert.match(trendsRow.cannotEstablish, /unit sales/i);
-  assert.equal(contraRow.relationship, 'contradicts');
+  assert.equal(contraRow.relationship, 'excluded');
   assert.equal(contraRow.reviewState, 'rejected_blocked');
 
   // Single-chain only -> SINGLE_SOURCE
@@ -607,7 +607,7 @@ test('15. Legacy project migration preserves live/manual/import observations, at
   assert.equal(migrated.schemaVersion, '4.0');
   assert.equal(migrated.preferences.automationMode, 'manual_review');
   assert.equal(migrated.preferences.autoApproveNonCritical, false);
-  assert.equal(migrated.marketResearch.resourceDirectory?.length, 9);
+  assert.equal(migrated.marketResearch.resourceDirectory?.length, 10);
   assert.equal(migrated.referenceLibrary.cards.length, 1);
 
   const obsSample = migrated.marketResearch.platformEvidence.find((o) => o.id === 'OBS-01')!;
@@ -617,7 +617,8 @@ test('15. Legacy project migration preserves live/manual/import observations, at
   assert.equal(obsReal.isSample, false);
   assert.equal(obsReal.attachmentHash, 'sha256_preserved_hash');
   assert.equal(obsReal.acquisitionMethod, 'file_import');
-  assert.equal(obsReal.reviewStatus, 'manually_reviewed');
-  assert.ok(obsReal.reviewedEvidenceHash);
+  assert.equal(obsReal.reviewStatus, 'unverified');
+  assert.equal(obsReal.reviewedEvidenceHash, undefined);
+  assert.ok(obsReal.reviewedAt, 'Preserve the legacy decision without manufacturing a new one');
 });
 

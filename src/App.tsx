@@ -232,7 +232,7 @@ export default function App() {
       setSaveStatus('saving');
       setWorkspaceError(null);
       try {
-        const result = await saveProjectToFirestore(authUser.uid, targetProject);
+        const result = await saveProjectToFirestore(authUser.uid, targetProject, revisionsRef.current[targetProject.projectId]);
         updateRevision(result.project.projectId, result.revision);
         setSaveStatus('saved');
       } catch (err: any) {
@@ -427,7 +427,7 @@ export default function App() {
   };
 
   const handleAddManualObservation = (obs: MarketplaceObservation) => {
-    updateProjectObservations((prev) => [obs, ...prev]);
+    updateProjectObservations((prev) => [obs, ...prev.filter(existing=>existing.id!==obs.id)]);
   };
 
   const handleImportObservations = (obsList: MarketplaceObservation[]) => {
@@ -722,7 +722,7 @@ export default function App() {
 
   const handleUpdateBrand = (updatedBrand: DigitalProductProject['brand']) => {
     setProject((prev) => ({
-      ...prev,
+      ...revokeApprovals(prev, 'gateB'),
       isBlankProject: false,
       updatedAt: new Date().toISOString(),
       brand: updatedBrand,
@@ -737,9 +737,9 @@ export default function App() {
         },
       },
       workflow: {
-        ...prev.workflow,
+        ...revokeApprovals(prev, 'gateB').workflow,
         stageStatuses: {
-          ...prev.workflow.stageStatuses,
+          ...revokeApprovals(prev, 'gateB').workflow.stageStatuses,
           brand_design: 'COMPLETED',
         },
       },
@@ -751,7 +751,7 @@ export default function App() {
     salesAssets: SalesAssets
   ) => {
     setProject((prev) => ({
-      ...prev,
+      ...revokeApprovals(prev, 'gateB'),
       isBlankProject: false,
       updatedAt: new Date().toISOString(),
       pricingReport,
@@ -768,9 +768,9 @@ export default function App() {
         },
       },
       workflow: {
-        ...prev.workflow,
+        ...revokeApprovals(prev, 'gateB').workflow,
         stageStatuses: {
-          ...prev.workflow.stageStatuses,
+          ...revokeApprovals(prev, 'gateB').workflow.stageStatuses,
           pricing_launch: 'COMPLETED',
         },
       },

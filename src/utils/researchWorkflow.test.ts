@@ -71,9 +71,11 @@ test('stale evidence blocks a previously approved buyer bundle and incomplete im
  assert.ok(gateIssues(DEMO_PROJECT,'gateC').length>0);
 });
 test('offline bundle includes chapter readers, usable worksheets, companions, executive summary, launch kit and correct integrity hashes',async()=>{
- const project=approveGate(completeProject(),'gateC');
+ let project=approveGate(completeProject(),'gateC');
  project.outline[0].title='=HYPERLINK("https://example.com")';
  relevanceFixture(project.referenceLibrary.cards[0],project.outline);
+ assert.ok(gateIssues(project,'gateC').length, 'Changing chapter research inputs invalidates prior approvals');
+ project=approveGate(project,'gateB');project=approveGate(project,'gateC');
  const {zip,manifest}=await buildLearningBundle(project,sourceCheckFixture(project.referenceLibrary.cards));
  for(const path of ['START-HERE.html','book/executive-ebook.html','chapters/chapter-1.html','resources/executive-summary.md','resources/executive-summary.html','resources/worksheet-1.html','resources/companion-1.html','resources/learning-progress.csv','research/reading-room.html','research/marketplace-evidence.json','publisher/launch-summary.html','publisher/project-backup.json','review/publication-review.json','manifest.json'])assert.ok(zip.file(path),path);
  assert.equal(JSON.parse(await zip.file('review/publication-review.json')!.async('string')).reviewed,true);

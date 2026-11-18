@@ -10,6 +10,7 @@ import { searchReferences, retrieveReference, verifyReferenceRecords } from './r
 import { collectMarketResearch, checkResourceDirectory, checkUrlAccessibility } from './marketResearch.ts';
 import { FirebaseTokenVerifier } from './security/firebaseToken.ts';
 import { isPrivateOrInvalidPublicUrl } from '../src/utils/manualEvidenceReview.ts';
+import { retrievePublicListing } from './marketListings.ts';
 
 export interface ApiRouterDeps {
   store?: DataStore;
@@ -45,7 +46,8 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
       status: 'ok',
       version: '4.1.0',
       mode: 'commercial-cloud',
-      dbMode: 'firestore',
+      dbMode: store.mode,
+      frontendProjectStore: 'firestore',
       app: 'Digital Product Studio',
       authRequired: true,
       geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
@@ -65,6 +67,14 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
   router.use('/jobs', createJobRouter({ store, config, verifyToken: deps.verifyToken }));
 
   // Live market & academic reference research endpoints
+  router.post('/market/listings/retrieve', researchRateLimit, async (req:Request,res:Response)=>{
+    const {url,category,productFormat}=req.body || {};
+    if(typeof url!=='string'||url.length>2000||typeof category!=='string'||category.trim().length<2||category.length>200||typeof productFormat!=='string'||productFormat.trim().length<2||productFormat.length>200)return res.status(400).json({error:'Provide a specific public product URL, investigation category and product format.'});
+    try {
+      await recordResearchEvent('market_research');
+      return res.json(await retrievePublicListing({url:url.trim(),category:category.trim(),productFormat:productFormat.trim()}));
+    } catch(error){return res.status(422).json({error:error instanceof Error?error.message:'Public listing could not be retrieved; no sample data was substituted.',httpStatus:(error as {httpStatus?:number}).httpStatus ?? null,checkedAt:new Date().toISOString()});}
+  });
   router.get('/market/research', researchRateLimit, async (_req: Request, res: Response) => {
     await recordResearchEvent('market_research');
     try {

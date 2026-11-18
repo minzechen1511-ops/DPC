@@ -4,10 +4,16 @@ import { isGateAQualifiedEvidence } from './marketDiscoveryEngine.ts';
 import { isObservationReviewStale } from './manualEvidenceReview.ts';
 import { auditChapter, resourceEvidenceDocument } from './citationEvidence.ts';
 import { isRetrievedSource, chapterResearchFingerprint } from './sourceEvidence.ts';
+import { approvalFingerprint } from './approvalIntegrity.ts';
 const reviewedSource = isRetrievedSource;
 export type GateKey = 'gateA' | 'gateB' | 'gateC';
 export function gateIssues(project: DigitalProductProject, gate: GateKey): string[] {
   const issues: string[] = [];
+  const order: GateKey[] = ['gateA','gateB','gateC'];
+  for (const key of order.slice(0, order.indexOf(gate)+1)) {
+    const decision=project.workflow.gates[key];
+    if(decision.isApproved && decision.approvedFingerprint!==approvalFingerprint(project,key)) issues.push(`${key}: approval is not bound to the current project inputs. Review and explicitly approve again.`);
+  }
   const selected = project.marketResearch.topicCandidates.find(c => c.id === project.marketResearch.selectedTopicId);
   if (!selected) issues.push('Select a niche linked to current chart or manually reviewed marketplace evidence.');
   else {
@@ -48,11 +54,12 @@ export function gateIssues(project: DigitalProductProject, gate: GateKey): strin
 export function revokeApprovals(project: DigitalProductProject, from: GateKey): DigitalProductProject {
   const next = { ...project, updatedAt: new Date().toISOString(), workflow: { ...project.workflow, gates: { ...project.workflow.gates }, stageStatuses: { ...project.workflow.stageStatuses, quality_assurance: 'NEEDS_REVIEW' as const, export_center: 'BLOCKED' as const } } };
   const order: GateKey[] = ['gateA', 'gateB', 'gateC'];
-  for (const key of order.slice(order.indexOf(from))) next.workflow.gates[key] = { ...next.workflow.gates[key], isApproved: false, approvedAt: undefined };
+  for (const key of order.slice(order.indexOf(from))) next.workflow.gates[key] = { ...next.workflow.gates[key], isApproved: false, approvedAt: undefined, approvedFingerprint: undefined };
   if (from !== 'gateC') next.charter = { ...project.charter, isApproved: false, approvedAt: undefined };
   return next;
 }
 export function approveGate(project: DigitalProductProject, gate: GateKey): DigitalProductProject {
-  if (gateIssues(project, gate).length) return project;
-  return { ...project, referenceLibrary: gate === 'gateB' ? { ...project.referenceLibrary, status: 'COMPLETED' } : project.referenceLibrary, charter: gate === 'gateB' ? { ...project.charter, isApproved: true, approvedAt: new Date().toISOString() } : project.charter, workflow: { ...project.workflow, gates: { ...project.workflow.gates, [gate]: { ...project.workflow.gates[gate], isApproved: true, approvedAt: new Date().toISOString() } }, stageStatuses: { ...project.workflow.stageStatuses, ...(gate === 'gateA' ? { market_research: 'COMPLETED' as const } : {}), ...(gate === 'gateB' ? { reference_library: 'COMPLETED' as const } : {}), [gate === 'gateA' ? 'topic_selection' : gate === 'gateB' ? 'product_charter' : 'quality_assurance']: 'COMPLETED', export_center: gate === 'gateC' ? 'READY' : 'BLOCKED' } } };
+  const pending={...project,workflow:{...project.workflow,gates:{...project.workflow.gates,[gate]:{...project.workflow.gates[gate],isApproved:false}}}};
+  if (gateIssues(pending, gate).length) return project;
+  return { ...project, referenceLibrary: gate === 'gateB' ? { ...project.referenceLibrary, status: 'COMPLETED' } : project.referenceLibrary, charter: gate === 'gateB' ? { ...project.charter, isApproved: true, approvedAt: new Date().toISOString() } : project.charter, workflow: { ...project.workflow, gates: { ...project.workflow.gates, [gate]: { ...project.workflow.gates[gate], isApproved: true, approvedAt: new Date().toISOString(), approvedFingerprint: approvalFingerprint(project, gate) } }, stageStatuses: { ...project.workflow.stageStatuses, ...(gate === 'gateA' ? { market_research: 'COMPLETED' as const } : {}), ...(gate === 'gateB' ? { reference_library: 'COMPLETED' as const } : {}), [gate === 'gateA' ? 'topic_selection' : gate === 'gateB' ? 'product_charter' : 'quality_assurance']: 'COMPLETED', export_center: gate === 'gateC' ? 'READY' : 'BLOCKED' } } };
 }

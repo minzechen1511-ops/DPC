@@ -60,11 +60,14 @@ export type MarketSourceClass =
   | 'supporting_context';
 
 export type MarketAcquisitionMethod =
+  | 'public_page_capture'
   | 'live_collector'
   | 'manual_observation'
   | 'file_import';
 
 export type MarketEvidenceType =
+  | 'listing_details'
+  | 'published_research'
   | 'official_ranking'
   | 'reported_ranking'
   | 'estimate'
@@ -114,6 +117,8 @@ export interface ObservationReviewAssessment {
   metricNature: 'observed' | 'reported' | 'estimated';
   limitationsSummary: string;
   liveRetrievalUnavailableDisclosed?: boolean;
+  relationship?: 'corroborates' | 'complements' | 'contradicts';
+  relationshipRationale?: string;
 }
 
 export interface ObservationReviewHistoryEntry {
@@ -126,6 +131,7 @@ export interface ObservationReviewHistoryEntry {
 }
 
 export interface MarketplaceObservation {
+  evidenceCapture?: { content: string; mediaType: string; sha256: string; retrievedAt: string; sourceURL: string };
   isSample?: boolean;
   priceKnown?: boolean;
   collector?: 'apple-chart-v1' | 'amazon-chart-v1';
@@ -138,6 +144,7 @@ export interface MarketplaceObservation {
     | 'Google Play Books'
     | 'Kobo'
     | 'Gumroad'
+    | 'Whop'
     | 'Payhip'
     | 'Etsy'
     | 'NYT Best Sellers'
@@ -151,6 +158,7 @@ export interface MarketplaceObservation {
   sellerOrAuthor: string;
   productURL: string;
   currentPrice: number;
+  pricingTerms?: string;
   currency: string;
   observedRank?: number;
   rankScope?: string;
@@ -184,7 +192,7 @@ export interface MarketplaceObservation {
   reviewHistory?: ObservationReviewHistoryEntry[];
   reviewerRationale?: string;
   reviewedAt?: string;
-  evidenceLevel: 'VERIFIED_RANKING' | 'FEATURED_COLLECTION' | 'SEARCH_RESULT' | 'SELLER_CLAIM' | 'PUBLIC_MARKET_INDEX';
+  evidenceLevel: 'VERIFIED_RANKING' | 'FEATURED_COLLECTION' | 'SEARCH_RESULT' | 'SELLER_CLAIM' | 'PUBLIC_MARKET_INDEX' | 'PUBLIC_LISTING';
   dataLimitations: string;
 }
 
@@ -239,6 +247,7 @@ export type EvidenceRelationshipKind =
   | 'complements'
   | 'contradicts'
   | 'duplicates_dataset'
+  | 'excluded'
   | 'standalone';
 
 export interface CandidateEvidenceComparisonRow {
@@ -297,7 +306,7 @@ export interface TopicCandidate {
   differentiationAngle: string;
   creationComplexity: 'LOW' | 'MODERATE' | 'COMPLEX';
   potentialCompanions: string[];
-  confidenceRating: 'VERY_HIGH' | 'HIGH' | 'MEDIUM';
+  confidenceRating: 'VERY_HIGH' | 'HIGH' | 'MEDIUM' | 'LOW';
   opportunityScore: number; // 0-100 calculated by rubric
   scoreBreakdown: {
     demandSignal: number; // max 25
@@ -652,6 +661,7 @@ export interface WorkflowGate {
   gate: 'GATE_A_TOPIC' | 'GATE_B_STRATEGY' | 'GATE_C_QUALITY';
   isApproved: boolean;
   approvedAt?: string;
+  approvedFingerprint?: string;
   requiredFor: StageId[];
 }
 

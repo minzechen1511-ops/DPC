@@ -1,0 +1,883 @@
+{
+  "schemaVersion": "4.0",
+  "projectId": "release_audit_1795001649413",
+  "name": "RELEASE AUDIT ONLY — Emergency Expense Planning",
+  "isBlankProject": false,
+  "createdAt": "2026-11-18T11:34:08.954Z",
+  "updatedAt": "2026-11-18T11:34:09.469Z",
+  "preferences": {
+    "market": "US",
+    "language": "English",
+    "productFormat": "ebook_toolkit",
+    "automationMode": "manual_review",
+    "referenceTarget": 20,
+    "autoApproveNonCritical": false
+  },
+  "workflow": {
+    "activeStage": "topic_selection",
+    "stageStatuses": {
+      "market_research": "COMPLETED",
+      "topic_selection": "COMPLETED",
+      "project_brief": "NOT_STARTED",
+      "uvz": "NOT_STARTED",
+      "transformation_map": "NOT_STARTED",
+      "reference_library": "COMPLETED",
+      "product_charter": "COMPLETED",
+      "outline_builder": "PARTIAL",
+      "content_studio": "NOT_STARTED",
+      "workbook_studio": "NOT_STARTED",
+      "quality_assurance": "COMPLETED",
+      "brand_design": "NOT_STARTED",
+      "pricing_launch": "NOT_STARTED",
+      "export_center": "READY"
+    },
+    "gates": {
+      "gateA": {
+        "gate": "GATE_A_TOPIC",
+        "isApproved": true,
+        "requiredFor": [
+          "project_brief",
+          "reference_library",
+          "uvz",
+          "transformation_map"
+        ],
+        "approvedAt": "2026-11-18T11:34:09.414Z",
+        "approvedFingerprint": "approval-v1-3b64e19e8878cea"
+      },
+      "gateB": {
+        "gate": "GATE_B_STRATEGY",
+        "isApproved": true,
+        "requiredFor": [
+          "outline_builder",
+          "content_studio",
+          "workbook_studio",
+          "brand_design",
+          "pricing_launch"
+        ],
+        "approvedAt": "2026-11-18T11:34:09.416Z",
+        "approvedFingerprint": "approval-v1-dc2f148c1070a626"
+      },
+      "gateC": {
+        "gate": "GATE_C_QUALITY",
+        "isApproved": true,
+        "requiredFor": [
+          "export_center"
+        ],
+        "approvedAt": "2026-11-18T11:34:09.439Z",
+        "approvedFingerprint": "approval-v1-534ea4d9d6fea3cc"
+      }
+    },
+    "isAutopilotRunning": false,
+    "lastCheckpoint": "2026-11-18T11:34:08.955Z"
+  },
+  "marketResearch": {
+    "researchDate": "2026-11-18",
+    "platformEvidence": [
+      {
+        "id": "AUDIT-MANUAL-AMAZON",
+        "marketplace": "Amazon Kindle",
+        "publisher": "Amazon",
+        "country": "US",
+        "category": "Investing, Money & Personal Finance",
+        "productTitle": "The Art of Spending Money: Simple Choices for a Richer Life",
+        "sellerOrAuthor": "Morgan Housel",
+        "productURL": "https://www.amazon.com/dp/B0F42TZ2FY",
+        "sourceURL": "https://www.amazon.com/Best-Sellers-Kindle-Store-Business-Investing/zgbs/digital-text/154821011",
+        "currentPrice": 0,
+        "priceKnown": false,
+        "currency": "USD",
+        "observedRank": 1,
+        "rankScope": "Amazon US · Business & Investing Best Sellers",
+        "productFormat": "Kindle Ebook",
+        "observedAt": "2026-11-18T11:32:20.708Z",
+        "dataAsOfDate": "2026-11-18T11:32:20.708Z",
+        "retrievedAt": "2026-11-18T11:32:20.708Z",
+        "evidenceExcerpt": "#1 The Art of Spending Money: Simple Choices for a Richer Life (Investing, Money & Personal Finance)",
+        "excerptLocator": "[data-asin=\"B0F42TZ2FY\"] .zg-bdg-text",
+        "evidenceAttachmentRef": "audit/results/local-market.json",
+        "collectionMethodology": "Explicit inspection of original numbered Amazon badge, title, ASIN and link retained by the actual backend request.",
+        "keepaProvenance": "not_applicable",
+        "evidenceChainId": "audit-amazon-marketplace",
+        "sourceClass": "primary_marketplace",
+        "acquisitionMethod": "manual_observation",
+        "evidenceType": "official_ranking",
+        "reviewStatus": "manually_reviewed",
+        "evidenceLevel": "PUBLIC_MARKET_INDEX",
+        "dataLimitations": "Public chart position only; sales volume, revenue, conversion, reviews, and price are not inferred from rank or search order.",
+        "isSample": false,
+        "evidenceVersionHash": "ev_ae2cf127d816eb8a",
+        "reviewOutcome": "qualified",
+        "reviewAssessment": {
+          "relationship": "complements",
+          "relationshipRationale": "Marketplace book visibility and an independently originated household survey offer different contextual signals; neither validates this proposed worksheet.",
+          "establishes": "Ordinal position within the stated Amazon Kindle chart.",
+          "dateScopeProductMatch": "partial_scope_match",
+          "metricNature": "observed",
+          "limitationsSummary": "Public chart position only; sales volume, revenue, conversion, reviews, and price are not inferred from rank or search order.",
+          "liveRetrievalUnavailableDisclosed": true
+        },
+        "reviewHistory": [
+          {
+            "timestamp": "2026-11-18T11:34:09.411Z",
+            "status": "manually_reviewed",
+            "outcome": "qualified",
+            "rationale": "Compared the original numbered badge, title, ASIN and product URL. It shows current visibility for a book only, without worksheet sales evidence.",
+            "evidenceVersionHash": "ev_ae2cf127d816eb8a",
+            "establishes": "Ordinal position within the stated Amazon Kindle chart."
+          }
+        ],
+        "reviewerRationale": "Compared the original numbered badge, title, ASIN and product URL. It shows current visibility for a book only, without worksheet sales evidence.",
+        "reviewedAt": "2026-11-18T11:34:09.411Z",
+        "reviewedEvidenceHash": "ev_ae2cf127d816eb8a"
+      },
+      {
+        "id": "IMP-AUDIT-FED-SHED",
+        "marketplace": "Other Research Source",
+        "publisher": "Federal Reserve Board",
+        "country": "US",
+        "category": "Household Personal Finance",
+        "productTitle": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report",
+        "sellerOrAuthor": "Federal Reserve Board",
+        "productURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+        "sourceURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+        "currentPrice": 0,
+        "priceKnown": false,
+        "currency": "USD",
+        "productFormat": "Published household survey report",
+        "observedAt": "2025-10",
+        "dataAsOfDate": "2025-10",
+        "publicationDate": "2026-05-13",
+        "retrievedAt": "2026-11-18T11:21:44.484Z",
+        "evidenceExcerpt": "The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.",
+        "excerptLocator": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16",
+        "evidenceAttachmentRef": "real-evidence-import.json",
+        "attachmentHash": "50522a0f05873add20aa0b2d84a3d5bf464304cd8cc3053fb4083552be647543",
+        "importFileName": "real-evidence-import.json",
+        "importRowNumber": 1,
+        "rawImportedPayload": {
+          "id": "AUDIT-FED-SHED",
+          "productTitle": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report",
+          "publisher": "Federal Reserve Board",
+          "marketplace": "Other Research Source",
+          "country": "US",
+          "category": "Household Personal Finance",
+          "productFormat": "Published household survey report",
+          "productURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+          "sourceURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+          "sourceClass": "supporting_context",
+          "evidenceType": "published_research",
+          "dataAsOfDate": "2025-10",
+          "publicationDate": "2026-05-13",
+          "retrievedAt": "2026-11-18T11:21:44.484Z",
+          "evidenceExcerpt": "The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.",
+          "excerptLocator": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16",
+          "collectionMethodology": "Official report announcement; independent SHED survey fielded in October 2025, not a buyer-conversion study.",
+          "dataLimitations": "Historical US adult self-report survey, not marketplace purchases or willingness to pay for a budgeting worksheet. Fieldwork month only; exact respondent dates unknown.",
+          "evidenceChainId": "shed-2025"
+        },
+        "collectionMethodology": "Official report announcement; independent SHED survey fielded in October 2025, not a buyer-conversion study.",
+        "keepaProvenance": "not_applicable",
+        "evidenceChainId": "shed-2025",
+        "sourceClass": "supporting_context",
+        "acquisitionMethod": "file_import",
+        "evidenceType": "published_research",
+        "reviewStatus": "manually_reviewed",
+        "evidenceLevel": "PUBLIC_MARKET_INDEX",
+        "dataLimitations": "Historical US adult self-report survey, not marketplace purchases or willingness to pay for a budgeting worksheet. Fieldwork month only; exact respondent dates unknown.",
+        "isSample": false,
+        "evidenceVersionHash": "ev_72b466b0465a929d",
+        "reviewOutcome": "qualified",
+        "reviewedAt": "2026-11-18T11:34:09.411Z",
+        "reviewerRationale": "Compared the exact retained Federal Reserve paragraph with the retrieved official report. It contextualizes household finance; it does not establish workbook demand.",
+        "reviewedEvidenceHash": "ev_72b466b0465a929d",
+        "reviewAssessment": {
+          "relationship": "complements",
+          "relationshipRationale": "Marketplace book visibility and an independently originated household survey offer different contextual signals; neither validates this proposed worksheet.",
+          "establishes": "Historical US household survey context for emergency-expense planning.",
+          "dateScopeProductMatch": "partial_scope_match",
+          "metricNature": "reported",
+          "limitationsSummary": "Historical US adult self-report survey, not marketplace purchases or willingness to pay for a budgeting worksheet. Fieldwork month only; exact respondent dates unknown.",
+          "liveRetrievalUnavailableDisclosed": true
+        },
+        "reviewHistory": [
+          {
+            "timestamp": "2026-11-18T11:34:09.411Z",
+            "status": "manually_reviewed",
+            "outcome": "qualified",
+            "rationale": "Compared the exact retained Federal Reserve paragraph with the retrieved official report. It contextualizes household finance; it does not establish workbook demand.",
+            "evidenceVersionHash": "ev_72b466b0465a929d",
+            "establishes": "Historical US household survey context for emergency-expense planning."
+          }
+        ]
+      }
+    ],
+    "topicCandidates": [
+      {
+        "id": "NICHE-personal_finance",
+        "marketCategory": "personal_finance",
+        "evidenceStatus": "REVIEWED_FALLBACK",
+        "evidenceLabel": "MANUALLY_REVIEWED_PRIMARY",
+        "multiSourceStatus": "REVIEWED_MULTI_SOURCE",
+        "evidenceComparison": [
+          {
+            "observationId": "AUDIT-MANUAL-AMAZON",
+            "productTitle": "The Art of Spending Money: Simple Choices for a Richer Life",
+            "marketplace": "Amazon Kindle",
+            "sourceURL": "https://www.amazon.com/Best-Sellers-Kindle-Store-Business-Investing/zgbs/digital-text/154821011",
+            "dataAsOfDate": "2026-11-18T11:32:20.708Z",
+            "evidenceChainId": "origin:amazon",
+            "sourceClass": "primary_marketplace",
+            "acquisitionMethod": "manual_observation",
+            "evidenceType": "official_ranking",
+            "reviewState": "valid_manual",
+            "supports": "Ordinal position within the stated Amazon Kindle chart.",
+            "cannotEstablish": "Does not measure unit sales volume, net margin, conversion rate, or creator-audience fit.",
+            "relationship": "complements",
+            "sharesDatasetWithIds": [],
+            "conflictOrLimitationNote": "Complementary signal (different evidence type from primary chart; does not independently verify unit sales). Public chart position only; sales volume, revenue, conversion, reviews, and price are not inferred from rank or search order."
+          },
+          {
+            "observationId": "IMP-AUDIT-FED-SHED",
+            "productTitle": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report",
+            "marketplace": "Other Research Source",
+            "sourceURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+            "dataAsOfDate": "2025-10",
+            "evidenceChainId": "origin:federalreserve.gov",
+            "sourceClass": "supporting_context",
+            "acquisitionMethod": "file_import",
+            "evidenceType": "published_research",
+            "reviewState": "valid_manual",
+            "supports": "Historical US household survey context for emergency-expense planning.",
+            "cannotEstablish": "Does not measure unit sales volume, net margin, conversion rate, or creator-audience fit.",
+            "relationship": "complements",
+            "sharesDatasetWithIds": [],
+            "conflictOrLimitationNote": "Complementary signal (different evidence type from primary chart; does not independently verify unit sales). Historical US adult self-report survey, not marketplace purchases or willingness to pay for a budgeting worksheet. Fieldwork month only; exact respondent dates unknown."
+          }
+        ],
+        "audienceTopicHypotheses": [
+          {
+            "id": "personal_finance-hyp-early-career",
+            "audienceLabel": "Early-career earners organizing fixed bills, irregular annual costs, and debt sequences",
+            "productAngle": "30-day cashflow baseline table, sinking-fund calculator sheet, and monthly 15-minute check-in",
+            "evidenceBasis": "Informed by budgeting & personal finance signals (Amazon Kindle #1, Other Research Source); strictly educational template tools.",
+            "uncertainty": "Not licensed financial advice. Price sensitivity and spreadsheet vs ebook preference require buyer checks."
+          },
+          {
+            "id": "personal_finance-hyp-first-home",
+            "audienceLabel": "Prospective first-time homebuyers comparing closing fees and maintenance reserves",
+            "productAngle": "Pre-purchase hidden-cost audit workbook and mortgage readiness checklist",
+            "evidenceBasis": "Inspired by real-estate & personal finance signals (Amazon Kindle #1, Other Research Source); targets concrete financial preparation tasks.",
+            "uncertainty": "Regional mortgage rules vary widely; educational checklists require clear jurisdiction disclaimers."
+          }
+        ],
+        "evidenceStrength": {
+          "overallLevel": "MODERATE_REVIEWED",
+          "collectorVerifiedCount": 0,
+          "manuallyReviewedCount": 2,
+          "independentChainCount": 2,
+          "credibilityBasis": "Human-inspected manually reviewed primary (Amazon Kindle, Other Research Source)",
+          "methodologySummary": "Explicit inspection of original numbered Amazon badge, title, ASIN and link retained by the actual backend request.; Official report announcement; independent SHED survey fielded in October 2025, not a buyer-conversion study.",
+          "recencySummary": "Data age ~414d (review recency before relying on snapshot)",
+          "scopeFitSummary": "Educational category match (personal finance); general store ranks do not measure niche buyer conversion.",
+          "corroborationSummary": "2 distinct evidence chain(s) linked without duplicate dataset inflation."
+        },
+        "productSuitability": {
+          "readinessStatus": "HYPOTHESIS_NEEDS_VALIDATION",
+          "audienceProblemClarity": "Draft concept hypothesis addresses: Rising living costs and fragmented recurring subscriptions complicate monthly saving and debt prioritization.",
+          "differentiationHypothesis": "Combines plain-language household budgeting concepts with printable cashflow audit worksheets and clear educational boundaries.",
+          "creatorFitStatus": "UNMEASURED",
+          "creatorFitNote": "Creator workflow capability is production coordination; domain expertise, credentials, and customer outcomes are NOT pre-assumed and must be supplied or researched intentionally.",
+          "productionEffort": "MODERATE",
+          "nextValidationStep": "Capture at least one primary digital marketplace chart or run direct buyer interviews to validate willingness to pay before committing production time."
+        },
+        "factorAssessments": [
+          {
+            "key": "demandSignal",
+            "label": "Demand signal",
+            "score": 18,
+            "maxScore": 25,
+            "status": "REVIEWED_SIGNAL",
+            "basis": "Manually reviewed primary marketplace observation(s) (2 record(s), 2 independent chain(s)). Not collector-verified.",
+            "uncertainty": "Captured via manual observation or import; verify currency and marketplace scope before assuming active velocity."
+          },
+          {
+            "key": "problemUrgency",
+            "label": "Problem urgency",
+            "score": null,
+            "maxScore": 15,
+            "status": "UNMEASURED",
+            "basis": "No customer interview, survey, or conversion dataset recorded yet.",
+            "uncertainty": "Unmeasured — confirm problem urgency directly with target readers."
+          },
+          {
+            "key": "competitionEntry",
+            "label": "Competition entry",
+            "score": null,
+            "maxScore": 15,
+            "status": "UNMEASURED",
+            "basis": "Competitor pricing distribution, review depth, and saturation are not systematically measured.",
+            "uncertainty": "Unmeasured — manually inspect competing listings and reviews before positioning."
+          },
+          {
+            "key": "differentiation",
+            "label": "Differentiation",
+            "score": null,
+            "maxScore": 15,
+            "status": "UNMEASURED",
+            "basis": "Proposed differentiation angle is an unvalidated editorial hypothesis.",
+            "uncertainty": "Unmeasured — verify whether buyers value the proposed companion toolkit angle."
+          },
+          {
+            "key": "creatorFit",
+            "label": "Creator fit",
+            "score": null,
+            "maxScore": 10,
+            "status": "UNMEASURED",
+            "basis": "Creator coordinates production workflows; subject expertise is not pre-assumed.",
+            "uncertainty": "Unmeasured — assess source availability and review capacity in Reference Library."
+          },
+          {
+            "key": "audienceReach",
+            "label": "Audience reach",
+            "score": null,
+            "maxScore": 10,
+            "status": "UNMEASURED",
+            "basis": "No existing owned audience, distribution channel, or ad CAC test recorded.",
+            "uncertainty": "Unmeasured — no audience has been approved or measured yet."
+          },
+          {
+            "key": "digitalFit",
+            "label": "Digital-product fit",
+            "score": null,
+            "maxScore": 5,
+            "status": "UNMEASURED",
+            "basis": "Format suitability inferred conceptually only; digital delivery willingness untested.",
+            "uncertainty": "Unmeasured — validate preferred format (ebook vs templates/worksheets) with buyers."
+          },
+          {
+            "key": "costRisk",
+            "label": "Cost / risk",
+            "score": null,
+            "maxScore": 5,
+            "status": "UNMEASURED",
+            "basis": "Time, licensing, and acquisition cost risk not yet quantified.",
+            "uncertainty": "Unmeasured — estimate production budget and price elasticity directly."
+          }
+        ],
+        "independentChainIds": [
+          "origin:amazon",
+          "origin:federalreserve.gov"
+        ],
+        "title": "Clarity-First Household Cashflow & Debt Reduction Guide",
+        "subtitle": "Structured budgeting framework, expense audit sheets, and milestone worksheets for household clarity",
+        "targetAudience": "Households and early-career earners seeking clear expense-tracking templates (educational tool, not financial advice)",
+        "coreProblem": "Rising living costs and fragmented recurring subscriptions complicate monthly saving and debt prioritization.",
+        "bigPromise": "Organize a transparent 30-day cashflow baseline, audit recurring expenses, and compare structured payoff sequences.",
+        "suggestedFormat": "ebook_toolkit",
+        "priceTestRange": {
+          "test": 15,
+          "regular": 29,
+          "premium": 49
+        },
+        "marketEvidenceSummary": "[AUDIT-MANUAL-AMAZON] Amazon Kindle: #1 — The Art of Spending Money: Simple Choices for a Richer Life (as of 2026-11-18T11:32:20.708Z; Amazon US · Business & Investing Best Sellers) · [IMP-AUDIT-FED-SHED] Other Research Source: Manual note — Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report (as of 2025-10; Household Personal Finance)",
+        "competitiveDensity": "MEDIUM",
+        "differentiationAngle": "Combines plain-language household budgeting concepts with printable cashflow audit worksheets and clear educational boundaries.",
+        "creationComplexity": "MODERATE",
+        "potentialCompanions": [
+          "Monthly Cashflow Ledger",
+          "Subscription & Fixed-Cost Pruning Worksheet",
+          "Emergency Buffer & Debt Sequence Planner",
+          "Irregular-Expense Sinking Fund Matrix"
+        ],
+        "confidenceRating": "MEDIUM",
+        "opportunityScore": 18,
+        "scoreBreakdown": {
+          "demandSignal": 18,
+          "problemUrgency": 0,
+          "competitionEntry": 0,
+          "differentiation": 0,
+          "creatorFit": 0,
+          "audienceReach": 0,
+          "digitalFit": 0,
+          "costRisk": 0
+        },
+        "recommendationReason": "2 manually reviewed fallback evidence record(s) across 2 chain(s) (manually reviewed primary). Not collector-verified and not a proven current bestseller; validate pricing and buyer demand directly before publishing.",
+        "researchGapNote": "Based on manually reviewed fallback records rather than a current live collector chart; review source scope and validate buyer willingness.",
+        "sourceObservationIds": [
+          "AUDIT-MANUAL-AMAZON",
+          "IMP-AUDIT-FED-SHED"
+        ]
+      }
+    ],
+    "selectedTopicId": "NICHE-personal_finance",
+    "confidence": "MEDIUM"
+  },
+  "intake": {
+    "projectName": "RELEASE AUDIT ONLY — Emergency Expense Planning",
+    "creatorName": "",
+    "experienceLevel": "BEGINNER",
+    "relevantExperience": "",
+    "expertise": "",
+    "interests": "",
+    "targetAudience": "Unvalidated hypothesis: US adults who want a personal emergency-expense ledger.",
+    "problemsSolved": "Organize known expense dates and available funds without treating population statistics as individual advice.",
+    "productIdea": "Clarity-First Household Cashflow & Debt Reduction Guide — Structured budgeting framework, expense audit sheets, and milestone worksheets for household clarity",
+    "desiredTransformation": "Complete a dated planning worksheet and record unresolved inputs.",
+    "brandStyleAndVoice": {
+      "personality": "Practical, supportive, evidence-based, actionable",
+      "primaryColor": "#2563EB",
+      "secondaryColor": "#059669",
+      "accentColor": "#F59E0B",
+      "typographyDirection": "Clean Sans-Serif with High Contrast",
+      "writingVoice": "Empowering, clear, concise, no fluff",
+      "emotionalPositioning": "From overwhelmed to confident & organized",
+      "stylesToAvoid": "Academic jargon, unrealistic claims, passive tone"
+    },
+    "constraintsAndExclusions": {
+      "productBoundaries": "Digital downloadable guides and companion tools only.",
+      "accuracyStandards": "Every claim grounded in public or scientific reference.",
+      "safetyRules": "Explicit disclaimer that guidance does not replace professional advice.",
+      "copyrightAttribution": "All references attributed with proper source provenance.",
+      "claimsToAvoid": "No get-rich-quick or instant cure assertions.",
+      "verificationRequirements": "Minimum 20 verified reference cards required."
+    },
+    "recommendedPrice": {
+      "introductoryTest": 15,
+      "regular": 29,
+      "premiumBundle": 49,
+      "currency": "USD",
+      "rationale": "Draft 3-tier price test range for ebook_toolkit; validate buyer willingness directly before launch.",
+      "validationMethod": "Marketplace competitor tier benchmarking"
+    }
+  },
+  "uvz": {
+    "buyerProblems": [
+      "Rising living costs and fragmented recurring subscriptions complicate monthly saving and debt prioritization."
+    ],
+    "potentialSolutions": [
+      "Organize a transparent 30-day cashflow baseline, audit recurring expenses, and compare structured payoff sequences.",
+      "Combines plain-language household budgeting concepts with printable cashflow audit worksheets and clear educational boundaries."
+    ],
+    "creatorExpertiseFit": "Unknown; no credentials or customer outcomes were supplied.",
+    "commercialFeasibility": "Unknown: interview five prospective readers and test comprehension and willingness to pay before building a commercial product.",
+    "differentiationOpportunities": [
+      "Monthly Cashflow Ledger",
+      "Subscription & Fixed-Cost Pruning Worksheet",
+      "Emergency Buffer & Debt Sequence Planner",
+      "Irregular-Expense Sinking Fund Matrix"
+    ],
+    "positioningOptions": [],
+    "selectedOptionId": ""
+  },
+  "transformationMap": {
+    "beforeState": {
+      "currentPains": [
+        "Expense dates scattered across documents"
+      ],
+      "anxietiesAndFrustrations": [
+        "Unstructured workflow or scattered instructions without companion worksheets"
+      ],
+      "flawedAlternatives": [],
+      "dailyDrainCost": ""
+    },
+    "bridgeProcess": {
+      "coreMethodology": "Combines plain-language household budgeting concepts with printable cashflow audit worksheets and clear educational boundaries.",
+      "signatureFrameworkName": "Clarity-First Household Cashflow & Debt Reduction Guide",
+      "keyMilestones": [
+        "Record baseline",
+        "List due dates",
+        "Document unknowns",
+        "Review outputs"
+      ],
+      "practicalTools": [
+        "Monthly Cashflow Ledger",
+        "Subscription & Fixed-Cost Pruning Worksheet",
+        "Emergency Buffer & Debt Sequence Planner",
+        "Irregular-Expense Sinking Fund Matrix"
+      ],
+      "obstacleBypasses": []
+    },
+    "afterState": {
+      "tangibleOutcomes": [
+        "A completed exercise, with no promised savings or income"
+      ],
+      "acquiredCapabilities": [],
+      "completedDeliverables": [
+        "Baseline Cashflow Snapshot Table",
+        "Expense Pruning Checklist",
+        "Sinking Fund Allocation Schedule",
+        "Debt Priority Comparison Sheet",
+        "Monthly 15-Minute Review Protocol"
+      ],
+      "measurableMetrics": []
+    },
+    "titleOptions": [],
+    "selectedTitleId": "",
+    "bigPromise": "Organize a transparent 30-day cashflow baseline, audit recurring expenses, and compare structured payoff sequences.",
+    "uniqueSellingProposition": ""
+  },
+  "referenceLibrary": {
+    "targetCount": 20,
+    "verifiedCount": 0,
+    "cards": [
+      {
+        "id": "REF-FED-SHED-2025",
+        "title": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report",
+        "sourceTitle": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report",
+        "description": "Official report announcement describing the 2025 SHED survey.",
+        "researchSummary": "Household financial circumstances provide context; no product sales or workbook efficacy were measured.",
+        "contentOutline": [
+          "Survey context",
+          "Emergency expense response"
+        ],
+        "practicalFramework": {
+          "name": "Original expense ledger exercise",
+          "editorialOrigin": "Original author exercise; not a tested method from SHED",
+          "actionSteps": [
+            "Record dates",
+            "Record amounts",
+            "List uncertainties"
+          ]
+        },
+        "author": "",
+        "publisherOrOrg": "www.federalreserve.gov",
+        "sourceURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+        "retrievedAt": "2026-11-18T11:21:44.484Z",
+        "verificationQuote": "The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.",
+        "verificationLocator": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16",
+        "qualityScore": 0,
+        "pillars": [
+          "Household finance context"
+        ],
+        "supportedClaims": [
+          "63 percent would cover a hypothetical $400 emergency expense using cash or its equivalent."
+        ],
+        "rightsNotes": "US Federal Reserve announcement; cite the original page. Source page text is not product efficacy evidence.",
+        "status": "VERIFIED_FULL_TEXT",
+        "verifiedAt": "2026-11-18T11:34:09.415Z",
+        "retrieval": {
+          "provider": "Trusted public page",
+          "documentId": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+          "title": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report",
+          "canonicalUrl": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+          "authors": [],
+          "publisher": "www.federalreserve.gov",
+          "retrievedAt": "2026-11-18T11:21:44.484Z",
+          "contentHash": "8bf2069aea0c4d9da95a5400b6e52477583d41dad974a41a42dbf5665be99175",
+          "kind": "page_text",
+          "excerpt": "The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.",
+          "locator": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16"
+        },
+        "editorialNotes": {
+          "targetChapters": [
+            "audit_ch1"
+          ],
+          "exerciseSuggestions": [
+            "Complete an original planning ledger"
+          ],
+          "worksheetIntegration": "Keep the survey statistic separate from your individual budget.",
+          "verificationNotes": "Exact paragraph inspected; publication date not extracted by this parser remains unknown in card metadata."
+        },
+        "brandGuidelines": {
+          "toneApplication": "Measured and clear",
+          "visualDirection": "Conceptual process and source-backed table",
+          "audienceFraming": "Unvalidated audience hypothesis"
+        },
+        "chapterRelevance": [
+          {
+            "chapterId": "audit_ch1",
+            "chapterFingerprint": "[\"audit_ch1\",\"Build an emergency-expense planning ledger\",\"Create and review a dated ledger while separating reported survey context from original instructions.\",[\"Evidence boundary\",\"Dated ledger\",\"Original worked example\",\"Review\"]]",
+            "rationale": "The survey establishes contextual emergency-expense responses; it does not validate this original exercise or buyer demand.",
+            "reviewedAt": "2026-11-18T11:34:09.415Z"
+          }
+        ]
+      }
+    ],
+    "coveragePillars": {},
+    "status": "COMPLETED"
+  },
+  "charter": {
+    "productTitle": "RELEASE AUDIT ONLY — Emergency Expense Planning",
+    "subtitle": "Isolated acceptance exercise; not offered for sale",
+    "targetAudience": "Unvalidated hypothesis: US adults who want a personal emergency-expense ledger.",
+    "primaryProblemSolved": "Organize known expense dates and available funds without treating population statistics as individual advice.",
+    "centralPromise": "Complete a dated planning worksheet and record unresolved inputs.",
+    "explicitDisclaimers": [
+      "Educational planning exercise only. No individualized financial, legal or tax advice. No promised savings, earnings or profitability. Audience and willingness to pay remain unvalidated."
+    ],
+    "signatureFramework": "",
+    "deliveryFormat": "ebook_toolkit",
+    "contentDepthTarget": "STANDARD",
+    "targetWordCount": 18000,
+    "learningObjectives": [
+      "Distinguish survey context from personal planning inputs",
+      "Create a dated ledger and mark unknowns"
+    ],
+    "structuralPillars": [
+      "The Honest 30-Day Cashflow Baseline",
+      "Auditing Recurring Leaks & Fixed Costs",
+      "Sinking Funds & Emergency Reserves",
+      "Comparing Debt Payoff Sequencing Methods",
+      "Monthly 15-Minute Money Check-In"
+    ],
+    "companionResourcePlan": [],
+    "brandVoiceSummary": "Warm, expert, accessible, outcome-focused",
+    "pricingStrategy": "Standard value ladder",
+    "evidenceStandards": "20+ source-grounded references",
+    "qualityAcceptanceCriteria": [
+      "Zero factual hallucination on actionable steps",
+      "At least 5 plug-and-play practical companion templates",
+      "Total manuscript length exceeding 15,000 words"
+    ],
+    "isApproved": true,
+    "approvedAt": "2026-11-18T11:34:09.416Z"
+  },
+  "outline": [
+    {
+      "id": "audit_ch1",
+      "order": 1,
+      "title": "Build an emergency-expense planning ledger",
+      "objective": "Create and review a dated ledger while separating reported survey context from original instructions.",
+      "subtopics": [
+        "Evidence boundary",
+        "Dated ledger",
+        "Original worked example",
+        "Review"
+      ],
+      "targetWordCount": 600,
+      "practicalDeliverable": "Completed expense ledger",
+      "mappedReferenceIds": [
+        "REF-FED-SHED-2025"
+      ],
+      "exampleScenarios": [
+        "Clearly fictional $120 repair with $50 set aside"
+      ],
+      "completionMilestone": "Every row contains confirmed inputs or explicit unknowns.",
+      "contentMarkdown": "## Read the evidence within its scope\n\nThe Federal Reserve reported that 63 percent of US adults would cover a hypothetical $400 emergency expense using cash or its equivalent. This describes the survey response, rather than a claim about the reader or the effectiveness of this exercise [REF-FED-SHED-2025].\n\n| Survey year | Adults reporting cash or equivalent | Source |\n|---|---|---|\n| 2024 | 63% | [REF-FED-SHED-2025] |\n| 2025 | 63% | [REF-FED-SHED-2025] |\n\n## Step 1: Define your planning boundary\n\nChoose one household and one planning period, such as the next calendar month. Write the start and end dates at the top of your worksheet. Keep unknown amounts blank and label them unknown. Do not borrow a survey average to fill a missing personal number. The purpose of this original exercise is to organize your own information, not to compare yourself with a population statistic or promise a financial result.\n\n## Step 2: Build a dated ledger\n\nCollect your own bills and notes. For each expense you choose to include, write the amount, expected due date, whether the amount is confirmed, and the document you used. If you are uncomfortable storing a document, record a private local reference rather than copying account numbers into this project. Separate money available now from money you expect later. Treat expected income as uncertain until you decide how to record it for this exercise.\n\n## Step 3: Work through an original example\n\nImagine a fictional household with an illustrative $120 repair due on the tenth and $50 already set aside for that specific item. Enter those two values in separate cells and calculate an illustrative gap of $70. This is invented arithmetic for practicing the worksheet, not a typical repair price, a suggested emergency-fund target, or an estimate of a buyer's circumstances. Try replacing the amounts with your own confirmed inputs and leave any unresolved figure visibly unresolved.\n\n## Step 4: Review the output\n\nRead each row aloud and identify the next information-gathering action. You might confirm a due date, check whether a planned payment is already included elsewhere, or ask a qualified professional a question outside your knowledge. Finish by writing one action you can personally verify and a date for checking it. Keep a copy of the worksheet before updating it so you can explain what changed. Do not interpret completion as proof that a product, strategy or spending decision will succeed.\n\n## Completion check\n\nThe exercise is complete when every included row has a date, an amount or an explicit unknown, a source note, and a next review action. Explain in your own words why the SHED statistic cannot establish sales, conversion, willingness to pay, or the suitability of a workbook for a specific person. If that distinction remains unclear, revisit the source paragraph before sharing the exercise. The diagram accompanying these steps is a conceptual summary of the instructions, not measured data.",
+      "isCompleted": true,
+      "isLocked": false,
+      "citationReviews": [
+        {
+          "passageKey": "[\"paragraph\",\"Read the evidence within its scope\",\"The Federal Reserve reported that 63 percent of US adults would cover a hypothetical $400 emergency expense using cash or its equivalent. This describes the survey response, rather than a claim about the reader or the effectiveness of this exercise .\",[\"REF-FED-SHED-2025\"]]",
+          "referenceId": "REF-FED-SHED-2025",
+          "relationship": "qualifies",
+          "rationale": "The exact report paragraph states 63 percent and unchanged from 2024. This supports population survey context only, not an individual outcome.",
+          "reviewedAt": "2026-11-18T11:34:09.423Z",
+          "sourceFingerprint": "[\"REF-FED-SHED-2025\",\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report\",\"\",\"www.federalreserve.gov\",null,null,\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"VERIFIED_FULL_TEXT\",\"The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.\",\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16\",{\"provider\":\"Trusted public page\",\"documentId\":\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"title\":\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report\",\"canonicalUrl\":\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"authors\":[],\"publisher\":\"www.federalreserve.gov\",\"retrievedAt\":\"2026-11-18T11:21:44.484Z\",\"contentHash\":\"8bf2069aea0c4d9da95a5400b6e52477583d41dad974a41a42dbf5665be99175\",\"kind\":\"page_text\",\"excerpt\":\"The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.\",\"locator\":\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16\"},\"2026-11-18T11:34:09.415Z\"]"
+        },
+        {
+          "passageKey": "[\"table-row\",\"Read the evidence within its scope\",\"Survey year | Adults reporting cash or equivalent | Source 2024 | 63% |\",[\"REF-FED-SHED-2025\"]]",
+          "referenceId": "REF-FED-SHED-2025",
+          "relationship": "qualifies",
+          "rationale": "The exact report paragraph states 63 percent and unchanged from 2024. This supports population survey context only, not an individual outcome.",
+          "reviewedAt": "2026-11-18T11:34:09.423Z",
+          "sourceFingerprint": "[\"REF-FED-SHED-2025\",\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report\",\"\",\"www.federalreserve.gov\",null,null,\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"VERIFIED_FULL_TEXT\",\"The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.\",\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16\",{\"provider\":\"Trusted public page\",\"documentId\":\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"title\":\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report\",\"canonicalUrl\":\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"authors\":[],\"publisher\":\"www.federalreserve.gov\",\"retrievedAt\":\"2026-11-18T11:21:44.484Z\",\"contentHash\":\"8bf2069aea0c4d9da95a5400b6e52477583d41dad974a41a42dbf5665be99175\",\"kind\":\"page_text\",\"excerpt\":\"The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.\",\"locator\":\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16\"},\"2026-11-18T11:34:09.415Z\"]"
+        },
+        {
+          "passageKey": "[\"table-row\",\"Read the evidence within its scope\",\"Survey year | Adults reporting cash or equivalent | Source 2025 | 63% |\",[\"REF-FED-SHED-2025\"]]",
+          "referenceId": "REF-FED-SHED-2025",
+          "relationship": "qualifies",
+          "rationale": "The exact report paragraph states 63 percent and unchanged from 2024. This supports population survey context only, not an individual outcome.",
+          "reviewedAt": "2026-11-18T11:34:09.423Z",
+          "sourceFingerprint": "[\"REF-FED-SHED-2025\",\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report\",\"\",\"www.federalreserve.gov\",null,null,\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"VERIFIED_FULL_TEXT\",\"The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.\",\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16\",{\"provider\":\"Trusted public page\",\"documentId\":\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"title\":\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report\",\"canonicalUrl\":\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"authors\":[],\"publisher\":\"www.federalreserve.gov\",\"retrievedAt\":\"2026-11-18T11:21:44.484Z\",\"contentHash\":\"8bf2069aea0c4d9da95a5400b6e52477583d41dad974a41a42dbf5665be99175\",\"kind\":\"page_text\",\"excerpt\":\"The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.\",\"locator\":\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16\"},\"2026-11-18T11:34:09.415Z\"]"
+        },
+        {
+          "passageKey": "[\"paragraph\",\"Step 1: Define your planning boundary\",\"Choose one household and one planning period, such as the next calendar month. Write the start and end dates at the top of your worksheet. Keep unknown amounts blank and label them unknown. Do not borrow a survey average to fill a missing personal number. The purpose of this original exercise is to organize your own information, not to compare yourself with a population statistic or promise a financial result.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original planning instructions or clearly labeled fictional arithmetic, without an empirical efficacy or demand claim.",
+          "reviewedAt": "2026-11-18T11:34:09.423Z"
+        },
+        {
+          "passageKey": "[\"paragraph\",\"Step 2: Build a dated ledger\",\"Collect your own bills and notes. For each expense you choose to include, write the amount, expected due date, whether the amount is confirmed, and the document you used. If you are uncomfortable storing a document, record a private local reference rather than copying account numbers into this project. Separate money available now from money you expect later. Treat expected income as uncertain until you decide how to record it for this exercise.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original planning instructions or clearly labeled fictional arithmetic, without an empirical efficacy or demand claim.",
+          "reviewedAt": "2026-11-18T11:34:09.423Z"
+        },
+        {
+          "passageKey": "[\"paragraph\",\"Step 3: Work through an original example\",\"Imagine a fictional household with an illustrative $120 repair due on the tenth and $50 already set aside for that specific item. Enter those two values in separate cells and calculate an illustrative gap of $70. This is invented arithmetic for practicing the worksheet, not a typical repair price, a suggested emergency-fund target, or an estimate of a buyer's circumstances. Try replacing the amounts with your own confirmed inputs and leave any unresolved figure visibly unresolved.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original planning instructions or clearly labeled fictional arithmetic, without an empirical efficacy or demand claim.",
+          "reviewedAt": "2026-11-18T11:34:09.423Z"
+        },
+        {
+          "passageKey": "[\"paragraph\",\"Step 4: Review the output\",\"Read each row aloud and identify the next information-gathering action. You might confirm a due date, check whether a planned payment is already included elsewhere, or ask a qualified professional a question outside your knowledge. Finish by writing one action you can personally verify and a date for checking it. Keep a copy of the worksheet before updating it so you can explain what changed. Do not interpret completion as proof that a product, strategy or spending decision will succeed.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original planning instructions or clearly labeled fictional arithmetic, without an empirical efficacy or demand claim.",
+          "reviewedAt": "2026-11-18T11:34:09.423Z"
+        },
+        {
+          "passageKey": "[\"paragraph\",\"Completion check\",\"The exercise is complete when every included row has a date, an amount or an explicit unknown, a source note, and a next review action. Explain in your own words why the SHED statistic cannot establish sales, conversion, willingness to pay, or the suitability of a workbook for a specific person. If that distinction remains unclear, revisit the source paragraph before sharing the exercise. The diagram accompanying these steps is a conceptual summary of the instructions, not measured data.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original planning instructions or clearly labeled fictional arithmetic, without an empirical efficacy or demand claim.",
+          "reviewedAt": "2026-11-18T11:34:09.423Z"
+        }
+      ]
+    }
+  ],
+  "productBible": {
+    "productTitle": "Untitled Product",
+    "audiencePersona": "",
+    "centralPromise": "",
+    "signatureFramework": "",
+    "brandVoiceKeywords": [
+      "Actionable",
+      "Ground-level",
+      "Encouraging"
+    ],
+    "keyTerminology": {},
+    "introducedConcepts": [],
+    "usedExamples": [],
+    "activeReferenceMap": {},
+    "unresolvedClaims": [],
+    "continuityHandoffNotes": []
+  },
+  "resources": [
+    {
+      "id": "audit_resource",
+      "title": "Emergency-expense ledger",
+      "category": "WORKSHEET",
+      "purpose": "Organize a single planning period with confirmed information and explicit unknowns.",
+      "instructions": "Write period dates, enter your own amounts, label uncertain inputs and record a next check. Do not include account credentials.",
+      "fieldsOrColumns": [
+        "Item",
+        "Due date",
+        "Amount",
+        "Confirmed or unknown",
+        "Source note",
+        "Next action"
+      ],
+      "sampleEntries": [
+        "FICTIONAL EXAMPLE: Repair | day 10 | $120 | invented for arithmetic practice | exercise | replace with own data"
+      ],
+      "completionCriteria": "All included rows contain a confirmed amount or an unknown plus a next review action.",
+      "contentMarkdown": "## Your ledger\n\n| Item | Due date | Amount | Status | Source note | Next action |\n|---|---|---|---|---|---|\n| Write your own item | Record a date | Confirm or leave unknown | Confirmed / unknown | Private reference | Verify next input |\n\nRecord one unresolved question below the table. Keep survey context separate from personal data. This original worksheet is a planning aid, not a validated intervention or individualized financial advice.",
+      "citationReviews": [
+        {
+          "passageKey": "[\"paragraph\",\"Resource purpose\",\"Organize a single planning period with confirmed information and explicit unknowns.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original blank worksheet instructions, with an explicitly fictional example and no empirical success claim.",
+          "reviewedAt": "2026-11-18T11:34:09.424Z"
+        },
+        {
+          "passageKey": "[\"paragraph\",\"Resource instructions\",\"Write period dates, enter your own amounts, label uncertain inputs and record a next check. Do not include account credentials.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original blank worksheet instructions, with an explicitly fictional example and no empirical success claim.",
+          "reviewedAt": "2026-11-18T11:34:09.424Z"
+        },
+        {
+          "passageKey": "[\"table-row\",\"Your ledger\",\"Item | Due date | Amount | Status | Source note | Next action Write your own item | Record a date | Confirm or leave unknown | Confirmed / unknown | Private reference | Verify next input\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original blank worksheet instructions, with an explicitly fictional example and no empirical success claim.",
+          "reviewedAt": "2026-11-18T11:34:09.424Z"
+        },
+        {
+          "passageKey": "[\"paragraph\",\"Your ledger\",\"Record one unresolved question below the table. Keep survey context separate from personal data. This original worksheet is a planning aid, not a validated intervention or individualized financial advice.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original blank worksheet instructions, with an explicitly fictional example and no empirical success claim.",
+          "reviewedAt": "2026-11-18T11:34:09.424Z"
+        },
+        {
+          "passageKey": "[\"paragraph\",\"Completion criteria\",\"All included rows contain a confirmed amount or an unknown plus a next review action.\",[]]",
+          "relationship": "editorial",
+          "rationale": "Original blank worksheet instructions, with an explicitly fictional example and no empirical success claim.",
+          "reviewedAt": "2026-11-18T11:34:09.424Z"
+        }
+      ]
+    }
+  ],
+  "qualityReport": {
+    "overallStatus": "DRAFT_COMPLETE",
+    "overallScore": 0,
+    "issues": [],
+    "checksPassed": [],
+    "disclaimersVerified": false,
+    "actualWordCount": 0,
+    "verifiedReferenceCount": 0,
+    "reviewedAt": "2026-11-18T11:34:08.955Z"
+  },
+  "brand": {
+    "profileName": "Digital Product Studio — Isolated Audit",
+    "primaryHex": "#146b5d",
+    "secondaryHex": "#059669",
+    "accentHex": "#F59E0B",
+    "neutralBgHex": "#F8FAFC",
+    "fontDisplay": "Plus Jakarta Sans",
+    "fontBody": "Inter",
+    "coverBrief": "Clean typography with crisp geometric grid",
+    "manuscriptLayoutNotes": "High-contrast typography with colored callout boxes and checklists."
+  },
+  "pricingReport": {
+    "introductoryPrice": 9,
+    "regularPrice": 15,
+    "bundlePrice": 19,
+    "currency": "USD",
+    "rationale": "Unvalidated price assumptions for acceptance testing. No buyer interviews or price tests completed.",
+    "marketComparisonSummary": "No systematically verified competitor pricing dataset; unknown."
+  },
+  "salesAssets": {
+    "salesPageHeadline": "",
+    "salesPageSubheadline": "",
+    "heroPitch": "",
+    "productDescriptionBullets": [],
+    "targetBuyerNotice": "",
+    "notForBuyerNotice": "",
+    "faqList": [],
+    "leadMagnetConcept": {
+      "title": "",
+      "hook": "",
+      "format": "PDF Quick-Start Checklist",
+      "deliverable": "1-page printable cheat sheet"
+    },
+    "emailLaunchSequence": [],
+    "socialPosts": [],
+    "thirtyDayLaunchPlan": []
+  },
+  "aiSettings": {
+    "provider": "gemini",
+    "apiKey": "",
+    "baseUrl": "",
+    "defaultModel": "gemini-4-hydrogen",
+    "apiKeys": {
+      "openrouter": "",
+      "gemini": "",
+      "openai": "",
+      "claude": ""
+    },
+    "providerModels": {
+      "openrouter": "",
+      "gemini": "gemini-4-hydrogen",
+      "openai": "",
+      "claude": ""
+    },
+    "freeOnly": false,
+    "allowPaidFallback": true,
+    "maxSpendPerRequest": 0.5,
+    "dailyBudget": 5,
+    "projectBudget": 20,
+    "stageModels": {
+      "market_research": "gemini-4-hydrogen",
+      "topic_selection": "gemini-4-hydrogen",
+      "project_brief": "gemini-4-hydrogen",
+      "uvz": "gemini-4-hydrogen",
+      "transformation_map": "gemini-4-hydrogen",
+      "reference_library": "gemini-4-hydrogen",
+      "product_charter": "gemini-4-hydrogen",
+      "outline_builder": "gemini-4-hydrogen",
+      "content_studio": "gemini-4-hydrogen",
+      "workbook_studio": "gemini-4-hydrogen",
+      "quality_assurance": "gemini-4-hydrogen",
+      "brand_design": "gemini-4-hydrogen",
+      "pricing_launch": "gemini-4-hydrogen",
+      "export_center": "gemini-4-hydrogen"
+    },
+    "fallbackModels": [
+      "gemini-3.1-flash-lite",
+      "gemini-4-hydrogen"
+    ],
+    "usageStats": {
+      "totalRequests": 0,
+      "totalTokens": 0,
+      "estimatedCostUsd": 0
+    }
+  }
+}

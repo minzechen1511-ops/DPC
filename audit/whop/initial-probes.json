@@ -1,0 +1,30 @@
+[
+  {
+    "requestedURL": "https://whop.com/discover/",
+    "checkedAt": "2026-11-18T12:42:04.678843+00:00",
+    "httpStatus": 200,
+    "resolvedURL": "https://whop.com/",
+    "contentType": "text/html; charset=utf-8",
+    "bytes": 265296
+  },
+  {
+    "requestedURL": "https://whop.com/discover/iimagined/digital-products-reimagined/",
+    "checkedAt": "2026-11-18T12:42:04.679470+00:00",
+    "httpStatus": 200,
+    "resolvedURL": "https://whop.com/iimagined/digital-products-reimagined/",
+    "contentType": "text/html; charset=utf-8",
+    "bytes": 131581
+  },
+  {
+    "requestedURL": "https://whop.com/discover/digital-ecommerce/digital-ecommerce/",
+    "checkedAt": "2026-11-18T12:42:04.679821+00:00",
+    "httpStatus": 404,
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "requestedURL": "https://api.whop.com/api/v1/products?first=5",
+    "checkedAt": "2026-11-18T12:42:04.680095+00:00",
+    "httpStatus": 400,
+    "error": "HTTP Error 400: Bad Request"
+  }
+]

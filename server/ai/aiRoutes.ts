@@ -67,7 +67,7 @@ function createServerGeminiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY?.trim() || '';
   if (!apiKey) {
     const err = new Error(
-      'Server Gemini token (GEMINI_API_KEY) is not configured in Settings > Secrets.'
+      'GEMINI_API_KEY is missing. Configure it in the server environment (.env locally or deployment secrets), then restart/redeploy. Google sign-in does not supply a Gemini API key.'
     ) as Error & { statusCode?: number; code?: string };
     err.statusCode = 503;
     err.code = 'MISSING_SERVER_GEMINI_KEY';

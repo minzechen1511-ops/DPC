@@ -1,0 +1,23 @@
+[
+  {
+    "id": "AUDIT-FED-SHED",
+    "productTitle": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report",
+    "publisher": "Federal Reserve Board",
+    "marketplace": "Other Research Source",
+    "country": "US",
+    "category": "Household Personal Finance",
+    "productFormat": "Published household survey report",
+    "productURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+    "sourceURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+    "sourceClass": "supporting_context",
+    "evidenceType": "published_research",
+    "dataAsOfDate": "2025-10",
+    "publicationDate": "2026-05-13",
+    "retrievedAt": "2026-11-18T11:21:44.484Z",
+    "evidenceExcerpt": "The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.",
+    "excerptLocator": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16",
+    "collectionMethodology": "Official report announcement; independent SHED survey fielded in October 2025, not a buyer-conversion study.",
+    "dataLimitations": "Historical US adult self-report survey, not marketplace purchases or willingness to pay for a budgeting worksheet. Fieldwork month only; exact respondent dates unknown.",
+    "evidenceChainId": "shed-2025"
+  }
+]

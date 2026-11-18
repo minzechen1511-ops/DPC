@@ -65,7 +65,7 @@ test('2. Amazon collector requires explicit numbered badges, valid ASIN anchors,
   // Challenge / CAPTCHA rejected cleanly
   assert.throws(() => parseAmazonChart('<title>Robot Check</title>', now), /human verification/);
   // Sign-in returns empty without throwing fake observations
-  assert.deepEqual(parseAmazonChart('<title>Sign in</title>', now), []);
+  assert.throws(()=>parseAmazonChart('<title>Sign in</title>', now), /sign-in/);
   // Unexpected layout with ASIN cards but zero numbered badges throws cleanly rather than inferring rank from DOM order
   assert.throws(
     () => parseAmazonChart('<title>Amazon</title><div data-asin="B000000009"><a href="/dp/B000000009"><img alt="No badge"></a></div>', now),
@@ -73,8 +73,8 @@ test('2. Amazon collector requires explicit numbered badges, valid ASIN anchors,
   );
 });
 
-test('3. Seed resource directory preserves all 9 resources with honest scope & checkUrlAccessibility refuses unsafe protocols', async () => {
-  assert.equal(INITIAL_GATE_A_RESOURCES.length, 9);
+test('3. Seed resource directory preserves all 10 resources with honest scope & checkUrlAccessibility refuses unsafe protocols', async () => {
+  assert.equal(INITIAL_GATE_A_RESOURCES.length, 10);
   for (const res of INITIAL_GATE_A_RESOURCES) {
     assert.ok(res.publisher && res.resourceName && res.originalURL);
     assert.ok(res.whatItSupports && res.importantLimitations);

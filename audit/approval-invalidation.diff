@@ -1,0 +1,148 @@
+diff --git a/server/db/localStore.ts b/server/db/localStore.ts
+index 9ba2312..9716f3e 100644
+--- a/server/db/localStore.ts
++++ b/server/db/localStore.ts
+@@ -0,0 +1 @@
++import { invalidateChangedApprovals } from '../../src/utils/approvalIntegrity.ts';
+@@ -68,2 +69,2 @@ export class LocalStore implements DataStore {
+-      } catch {
+-        this.state = emptyState();
++      } catch (cause) {
++        throw new Error('Stored workspace could not be read. Original data was preserved; restore a valid backup before starting.', {cause});
+@@ -164 +165 @@ export class LocalStore implements DataStore {
+-    const clean = sanitizeProjectForExport({
++    const clean = invalidateChangedApprovals(row.data, sanitizeProjectForExport({
+@@ -168 +169 @@ export class LocalStore implements DataStore {
+-    });
++    }));
+diff --git a/src/App.tsx b/src/App.tsx
+index c4148ed..2b6f7c4 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -235 +235 @@ export default function App() {
+-        const result = await saveProjectToFirestore(authUser.uid, targetProject);
++        const result = await saveProjectToFirestore(authUser.uid, targetProject, revisionsRef.current[targetProject.projectId]);
+@@ -725 +725 @@ export default function App() {
+-      ...prev,
++      ...revokeApprovals(prev, 'gateB'),
+@@ -740 +740 @@ export default function App() {
+-        ...prev.workflow,
++        ...revokeApprovals(prev, 'gateB').workflow,
+@@ -742 +742 @@ export default function App() {
+-          ...prev.workflow.stageStatuses,
++          ...revokeApprovals(prev, 'gateB').workflow.stageStatuses,
+@@ -754 +754 @@ export default function App() {
+-      ...prev,
++      ...revokeApprovals(prev, 'gateB'),
+@@ -771 +771 @@ export default function App() {
+-        ...prev.workflow,
++        ...revokeApprovals(prev, 'gateB').workflow,
+@@ -773 +773 @@ export default function App() {
+-          ...prev.workflow.stageStatuses,
++          ...revokeApprovals(prev, 'gateB').workflow.stageStatuses,
+diff --git a/src/services/firestoreProjects.ts b/src/services/firestoreProjects.ts
+index 57b3446..d89cf04 100644
+--- a/src/services/firestoreProjects.ts
++++ b/src/services/firestoreProjects.ts
+@@ -20,0 +21,2 @@ import type { Language } from '../utils/i18n.ts';
++import { invalidateChangedApprovals } from '../utils/approvalIntegrity.ts';
++import { compactMarketResearch, hydrateMarketResearch } from '../utils/marketPersistence.ts';
+@@ -132 +134 @@ export function subscribeUserProjects(
+-          project: normalized,
++          project: {...normalized, marketResearch: hydrateMarketResearch(normalized.marketResearch)},
+@@ -150 +152,2 @@ export async function saveProjectToFirestore(
+-  project: DigitalProductProject
++  project: DigitalProductProject,
++  expectedRevision?: number
+@@ -169 +172 @@ export async function saveProjectToFirestore(
+-    marketResearch: sanitized.marketResearch,
++    marketResearch: compactMarketResearch(sanitized.marketResearch),
+@@ -204,0 +208,3 @@ export async function saveProjectToFirestore(
++      const currentRevision=typeof existing.revision==='number'?existing.revision:1;
++      if(expectedRevision!==undefined && currentRevision!==expectedRevision)throw new Error(`Project revision conflict: expected ${expectedRevision}, current ${currentRevision}. Reload before saving to preserve the newer work.`);
++      const reconciled=invalidateChangedApprovals(migrateProjectSchema(existing),sanitized);
+@@ -208,0 +215,2 @@ export async function saveProjectToFirestore(
++        workflow: stripUndefinedDeep(reconciled.workflow),
++        charter: stripUndefinedDeep(reconciled.charter),
+diff --git a/src/utils/approvalIntegrity.ts b/src/utils/approvalIntegrity.ts
+new file mode 100644
+index 0000000..ae46dd2
+--- /dev/null
++++ b/src/utils/approvalIntegrity.ts
+@@ -0,0 +1,26 @@
++import type { DigitalProductProject } from '../types/project.ts';
++type Gate = 'gateA'|'gateB'|'gateC';
++const order: Gate[] = ['gateA','gateB','gateC'];
++const canonical = (value:unknown):unknown => Array.isArray(value) ? value.map(canonical) : value && typeof value==='object' ? Object.fromEntries(Object.entries(value).filter(([,v])=>v!==undefined).sort(([a],[b])=>a < b ? -1 : a > b ? 1 : 0).map(([k,v])=>[k,canonical(v)])) : value;
++
++/** Change detector for approval inputs, not a signature or authentication token. */
++export function approvalFingerprint(project:DigitalProductProject,gate:Gate):string {
++  const {isApproved:_approved,approvedAt:_at,...charter}=project.charter;
++  const selected=project.marketResearch.topicCandidates.find(c=>c.id===project.marketResearch.selectedTopicId);
++  const a=[project.marketResearch.selectedTopicId,selected?.sourceObservationIds,selected?.selectedAudienceHypothesisId,project.marketResearch.platformEvidence];
++  const b=[a,project.intake,project.uvz,project.transformationMap,charter,project.referenceLibrary.cards,project.outline.map(ch=>[ch.id,ch.title,ch.objective,ch.subtopics,ch.mappedReferenceIds,ch.practicalDeliverable,ch.completionMilestone])];
++  const c=[b,project.outline,project.resources,project.productBible,project.brand,project.pricingReport,project.salesAssets];
++  const raw=JSON.stringify(canonical(gate==='gateA'?a:gate==='gateB'?b:c));
++  let h1=0x811c9dc5,h2=0xdeadbeef;
++  for(let i=0;i<raw.length;i++){h1=Math.imul(h1^raw.charCodeAt(i),0x01000193);h2=Math.imul(h2^(raw.charCodeAt(i)+i),0x85ebca6b);}
++  return `approval-v1-${(h1>>>0).toString(16)}${(h2>>>0).toString(16)}`;
++}
++
++/** Persisted API/Firestore writes must invalidate approvals even outside App handlers. */
++export function invalidateChangedApprovals(previous:DigitalProductProject,next:DigitalProductProject):DigitalProductProject {
++  const changed=order.findIndex(g=>previous.workflow.gates[g].isApproved && approvalFingerprint(previous,g)!==approvalFingerprint(next,g));
++  if(changed<0)return next;
++  const gates={...next.workflow.gates};
++  for(const g of order.slice(changed))gates[g]={...gates[g],isApproved:false,approvedAt:undefined,approvedFingerprint:undefined};
++  return {...next,charter:changed<2?{...next.charter,isApproved:false,approvedAt:undefined}:next.charter,workflow:{...next.workflow,gates,stageStatuses:{...next.workflow.stageStatuses,quality_assurance:'NEEDS_REVIEW',export_center:'BLOCKED'}}};
++}
+diff --git a/src/utils/gatePolicy.ts b/src/utils/gatePolicy.ts
+index a111348..ff53516 100644
+--- a/src/utils/gatePolicy.ts
++++ b/src/utils/gatePolicy.ts
+@@ -6,0 +7 @@ import { isRetrievedSource, chapterResearchFingerprint } from './sourceEvidence.
++import { approvalFingerprint } from './approvalIntegrity.ts';
+@@ -10,0 +12,5 @@ export function gateIssues(project: DigitalProductProject, gate: GateKey): strin
++  const order: GateKey[] = ['gateA','gateB','gateC'];
++  for (const key of order.slice(0, order.indexOf(gate)+1)) {
++    const decision=project.workflow.gates[key];
++    if(decision.isApproved && decision.approvedFingerprint!==approvalFingerprint(project,key)) issues.push(`${key}: approval is not bound to the current project inputs. Review and explicitly approve again.`);
++  }
+@@ -51 +57 @@ export function revokeApprovals(project: DigitalProductProject, from: GateKey):
+-  for (const key of order.slice(order.indexOf(from))) next.workflow.gates[key] = { ...next.workflow.gates[key], isApproved: false, approvedAt: undefined };
++  for (const key of order.slice(order.indexOf(from))) next.workflow.gates[key] = { ...next.workflow.gates[key], isApproved: false, approvedAt: undefined, approvedFingerprint: undefined };
+@@ -56,2 +62,3 @@ export function approveGate(project: DigitalProductProject, gate: GateKey): Digi
+-  if (gateIssues(project, gate).length) return project;
+-  return { ...project, referenceLibrary: gate === 'gateB' ? { ...project.referenceLibrary, status: 'COMPLETED' } : project.referenceLibrary, charter: gate === 'gateB' ? { ...project.charter, isApproved: true, approvedAt: new Date().toISOString() } : project.charter, workflow: { ...project.workflow, gates: { ...project.workflow.gates, [gate]: { ...project.workflow.gates[gate], isApproved: true, approvedAt: new Date().toISOString() } }, stageStatuses: { ...project.workflow.stageStatuses, ...(gate === 'gateA' ? { market_research: 'COMPLETED' as const } : {}), ...(gate === 'gateB' ? { reference_library: 'COMPLETED' as const } : {}), [gate === 'gateA' ? 'topic_selection' : gate === 'gateB' ? 'product_charter' : 'quality_assurance']: 'COMPLETED', export_center: gate === 'gateC' ? 'READY' : 'BLOCKED' } } };
++  const pending={...project,workflow:{...project.workflow,gates:{...project.workflow.gates,[gate]:{...project.workflow.gates[gate],isApproved:false}}}};
++  if (gateIssues(pending, gate).length) return project;
++  return { ...project, referenceLibrary: gate === 'gateB' ? { ...project.referenceLibrary, status: 'COMPLETED' } : project.referenceLibrary, charter: gate === 'gateB' ? { ...project.charter, isApproved: true, approvedAt: new Date().toISOString() } : project.charter, workflow: { ...project.workflow, gates: { ...project.workflow.gates, [gate]: { ...project.workflow.gates[gate], isApproved: true, approvedAt: new Date().toISOString(), approvedFingerprint: approvalFingerprint(project, gate) } }, stageStatuses: { ...project.workflow.stageStatuses, ...(gate === 'gateA' ? { market_research: 'COMPLETED' as const } : {}), ...(gate === 'gateB' ? { reference_library: 'COMPLETED' as const } : {}), [gate === 'gateA' ? 'topic_selection' : gate === 'gateB' ? 'product_charter' : 'quality_assurance']: 'COMPLETED', export_center: gate === 'gateC' ? 'READY' : 'BLOCKED' } } };
+diff --git a/src/utils/marketPersistence.ts b/src/utils/marketPersistence.ts
+new file mode 100644
+index 0000000..195cbc2
+--- /dev/null
++++ b/src/utils/marketPersistence.ts
+@@ -0,0 +1,23 @@
++import type { DigitalProductProject } from '../types/project.ts';
++import { compareCandidateEvidence } from './marketDiscoveryEngine.ts';
++
++/** Comparison rows duplicate retained observations and can exceed Firestore's
++ * document limit. Persist all original evidence and decisions; rebuild only
++ * this deterministic presentation data when opening the workspace. */
++export function compactMarketResearch(market: DigitalProductProject['marketResearch']): DigitalProductProject['marketResearch'] {
++  return {
++    ...market,
++    topicCandidates: market.topicCandidates.map(({ evidenceComparison: _derived, ...candidate }) => candidate),
++  };
++}
++
++export function hydrateMarketResearch(market: DigitalProductProject['marketResearch']): DigitalProductProject['marketResearch'] {
++  return {
++    ...market,
++    topicCandidates: market.topicCandidates.map(candidate => {
++      if (!candidate.marketCategory) return candidate;
++      const comparison = compareCandidateEvidence(market.platformEvidence, candidate.marketCategory);
++      return { ...candidate, evidenceComparison: comparison.evidenceComparison, multiSourceStatus: comparison.multiSourceStatus };
++    }),
++  };
++}

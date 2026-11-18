@@ -1,0 +1,62 @@
+diff --git a/server/projects/projectRoutes.ts b/server/projects/projectRoutes.ts
+index 9f9dbeb..ef4f36d 100644
+--- a/server/projects/projectRoutes.ts
++++ b/server/projects/projectRoutes.ts
+@@ -10,0 +11 @@ import { buildLearningBundle } from '../../src/utils/learningBundle.ts';
++import { collectMarketResearch, matchesCollectedObservation } from '../marketResearch.ts';
+@@ -54,0 +56,10 @@ async function compileVerifiedZipBundle(
++    // Collector labels inside an uploaded project are not proof. Reconcile
++    // selected collector records with actual backend research before delivery.
++    const selected=project.marketResearch.topicCandidates.find(c=>c.id===project.marketResearch.selectedTopicId);
++    const live=project.marketResearch.platformEvidence.filter(o=>selected?.sourceObservationIds.includes(o.id) && Boolean(o.collector));
++    if(live.length){
++      const current=await collectMarketResearch();
++      const mismatches=live.filter(o=>!current.observations.some(actual=>matchesCollectedObservation(o,actual)));
++      if(mismatches.length)return {status:422,errorPayload:{error:'Selected collector evidence could not be reconciled with current backend source material. Refresh research or explicitly review genuine manual evidence.',code:'MARKET_SOURCE_CHECK_FAILED',issues:mismatches.map(o=>o.id),sources:current.sources}};
++    }
++
+@@ -71,0 +83,2 @@ async function compileVerifiedZipBundle(
++  const manifest=JSON.parse(await zip.file('manifest.json')!.async('string'));
++  if(mode==='buyer_bundle' && !manifest.reviewed)return {status:422,errorPayload:{error:'Final bundle evidence checks did not pass. Export an author-review edition.',code:'GATE_CHECK_FAILED'}};
+diff --git a/src/components/views/ExportCenterView.tsx b/src/components/views/ExportCenterView.tsx
+index b127d9c..1e2b433 100644
+--- a/src/components/views/ExportCenterView.tsx
++++ b/src/components/views/ExportCenterView.tsx
+@@ -215 +215 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
+-        if (errJson.code === 'SOURCE_CHECK_FAILED') {
++        if (errJson.code === 'SOURCE_CHECK_FAILED' || errJson.code === 'MARKET_SOURCE_CHECK_FAILED') {
+diff --git a/src/components/views/PricingLaunchView.tsx b/src/components/views/PricingLaunchView.tsx
+index 2e4b431..be50e45 100644
+--- a/src/components/views/PricingLaunchView.tsx
++++ b/src/components/views/PricingLaunchView.tsx
+@@ -492 +492 @@ Return JSON with exact keys:
+-              {metrics.profitMarginPercent}% · {metrics.breakEvenUnits} {lang === 'en' ? 'sales' : '套'}
++              {metrics.profitMarginPercent}% · {metrics.breakEvenUnits === null ? (lang === 'en' ? 'No break-even at these unit costs' : '此單位成本下無法損益兩平') : `${metrics.breakEvenUnits} ${lang === 'en' ? 'sales' : '套'}`}
+diff --git a/src/utils/commercialMath.ts b/src/utils/commercialMath.ts
+index 7a10565..e11f027 100644
+--- a/src/utils/commercialMath.ts
++++ b/src/utils/commercialMath.ts
+@@ -15 +15 @@ export const PLATFORM_FEE_PRESETS: PlatformFeePreset[] = [
+-    notes: 'Highest margin direct-to-buyer checkout.',
++    notes: 'Illustrative fee assumption only; verify current processor, country, currency and tax charges.',
+@@ -22 +22 @@ export const PLATFORM_FEE_PRESETS: PlatformFeePreset[] = [
+-    notes: 'Merchant of record handles global VAT/sales tax.',
++    notes: 'Illustrative MoR fee assumption; verify current eligibility, tax handling and additional charges.',
+@@ -29 +29 @@ export const PLATFORM_FEE_PRESETS: PlatformFeePreset[] = [
+-    notes: 'Includes transaction, processing & listing fees with built-in marketplace search.',
++    notes: 'Illustrative combined fee assumption; regional processing, ads and taxes may add costs.',
+@@ -36 +36 @@ export const PLATFORM_FEE_PRESETS: PlatformFeePreset[] = [
+-    notes: 'Simple creator storefront with optional Discover marketplace.',
++    notes: 'Illustrative direct-sale fee assumption; verify current transaction and discovery fees.',
+@@ -43 +43 @@ export const PLATFORM_FEE_PRESETS: PlatformFeePreset[] = [
+-    notes: 'High-volume book channel for $2.99–$9.99 pricing.',
++    notes: 'Illustrative royalty assumption; territory, price, delivery costs and eligibility remain unknown.',
+@@ -72 +72 @@ export interface ProfitabilityResult {
+-  breakEvenUnits: number;
++  breakEvenUnits: number | null;
+@@ -96 +96 @@ export function calculateProfitability(input: ProfitabilityInput): Profitability
+-  const netPerSale = Math.max(0, blendedAov - perSaleFee);
++  const netPerSale = blendedAov - perSaleFee;
+@@ -103 +103 @@ export function calculateProfitability(input: ProfitabilityInput): Profitability
+-  const breakEvenUnits = netPerSale > 0 ? Math.ceil(totalFixedCosts / netPerSale) : 0;
++  const breakEvenUnits = netPerSale > 0 ? Math.ceil(totalFixedCosts / netPerSale) : null;

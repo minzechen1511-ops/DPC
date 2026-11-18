@@ -1,0 +1,22 @@
+{
+  "url": "http://127.0.0.1:3102/api/health",
+  "checkedAt": "2026-11-18T11:32:20.671Z",
+  "runtime": "local audit server; not deployed Cloud Run",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "response": {
+    "status": "ok",
+    "version": "4.1.0",
+    "mode": "commercial-cloud",
+    "dbMode": "local",
+    "frontendProjectStore": "firestore",
+    "app": "Digital Product Studio",
+    "authRequired": true,
+    "geminiConfigured": false,
+    "supportedProviders": [
+      "gemini"
+    ],
+    "defaultModel": "gemini-4-hydrogen",
+    "time": "2026-11-18T11:32:20.698Z"
+  }
+}

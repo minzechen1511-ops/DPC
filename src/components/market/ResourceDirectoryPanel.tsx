@@ -151,7 +151,7 @@ export const ResourceDirectoryPanel: React.FC<ResourceDirectoryPanelProps> = ({
           <div>
             <strong>{lang === 'en' ? 'Verification Rule:' : '驗證規範：'}</strong>{' '}
             {lang === 'en'
-              ? 'An HTTP 200 response proves server reachability only. It never validates claims on a page, converts discovery pages (Etsy, Gumroad, Payhip) into verified rankings, or overrides combined print/ebook list scopes (NYT Best Sellers).'
+              ? 'An HTTP 200 response proves server reachability only. It never validates claims on a page, converts discovery pages (Whop, Etsy, Gumroad, Payhip) into verified rankings, or overrides combined print/ebook list scopes (NYT Best Sellers).'
               : 'HTTP 200 回應僅代表伺服器可連線，絕不代表該頁面宣稱正確或具有暢銷榜單效力；探勘型平台或合併榜單仍須受限於各自的涵蓋範圍與人工檢核規範。'}
           </div>
         </div>

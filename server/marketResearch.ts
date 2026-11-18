@@ -1,10 +1,12 @@
 import { load } from 'cheerio';
 import { fetch as proxyFetch, EnvHttpProxyAgent, Agent, type Dispatcher } from 'undici';
 import { lookup } from 'node:dns';
+import { createHash } from 'node:crypto';
 import type { LookupFunction } from 'node:net';
 import type { GateAResourceEntry, MarketplaceObservation } from '../src/types/project.ts';
 import { INITIAL_GATE_A_RESOURCES } from '../src/utils/marketResourceDirectory.ts';
 import { isPrivateResearchAddress } from './referenceResearch.ts';
+import { listingMarketplace } from '../src/utils/marketPlatforms.ts';
 
 export const APPLE_LEGACY_FEED_URL = 'https://rss.applemarketingtools.com/api/v2/us/books/top-paid/100/books.json';
 export const APPLE_CANONICAL_FEED_URL = 'https://rss.marketingtools.apple.com/api/v2/us/books/top-paid/100/books.json';
@@ -21,6 +23,7 @@ export const MARKET_SOURCES = [
   { marketplace: 'Gumroad', url: 'https://gumroad.com/discover', categoryLabel: 'Gumroad Discover', rankScope: 'Gumroad Discover' },
   { marketplace: 'Etsy', url: 'https://www.etsy.com/market/digital_downloads', categoryLabel: 'Etsy Digital Downloads', rankScope: 'Etsy Digital Downloads' },
   { marketplace: 'Payhip', url: 'https://payhip.com/marketplace', categoryLabel: 'Payhip Marketplace', rankScope: 'Payhip Marketplace' },
+  { marketplace: 'Whop', url: 'https://whop.com/discover/', categoryLabel: 'Whop public discovery', rankScope: 'Discovery only; not a sales ranking' },
 ] as const;
 
 export type SourceReport = {
@@ -30,6 +33,9 @@ export type SourceReport = {
   message: string;
   checkedAt: string;
   count: number;
+  httpStatus?: number | null;
+  resolvedURL?: string;
+  responseSha256?: string;
 };
 
 export interface MarketResearchResult {
@@ -37,6 +43,23 @@ export interface MarketResearchResult {
   sources: SourceReport[];
   checkedAt: string;
   resourceDirectory?: GateAResourceEntry[];
+}
+
+/** Compare evidentiary content with a record actually collected by this backend.
+ * Amazon retrieval clocks may advance; title/rank/scope and original material
+ * must still match. Apple additionally requires the same feed update time. */
+export function matchesCollectedObservation(observation:MarketplaceObservation, actual:MarketplaceObservation):boolean {
+  const keys:(keyof MarketplaceObservation)[]=['id','collector','marketplace','country','category','productTitle','sellerOrAuthor','productURL','sourceURL','observedRank','rankScope','evidenceType','evidenceLevel','evidenceExcerpt','excerptLocator','collectionMethodology','dataLimitations'];
+  if(!keys.every(key=>observation[key]===actual[key]))return false;
+  const evidence=observation.evidenceCapture;
+  if(!evidence?.content || createHash('sha256').update(evidence.content).digest('hex')!==evidence.sha256)return false;
+  try {
+    const raw=JSON.parse(evidence.content);
+    if(observation.collector==='apple-chart-v1')return observation.dataAsOfDate===actual.dataAsOfDate && raw.item?.name===actual.productTitle && raw.item?.url===actual.productURL && raw.index+1===actual.observedRank && new Date(raw.updated).toISOString()===actual.dataAsOfDate;
+    // Amazon embeds per-request session IDs in its original href. Compare
+    // the underlying ASIN and numbered badge, retaining the original href.
+    return raw.title===actual.productTitle && raw.rankBadge===`#${actual.observedRank}` && `https://www.amazon.com/dp/${raw.asin}`===actual.productURL && /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/.exec(raw.href || '')?.[1]===raw.asin;
+  } catch {return false;}
 }
 
 const publicLookup: LookupFunction = (hostname, options, callback) => {
@@ -71,7 +94,7 @@ export function parseAppleChart(
   const updated = Date.parse(feedUpdatedRaw);
   const retrievedMs = Date.parse(retrievedAt);
   const age = retrievedMs - updated;
-  if (!feedUpdatedRaw || !Number.isFinite(updated) || age < -5 * 60_000 || age > 48 * 60 * 60_000) {
+  if (!feedUpdatedRaw || !Number.isFinite(updated) || !Number.isFinite(retrievedMs) || age < -5 * 60_000 || age > 48 * 60 * 60_000) {
     throw new Error('Source feed update time is missing, stale (>48h) or in the future.');
   }
   if (!Array.isArray(data.feed?.results)) {
@@ -111,6 +134,7 @@ export function parseAppleChart(
         evidenceLevel: 'VERIFIED_RANKING' as const,
         sourceURL,
         evidenceExcerpt: `Position ${i + 1} in Apple US top-paid chart (feed updated ${dataAsOfIso}): ${item.name}`,
+        evidenceCapture: capture(JSON.stringify({updated:feedUpdatedRaw,index:i,item}), 'application/json', retrievedAt, sourceURL),
         excerptLocator: `feed.results[${i}] · feed.updated=${feedUpdatedRaw}`,
         collectionMethodology: 'Apple Books official RSS/JSON top-paid feed collector',
         evidenceChainId: `apple-us-top-paid-${dataAsOfIso.slice(0, 13)}`,
@@ -136,7 +160,7 @@ export function parseAmazonChart(
     throw new Error('Marketplace requires human verification or returned an access challenge.');
   }
   if (/sign[\s-]*in/i.test(titleText)) {
-    return [];
+    throw new Error('Marketplace sign-in page returned; no observations validated.');
   }
 
   const results: MarketplaceObservation[] = [];
@@ -146,8 +170,9 @@ export function parseAmazonChart(
     const rankText = card.find('.zg-bdg-text').first().text().trim();
     const rank = Number(/^#([\d,]+)$/.exec(rankText)?.[1]?.replaceAll(',', ''));
     const anchor = card.find('a[href*="/dp/"]').first();
+    const linkedAsin = /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/.exec(anchor.attr('href') || '')?.[1];
     const title = card.find('img[alt]').first().attr('alt')?.trim();
-    if (!asin || !/^[A-Z0-9]{10}$/.test(asin) || !rank || rank > 100 || !title || !anchor.length) return;
+    if (!asin || !/^[A-Z0-9]{10}$/.test(asin) || linkedAsin !== asin || !rank || rank > 100 || !title || !anchor.length) return;
     if (results.some((r) => r.id === `amazon-${asin}`)) return;
 
     results.push({
@@ -178,6 +203,7 @@ export function parseAmazonChart(
       evidenceLevel: 'VERIFIED_RANKING',
       sourceURL,
       evidenceExcerpt: `${rankText} ${title} (${categoryLabel})`,
+      evidenceCapture: capture(JSON.stringify({asin,rankBadge:rankText,title,href:anchor.attr('href'),rankHtml:$.html(card.find('.zg-bdg-text').first())}), 'application/json', observedAt, sourceURL),
       excerptLocator: `[data-asin="${asin}"] .zg-bdg-text`,
       collectionMethodology: 'Amazon Best Sellers public HTML collector (explicitly numbered .zg-bdg-text + ASIN only)',
       evidenceChainId: `amazon-zgbs-${categoryLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${observedAt.slice(0, 13)}`,
@@ -210,7 +236,32 @@ async function readBoundedText(response: Awaited<ReturnType<typeof proxyFetch>>)
   return body + decoder.decode();
 }
 
-async function readSource(url: string): Promise<{ body: string; resolvedUrl: string }> {
+function capture(content:string,mediaType:string,retrievedAt:string,sourceURL:string) {
+  return {content,mediaType,retrievedAt,sourceURL,sha256:createHash('sha256').update(content).digest('hex')};
+}
+
+/** Bounded public listing requests only. Redirects must stay on the same
+ * recognized marketplace; arbitrary URLs and private services are not fetched. */
+export async function readPublicListingSource(rawUrl:string):Promise<{body:string;resolvedUrl:string;httpStatus:number}> {
+  const marketplace=listingMarketplace(rawUrl);
+  if(!marketplace)throw new Error('Use a supported HTTPS Whop, Gumroad, Etsy or Payhip public listing URL.');
+  let url=rawUrl;
+  const signal=AbortSignal.timeout(15000);
+  for(let hop=0;hop<3;hop++){
+    const response=await proxyFetch(url,{dispatcher,redirect:'manual',signal,headers:{Accept:'text/html,application/json','User-Agent':'DigitalProductStudio/1.0 (public listing investigation)'}});
+    if(response.status>=300 && response.status<400){
+      const target=new URL(response.headers.get('location') || '',url).href;
+      await response.body?.cancel().catch(()=>{});
+      if(listingMarketplace(target)!==marketplace || hop===2)throw Object.assign(new Error('Listing redirect left the recognized marketplace or exceeded the redirect limit.'),{httpStatus:response.status});
+      url=target;continue;
+    }
+    if(!response.ok){await response.body?.cancel().catch(()=>{});throw Object.assign(new Error(`Public listing returned HTTP ${response.status}; no observations validated.`),{httpStatus:response.status});}
+    return {body:await readBoundedText(response),resolvedUrl:url,httpStatus:response.status};
+  }
+  throw new Error('No public listing response.');
+}
+
+async function readSource(url: string): Promise<{ body: string; resolvedUrl: string; httpStatus:number }> {
   // Only the fixed public sources above; redirects are rejected except the canonical Apple RSS relocation.
   const response = await proxyFetch(url, {
     dispatcher,
@@ -237,18 +288,18 @@ async function readSource(url: string): Promise<{ body: string; resolvedUrl: str
       });
       if (!redirected.ok) {
         await redirected.body?.cancel().catch(() => {});
-        throw new Error(`Apple feed redirect target returned HTTP ${redirected.status}.`);
+        throw Object.assign(new Error(`Apple feed redirect target returned HTTP ${redirected.status}.`),{httpStatus:redirected.status,resolvedURL:location});
       }
-      return { body: await readBoundedText(redirected), resolvedUrl: location };
+      return { body: await readBoundedText(redirected), resolvedUrl: location, httpStatus:redirected.status };
     }
-    throw new Error(`Source attempted unallowlisted redirect (HTTP ${response.status}). Refused for safety.`);
+    throw Object.assign(new Error(`Source attempted unallowlisted redirect (HTTP ${response.status}). Refused for safety.`),{httpStatus:response.status});
   }
 
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
-    throw new Error(`Source returned HTTP ${response.status}. Access or network policy may require configuration.`);
+    throw Object.assign(new Error(`Source returned HTTP ${response.status}. Access or network policy may require configuration.`),{httpStatus:response.status});
   }
-  return { body: await readBoundedText(response), resolvedUrl: url };
+  return { body: await readBoundedText(response), resolvedUrl: url, httpStatus:response.status };
 }
 
 /**
@@ -373,8 +424,12 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
     const checkedAt = new Date().toISOString();
     const collected = await Promise.all(
       MARKET_SOURCES.map(async (source) => {
+        let httpStatus:number|null=null;
+        let resolvedURL:string|undefined;
+        let responseSha256:string|undefined;
         try {
-          const { body, resolvedUrl } = await readSource(source.url);
+          const { body, resolvedUrl, httpStatus:status } = source.marketplace==='Whop' ? await readPublicListingSource(source.url) : await readSource(source.url);
+          httpStatus=status;resolvedURL=resolvedUrl;responseSha256=createHash('sha256').update(body).digest('hex');
           const observations =
             source.marketplace === 'Apple Books'
               ? parseAppleChart(body, checkedAt, resolvedUrl)
@@ -388,9 +443,14 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
               url: source.url,
               checkedAt,
               count: observations.length,
+              httpStatus, resolvedURL, responseSha256,
               status: observations.length ? 'verified' : 'no_ranking',
               message: observations.length
                 ? `Source chart positions captured (${resolvedUrl}); inspect source URL, feed timestamp, and limitations.`
+                : source.marketplace.startsWith('Amazon Kindle') || source.marketplace==='Apple Books'
+                ? 'Page reached, but collector extracted zero valid chart entries. Inspect the original response; no observations were validated.'
+                : source.marketplace==='Whop'
+                ? `Whop discovery resolved to ${resolvedUrl}. No ranking was validated. Retrieve a specific public product URL in Manual Evidence Review to investigate original offer facts.`
                 : 'Page reached, but no supported public ranking collector applies here. Discovery and featured listings are never bestseller proof.',
             } as SourceReport,
           };
@@ -402,6 +462,8 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
               url: source.url,
               checkedAt,
               count: 0,
+              httpStatus: (error as {httpStatus?:number}).httpStatus ?? httpStatus,
+              resolvedURL: (error as {resolvedURL?:string}).resolvedURL ?? resolvedURL, responseSha256,
               status: 'unavailable',
               message:
                 error instanceof Error && error.message !== 'fetch failed'
@@ -429,12 +491,14 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
         ...seed,
         accessStatus:
           rpt.status === 'verified' || rpt.status === 'no_ranking'
-            ? seed.originalURL === APPLE_LEGACY_FEED_URL
+            ? rpt.resolvedURL && rpt.resolvedURL !== seed.originalURL
               ? 'redirected'
               : 'accessible'
             : /401|403|429|captcha|human verification/i.test(rpt.message)
             ? 'blocked'
             : 'unavailable',
+        httpStatus: rpt.httpStatus,
+        resolvedURL: rpt.resolvedURL || seed.resolvedURL,
         lastCheckedAt: rpt.checkedAt,
         lastCheckNote: rpt.message,
       };

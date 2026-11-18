@@ -25,6 +25,7 @@ function isLegacySampleFixture(obs: Partial<MarketplaceObservation>): boolean {
 
 export function migrateObservationRecord(rawObs: Partial<MarketplaceObservation>): MarketplaceObservation {
   const base: MarketplaceObservation = {
+    evidenceCapture: rawObs.evidenceCapture,
     id: String(rawObs.id || `OBS-${Date.now()}`),
     marketplace: rawObs.marketplace || 'Other Research Source',
     publisher: rawObs.publisher,
@@ -35,6 +36,7 @@ export function migrateObservationRecord(rawObs: Partial<MarketplaceObservation>
     productURL: String(rawObs.productURL || rawObs.sourceURL || ''),
     sourceURL: rawObs.sourceURL,
     currentPrice: Number.isFinite(Number(rawObs.currentPrice)) ? Number(rawObs.currentPrice) : 0,
+    pricingTerms: rawObs.pricingTerms,
     priceKnown: rawObs.priceKnown,
     currency: String(rawObs.currency || 'USD'),
     observedRank: rawObs.observedRank,
@@ -105,14 +107,14 @@ export function migrateObservationRecord(rawObs: Partial<MarketplaceObservation>
   const currentHash = computeObservationEvidenceHash(normalized);
   normalized.evidenceVersionHash = currentHash;
 
-  // Bind hash for legacy pre-hash manually_reviewed records that have complete rationale + excerpt + date
+  // Migration is not a review action. Keep original material/history, but require
+  // a fresh explicit review when the prior decision did not bind its evidence.
   if (
     !normalized.reviewedEvidenceHash &&
     normalized.reviewStatus === 'manually_reviewed' &&
-    normalized.reviewedAt &&
-    (normalized.reviewerRationale || '').trim().length >= 20
+    normalized.reviewedAt
   ) {
-    normalized.reviewedEvidenceHash = currentHash;
+    normalized.reviewStatus = 'unverified';
   }
 
   return normalized;

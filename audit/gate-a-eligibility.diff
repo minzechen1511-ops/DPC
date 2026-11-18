@@ -1,0 +1,118 @@
+diff --git a/src/utils/evidenceChains.ts b/src/utils/evidenceChains.ts
+new file mode 100644
+index 0000000..7190585
+--- /dev/null
++++ b/src/utils/evidenceChains.ts
+@@ -0,0 +1,37 @@
++import type { MarketplaceObservation } from '../types/project.ts';
++
++// Independent origin is stricter than a user-supplied report/chain label.
++// Multiple dates, categories and third-party Amazon/Keepa reports still share
++// one marketplace dataset. Explicit shared-chain labels also collapse reports
++// across hosts, including syndication the reviewer has identified.
++function originKey(obs: MarketplaceObservation): string {
++  const host = (() => { try { return new URL(obs.sourceURL || obs.productURL).hostname.replace(/^www\./,'').toLowerCase(); } catch { return ''; } })();
++  if (obs.marketplace === 'Amazon Kindle' || obs.marketplace === 'Keepa' || /(^|\.)(amazon\.com|keepa\.com)$/.test(host)) return 'origin:amazon';
++  if (obs.marketplace === 'Apple Books' || /(^|\.)apple\.com$/.test(host) || host === 'rss.applemarketingtools.com') return 'origin:apple-books';
++  if (obs.marketplace === 'NYT Best Sellers' || /(^|\.)nytimes\.com$/.test(host)) return 'origin:nyt-lists';
++  if (obs.marketplace === 'Google Trends' || host === 'trends.google.com') return 'origin:google-trends';
++  // Unknown origins are conservatively collapsed by publisher host. The
++  // reviewer must retain the true underlying dataset in evidenceChainId.
++  return `origin:${host || 'unknown'}`;
++}
++
++export function evidenceChainKeys(observations: MarketplaceObservation[]): Map<string,string> {
++  const parents = new Map<string,string>();
++  const root = (key:string):string => { const parent=parents.get(key); if(!parent){parents.set(key,key);return key;} return parent===key?key:root(parent); };
++  const join = (a:string,b:string) => {
++    const ra=root(a), rb=root(b);
++    if (ra === rb) return;
++    const representative = ra < rb ? ra : rb;
++    parents.set(ra, representative);
++    parents.set(rb, representative);
++  };
++  for(const obs of observations) {
++    const origin=originKey(obs);
++    root(origin);
++    if(obs.evidenceChainId?.trim())join(origin,`declared:${obs.evidenceChainId.trim()}`);
++  }
++  // Stable, inspectable origin names, independent of record order.
++  const groups=new Map<string,string[]>();
++  for(const obs of observations) {const key=root(originKey(obs)); groups.set(key,[...(groups.get(key)||[]),originKey(obs)]);}
++  return new Map(observations.map(obs=>[obs.id,[...new Set(groups.get(root(originKey(obs)))!)].sort().join('+')]));
++}
+diff --git a/src/utils/gatePolicy.ts b/src/utils/gatePolicy.ts
+index a111348..ff53516 100644
+--- a/src/utils/gatePolicy.ts
++++ b/src/utils/gatePolicy.ts
+@@ -6,0 +7 @@ import { isRetrievedSource, chapterResearchFingerprint } from './sourceEvidence.
++import { approvalFingerprint } from './approvalIntegrity.ts';
+@@ -10,0 +12,5 @@ export function gateIssues(project: DigitalProductProject, gate: GateKey): strin
++  const order: GateKey[] = ['gateA','gateB','gateC'];
++  for (const key of order.slice(0, order.indexOf(gate)+1)) {
++    const decision=project.workflow.gates[key];
++    if(decision.isApproved && decision.approvedFingerprint!==approvalFingerprint(project,key)) issues.push(`${key}: approval is not bound to the current project inputs. Review and explicitly approve again.`);
++  }
+@@ -51 +57 @@ export function revokeApprovals(project: DigitalProductProject, from: GateKey):
+-  for (const key of order.slice(order.indexOf(from))) next.workflow.gates[key] = { ...next.workflow.gates[key], isApproved: false, approvedAt: undefined };
++  for (const key of order.slice(order.indexOf(from))) next.workflow.gates[key] = { ...next.workflow.gates[key], isApproved: false, approvedAt: undefined, approvedFingerprint: undefined };
+@@ -56,2 +62,3 @@ export function approveGate(project: DigitalProductProject, gate: GateKey): Digi
+-  if (gateIssues(project, gate).length) return project;
+-  return { ...project, referenceLibrary: gate === 'gateB' ? { ...project.referenceLibrary, status: 'COMPLETED' } : project.referenceLibrary, charter: gate === 'gateB' ? { ...project.charter, isApproved: true, approvedAt: new Date().toISOString() } : project.charter, workflow: { ...project.workflow, gates: { ...project.workflow.gates, [gate]: { ...project.workflow.gates[gate], isApproved: true, approvedAt: new Date().toISOString() } }, stageStatuses: { ...project.workflow.stageStatuses, ...(gate === 'gateA' ? { market_research: 'COMPLETED' as const } : {}), ...(gate === 'gateB' ? { reference_library: 'COMPLETED' as const } : {}), [gate === 'gateA' ? 'topic_selection' : gate === 'gateB' ? 'product_charter' : 'quality_assurance']: 'COMPLETED', export_center: gate === 'gateC' ? 'READY' : 'BLOCKED' } } };
++  const pending={...project,workflow:{...project.workflow,gates:{...project.workflow.gates,[gate]:{...project.workflow.gates[gate],isApproved:false}}}};
++  if (gateIssues(pending, gate).length) return project;
++  return { ...project, referenceLibrary: gate === 'gateB' ? { ...project.referenceLibrary, status: 'COMPLETED' } : project.referenceLibrary, charter: gate === 'gateB' ? { ...project.charter, isApproved: true, approvedAt: new Date().toISOString() } : project.charter, workflow: { ...project.workflow, gates: { ...project.workflow.gates, [gate]: { ...project.workflow.gates[gate], isApproved: true, approvedAt: new Date().toISOString(), approvedFingerprint: approvalFingerprint(project, gate) } }, stageStatuses: { ...project.workflow.stageStatuses, ...(gate === 'gateA' ? { market_research: 'COMPLETED' as const } : {}), ...(gate === 'gateB' ? { reference_library: 'COMPLETED' as const } : {}), [gate === 'gateA' ? 'topic_selection' : gate === 'gateB' ? 'product_charter' : 'quality_assurance']: 'COMPLETED', export_center: gate === 'gateC' ? 'READY' : 'BLOCKED' } } };
+diff --git a/src/utils/marketDiscoveryEngine.ts b/src/utils/marketDiscoveryEngine.ts
+index 65530bd..021fcdb 100644
+--- a/src/utils/marketDiscoveryEngine.ts
++++ b/src/utils/marketDiscoveryEngine.ts
+@@ -0,0 +1 @@
++import { evidenceChainKeys } from './evidenceChains.ts';
+@@ -264,0 +266,4 @@ export function isReviewedFallbackEvidence(observation: MarketplaceObservation):
++  if (observation.reviewAssessment?.dateScopeProductMatch === 'mismatch') return false;
++  const dataMs = Date.parse(observation.dataAsOfDate || observation.observedAt || '');
++  const retrievalMs = Date.parse(observation.retrievedAt || '');
++  if (!Number.isFinite(dataMs) || !Number.isFinite(retrievalMs) || dataMs > retrievalMs + 300_000 || retrievalMs > Date.now() + 300_000) return false;
+@@ -562 +567,2 @@ export function compareCandidateEvidence(
+-  // Track dataset chain memberships across all non-sample domain records
++  const chainKeys = evidenceChainKeys(domainObs);
++  // Track independently originated dataset memberships, not arbitrary labels
+@@ -565 +571 @@ export function compareCandidateEvidence(
+-    const chain = (obs.evidenceChainId || obs.id).trim();
++    const chain = chainKeys.get(obs.id)!;
+@@ -571 +577 @@ export function compareCandidateEvidence(
+-    new Set(qualified.map((o) => (o.evidenceChainId || o.id).trim()))
++    new Set(qualified.map((o) => chainKeys.get(o.id)!))
+@@ -585 +591 @@ export function compareCandidateEvidence(
+-    return d.evidenceType === 'interest_signal' || d.evidenceType === 'estimate' || d.evidenceType === 'featured_collection';
++    return d.evidenceType === 'interest_signal' || d.evidenceType === 'published_research' || d.evidenceType === 'estimate' || d.evidenceType === 'featured_collection';
+@@ -596 +602 @@ export function compareCandidateEvidence(
+-    const chain = (obs.evidenceChainId || obs.id).trim();
++    const chain = chainKeys.get(obs.id)!;
+@@ -618 +624,3 @@ export function compareCandidateEvidence(
+-      relationship = 'contradicts';
++      relationship = 'excluded';
++    } else if (obs.reviewAssessment?.relationship && (obs.reviewAssessment.relationshipRationale || '').trim().length >= 20) {
++      relationship = obs.reviewAssessment.relationship;
+@@ -623 +631 @@ export function compareCandidateEvidence(
+-      (defaults.evidenceType === 'interest_signal' || defaults.evidenceType === 'estimate') &&
++      (defaults.evidenceType === 'interest_signal' || defaults.evidenceType === 'published_research' || defaults.evidenceType === 'estimate') &&
+@@ -658 +666 @@ export function compareCandidateEvidence(
+-    let conflictOrLimitationNote = obs.dataLimitations;
++    let conflictOrLimitationNote = [obs.reviewAssessment?.relationshipRationale,obs.dataLimitations].filter(Boolean).join(' ');
+@@ -660 +668 @@ export function compareCandidateEvidence(
+-      conflictOrLimitationNote = `Shares evidenceChainId "${chain}" with [${peersInChain.join(', ')}] — collapsed into 1 chain to avoid double-counting. ${obs.dataLimitations}`;
++      conflictOrLimitationNote = `Shares underlying evidence origin "${chain}" with [${peersInChain.join(', ')}] — collapsed into 1 chain to avoid double-counting. ${obs.dataLimitations}`;
+@@ -665 +673 @@ export function compareCandidateEvidence(
+-      conflictOrLimitationNote = `CONTRADICTION / EXCLUDED: ${obs.reviewerRationale || obs.dataLimitations}`;
++      conflictOrLimitationNote = `EXCLUDED (not evidence of a contrary claim): ${obs.reviewerRationale || obs.dataLimitations}`;
+@@ -724 +732,2 @@ function computeCandidateEvidenceAssessment(
+-  // Deduplicate overlapping reports sharing an underlying dataset chain
++  // Deduplicate both declared chains and known common data origins.
++  const chainKeys = evidenceChainKeys(sorted);
+@@ -726 +735 @@ function computeCandidateEvidenceAssessment(
+-    new Set(sorted.map((s) => (s.evidenceChainId || s.id).trim()))
++    new Set(sorted.map((s) => chainKeys.get(s.id)!))
+@@ -731 +740 @@ function computeCandidateEvidenceAssessment(
+-    const matching = sorted.filter((s) => (s.evidenceChainId || s.id).trim() === chainId);
++    const matching = sorted.filter((s) => chainKeys.get(s.id) === chainId);

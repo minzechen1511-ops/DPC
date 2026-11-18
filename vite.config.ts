@@ -8,7 +8,7 @@ function stripInternalPublicSpecs(): Plugin {
   return {
     name: 'strip-internal-aistudio-specs',
     closeBundle() {
-      const target = path.resolve(__dirname, 'dist/assets/aistudio');
+      const target = path.resolve(import.meta.dirname, 'dist/assets/aistudio');
       if (fs.existsSync(target)) {
         fs.rmSync(target, { recursive: true, force: true });
       }
@@ -21,7 +21,7 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss(), stripInternalPublicSpecs()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {

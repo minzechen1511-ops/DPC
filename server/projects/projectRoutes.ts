@@ -8,6 +8,7 @@ import { gateIssues, revokeApprovals } from '../../src/utils/gatePolicy.ts';
 import { verifyReferenceRecords } from '../referenceResearch.ts';
 import { isRetrievedSource } from '../../src/utils/sourceEvidence.ts';
 import { buildLearningBundle } from '../../src/utils/learningBundle.ts';
+import { collectMarketResearch, matchesCollectedObservation } from '../marketResearch.ts';
 import {
   AuthenticatedRequest,
   createRequireFirebaseAuth,
@@ -52,6 +53,16 @@ async function compileVerifiedZipBundle(
       };
     }
 
+    // Collector labels inside an uploaded project are not proof. Reconcile
+    // selected collector records with actual backend research before delivery.
+    const selected=project.marketResearch.topicCandidates.find(c=>c.id===project.marketResearch.selectedTopicId);
+    const live=project.marketResearch.platformEvidence.filter(o=>selected?.sourceObservationIds.includes(o.id) && Boolean(o.collector));
+    if(live.length){
+      const current=await collectMarketResearch();
+      const mismatches=live.filter(o=>!current.observations.some(actual=>matchesCollectedObservation(o,actual)));
+      if(mismatches.length)return {status:422,errorPayload:{error:'Selected collector evidence could not be reconciled with current backend source material. Refresh research or explicitly review genuine manual evidence.',code:'MARKET_SOURCE_CHECK_FAILED',issues:mismatches.map(o=>o.id),sources:current.sources}};
+    }
+
     const retrievedSources = (project.referenceLibrary?.cards || []).filter(isRetrievedSource);
     if (retrievedSources.length > 0) {
       sourceReport = await verifyReferenceRecords(retrievedSources);
@@ -69,6 +80,8 @@ async function compileVerifiedZipBundle(
   }
 
   const { zip } = await buildLearningBundle(project, sourceReport);
+  const manifest=JSON.parse(await zip.file('manifest.json')!.async('string'));
+  if(mode==='buyer_bundle' && !manifest.reviewed)return {status:422,errorPayload:{error:'Final bundle evidence checks did not pass. Export an author-review edition.',code:'GATE_CHECK_FAILED'}};
   const buffer = await zip.generateAsync({
     type: 'nodebuffer',
     compression: 'DEFLATE',

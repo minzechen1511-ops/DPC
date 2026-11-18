@@ -1,0 +1,122 @@
+{
+  "title": "RELEASE AUDIT ONLY — Emergency Expense Planning",
+  "createdAt": "2026-11-18T11:34:17.382Z",
+  "reviewed": true,
+  "files": [
+    {
+      "path": "book/executive-ebook.html",
+      "bytes": 23325,
+      "sha256": "f3044a3018017d9c084b738e9db8b69847f5d0d338de77fc1d0c0040b2203c45"
+    },
+    {
+      "path": "book/manuscript.md",
+      "bytes": 4817,
+      "sha256": "1c6eeeb2db2356d3b14c3734236423eee507ae9e20b133e6dfc5481f45973405"
+    },
+    {
+      "path": "resources/executive-summary.md",
+      "bytes": 1917,
+      "sha256": "2667d20bcc8e06e25f3aa139d6d71dd8ba4f844faca462d26ef2692d2c4c24e9"
+    },
+    {
+      "path": "resources/executive-summary.html",
+      "bytes": 5701,
+      "sha256": "af53a7693eaa8e92f7cc54d0c69d7d664f4f0bf04a88eed0d5168d4043d65877"
+    },
+    {
+      "path": "research/reference-library.md",
+      "bytes": 2766,
+      "sha256": "fae18279f8f7c01d1518b52a88a75f027f89fdc56219a862db4b1dfcc1e699cf"
+    },
+    {
+      "path": "research/source-records.json",
+      "bytes": 4167,
+      "sha256": "dc562c06f04dbb2766328de9129df1096aff5446248bcaf3e6b6ede549c8c4d3"
+    },
+    {
+      "path": "research/marketplace-evidence.json",
+      "bytes": 20809,
+      "sha256": "2112fa17446f38b88bbc6a52a76a970ca8b46a6e76fff56eccd5de13c86f57a9"
+    },
+    {
+      "path": "resources/companion-toolkits.md",
+      "bytes": 1308,
+      "sha256": "54cc2aec4ab9ae9ae3846ba61c3a07bbff680ab5fb3fc6385c2b61552c8c707c"
+    },
+    {
+      "path": "publisher/sales-assets.md",
+      "bytes": 678,
+      "sha256": "27e4042c774a0856c02307b80139fb27dcb1037ecb5467f757ca14cf266479d3"
+    },
+    {
+      "path": "publisher/launch-summary.html",
+      "bytes": 6531,
+      "sha256": "0db67a64f3859a93d18e3fd673508373f7bbd970e6abd972c81f81f88c6a8426"
+    },
+    {
+      "path": "publisher/storefront-listing.html",
+      "bytes": 5587,
+      "sha256": "561da9ff85fe85f2a4e484cb5c91d1999c2f70629fa537695082c4d999eda677"
+    },
+    {
+      "path": "publisher/project-backup.json",
+      "bytes": 56084,
+      "sha256": "a5b829eca30b62590b4f47e9ec1d4f20b2ac9d1f434d73c872dcf6140437e655"
+    },
+    {
+      "path": "review/publication-review.json",
+      "bytes": 3874,
+      "sha256": "a5c177a2c11380fabc1d9438620dce692fa1f86fb66e8a8bd741b38da1a9c761"
+    },
+    {
+      "path": "research/claim-evidence-matrix.json",
+      "bytes": 25334,
+      "sha256": "f64f9100eca505b5028261ac1f190ebe2743696c6d0673b7a5bda7a70abc7057"
+    },
+    {
+      "path": "research/claim-evidence-matrix.html",
+      "bytes": 13703,
+      "sha256": "6eb61a97f887a29043c4d4953f4d614b13432eeee08af79b0c0529bb6321bbca"
+    },
+    {
+      "path": "chapters/chapter-1.html",
+      "bytes": 23325,
+      "sha256": "f3044a3018017d9c084b738e9db8b69847f5d0d338de77fc1d0c0040b2203c45"
+    },
+    {
+      "path": "resources/worksheet-1.md",
+      "bytes": 1478,
+      "sha256": "84ddc09e702c691b91c5cd5887fc911c1a74df16f8980a6b36c36eca3e2542c4"
+    },
+    {
+      "path": "resources/worksheet-1.html",
+      "bytes": 5294,
+      "sha256": "96197711d39df688a0194d7515695c09cb51cea9d4117598e55dd96bb31a3d5c"
+    },
+    {
+      "path": "resources/companion-1.html",
+      "bytes": 17382,
+      "sha256": "a679e3f55438cca1ce04a2729017559bb43f3af378da0d09c72d96cc1e0ae796"
+    },
+    {
+      "path": "resources/learning-progress.csv",
+      "bytes": 379,
+      "sha256": "6883706b1b324a61be8c56ba16bf9487eefde6cdbc43aecaf563432073c4ac96"
+    },
+    {
+      "path": "research/reading-room.html",
+      "bytes": 4367,
+      "sha256": "85baa40e50e46e9f7b791d5bfeb56d5c2563f4c6afcd4d76381b1ef6e5b17006"
+    },
+    {
+      "path": "START-HERE.html",
+      "bytes": 7048,
+      "sha256": "2d3a64e867333254c23df3d3718f2dad80151fe2ca26330227dad4a23fcb6a63"
+    },
+    {
+      "path": "README.txt",
+      "bytes": 704,
+      "sha256": "1d46fd6d34dec78452d33cbd9b8c89412d6356c9f833d6a40808604f30924c22"
+    }
+  ]
+}

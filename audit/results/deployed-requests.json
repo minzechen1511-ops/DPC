@@ -1,0 +1,34 @@
+[
+  {
+    "url": "https://ais-dev-vdpfbf4ldv2d5ilgmzmbvc-758989687130.asia-east1.run.app/api/health",
+    "checkedAt": "2026-11-18T11:11:28.386905+00:00",
+    "status": 200,
+    "contentType": "text/html",
+    "bodyTitle": [
+      "Cookie check"
+    ],
+    "bodySha256": "4386d02acf9473e7bf84cd94e5b0ac7d78340021b69ffce6051c19c8fba3ee78",
+    "note": "Cookie-check HTML, not application JSON. Raw challenge omitted to avoid retaining ephemeral browser challenge data."
+  },
+  {
+    "url": "https://ais-dev-vdpfbf4ldv2d5ilgmzmbvc-758989687130.asia-east1.run.app/api/market/research",
+    "checkedAt": "2026-11-18T11:11:30.156596+00:00",
+    "status": 200,
+    "contentType": "text/html",
+    "bodyTitle": [
+      "Cookie check"
+    ],
+    "bodySha256": "4386d02acf9473e7bf84cd94e5b0ac7d78340021b69ffce6051c19c8fba3ee78",
+    "note": "Cookie-check HTML, not application JSON. Raw challenge omitted to avoid retaining ephemeral browser challenge data."
+  },
+  {
+    "url": "https://ais-pre-vdpfbf4ldv2d5ilgmzmbvc-758989687130.asia-east1.run.app/api/health",
+    "checkedAt": "2026-11-18T11:11:31.279394+00:00",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://ais-pre-vdpfbf4ldv2d5ilgmzmbvc-758989687130.asia-east1.run.app/api/market/research",
+    "checkedAt": "2026-11-18T11:11:32.463663+00:00",
+    "error": "HTTP Error 404: Not Found"
+  }
+]

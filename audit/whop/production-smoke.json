@@ -1,0 +1,51 @@
+{
+  "checkedAt": "2026-11-18T13:01:48.838Z",
+  "url": "http://127.0.0.1:3102/api/market/listings/retrieve",
+  "status": 200,
+  "response": {
+    "requestedURL": "https://whop.com/iimagined/digital-products-reimagined/",
+    "resolvedURL": "https://whop.com/iimagined/digital-products-reimagined/",
+    "httpStatus": 200,
+    "checkedAt": "2026-11-18T13:01:48.796Z",
+    "responseSha256": "96087e0c3d2a279dfcdd4be075d8fb28098a3b6e41445b17682888658c286f9f",
+    "observation": {
+      "id": "PAGE-a1ec50360110243b6c1c",
+      "marketplace": "Whop",
+      "publisher": "Whop",
+      "country": "Unknown / listing-specific",
+      "category": "Business Productivity Systems",
+      "productTitle": "Digital Products",
+      "sellerOrAuthor": "IImagined",
+      "productURL": "https://whop.com/iimagined/digital-products-reimagined/",
+      "sourceURL": "https://whop.com/iimagined/digital-products-reimagined/",
+      "currentPrice": 189,
+      "pricingTerms": "Advertised offer price only. Billing period, renewals, trials, fees and checkout total are unknown unless separately inspected.",
+      "priceKnown": true,
+      "currency": "USD",
+      "productFormat": "Course (investigation scope)",
+      "observedAt": "2026-11-18T13:01:48.796Z",
+      "dataAsOfDate": "2026-11-18T13:01:48.796Z",
+      "retrievedAt": "2026-11-18T13:01:48.796Z",
+      "evidenceExcerpt": "Structured Product name: Digital Products; brand/seller: IImagined; advertised offer: 189 USD.",
+      "excerptLocator": "script[type=\"application/ld+json\"] Product matching this product URL",
+      "collectionMethodology": "Backend extraction of original public JSON-LD Product/Offer facts; human relevance and scope review required.",
+      "keepaProvenance": "not_applicable",
+      "evidenceChainId": "whop-public-listings",
+      "sourceClass": "supporting_context",
+      "acquisitionMethod": "public_page_capture",
+      "evidenceType": "listing_details",
+      "reviewStatus": "unverified",
+      "evidenceLevel": "PUBLIC_LISTING",
+      "dataLimitations": "Listing metadata only: no unit sales, buyer demand, sales rank, conversion, revenue, profitability, purchase verification or seller-result verification. Country/category/format require review; category and format are user-supplied investigation scope. Advertised offer price only. Billing period, renewals, trials, fees and checkout total are unknown unless separately inspected.",
+      "isSample": false,
+      "evidenceVersionHash": "ev_a7993ec4587c6c23",
+      "evidenceCapture": {
+        "content": "{\"name\":\"Digital Products\",\"url\":\"https://whop.com/iimagined/digital-products-reimagined/\",\"sku\":\"prod_FLbQ7uk0ocvSf\",\"brand\":{\"@type\":\"Brand\",\"name\":\"IImagined\"},\"offers\":{\"@type\":\"Offer\",\"url\":\"https://whop.com/iimagined/digital-products-reimagined/\",\"price\":189,\"priceCurrency\":\"USD\",\"availability\":\"https://schema.org/InStock\"}}",
+        "mediaType": "application/json",
+        "sha256": "88eebb8d70b53bd620670bdc232998c80de823aa6ad2ff1717fb5633c3747704",
+        "sourceURL": "https://whop.com/iimagined/digital-products-reimagined/",
+        "retrievedAt": "2026-11-18T13:01:48.796Z"
+      }
+    }
+  }
+}

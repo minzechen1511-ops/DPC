@@ -18,6 +18,8 @@ import type { DigitalProductProject } from '../types/project.ts';
 import { sanitizeProjectForExport } from '../utils/projectSanitizer.ts';
 import { migrateProjectSchema } from '../utils/projectMigration.ts';
 import type { Language } from '../utils/i18n.ts';
+import { invalidateChangedApprovals } from '../utils/approvalIntegrity.ts';
+import { compactMarketResearch, hydrateMarketResearch } from '../utils/marketPersistence.ts';
 
 export interface FirestoreProjectRecord {
   project: DigitalProductProject;
@@ -129,7 +131,7 @@ export function subscribeUserProjects(
           })
         );
         return {
-          project: normalized,
+          project: {...normalized, marketResearch: hydrateMarketResearch(normalized.marketResearch)},
           revision: rev,
         };
       });
@@ -147,7 +149,8 @@ export function subscribeUserProjects(
 
 export async function saveProjectToFirestore(
   uid: string,
-  project: DigitalProductProject
+  project: DigitalProductProject,
+  expectedRevision?: number
 ): Promise<{ project: DigitalProductProject; revision: number }> {
   const safeProjectId = normalizeId(project.projectId);
   const path = `users/${uid}/projects/${safeProjectId}`;
@@ -166,7 +169,7 @@ export async function saveProjectToFirestore(
     isBlankProject: Boolean(sanitized.isBlankProject ?? false),
     preferences: sanitized.preferences,
     workflow: sanitized.workflow,
-    marketResearch: sanitized.marketResearch,
+    marketResearch: compactMarketResearch(sanitized.marketResearch),
     intake: sanitized.intake,
     uvz: sanitized.uvz,
     transformationMap: sanitized.transformationMap,
@@ -202,10 +205,15 @@ export async function saveProjectToFirestore(
         return 1;
       }
       const existing = snap.data();
+      const currentRevision=typeof existing.revision==='number'?existing.revision:1;
+      if(expectedRevision!==undefined && currentRevision!==expectedRevision)throw new Error(`Project revision conflict: expected ${expectedRevision}, current ${currentRevision}. Reload before saving to preserve the newer work.`);
+      const reconciled=invalidateChangedApprovals(migrateProjectSchema(existing),sanitized);
       const nextRev = (typeof existing.revision === 'number' ? existing.revision : 1) + 1;
       const { projectId: _pid, ownerId: _oid, ...mutableFields } = payloadFields;
       tx.update(ref, {
         ...mutableFields,
+        workflow: stripUndefinedDeep(reconciled.workflow),
+        charter: stripUndefinedDeep(reconciled.charter),
         revision: nextRev,
         updatedAt: serverTimestamp(),
       });

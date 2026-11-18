@@ -212,7 +212,7 @@ export const ExportCenterView: React.FC<ExportCenterViewProps> = ({
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        if (errJson.code === 'SOURCE_CHECK_FAILED') {
+        if (errJson.code === 'SOURCE_CHECK_FAILED' || errJson.code === 'MARKET_SOURCE_CHECK_FAILED') {
           onSourceCheckFailed(errJson.error || 'Source verification failed.');
         }
         throw new Error(errJson.error || `Export failed (${response.status}).`);

@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-11-18T11:32:48.400746+00:00",
+  "results": [
+    {
+      "url": "http://127.0.0.1:3102/assets/index-LvXdzYPe.js",
+      "status": 200,
+      "contentType": "application/javascript; charset=UTF-8",
+      "bytes": 1659575
+    },
+    {
+      "url": "http://127.0.0.1:3102/assets/index-Co2IEIEv.css",
+      "status": 200,
+      "contentType": "text/css; charset=UTF-8",
+      "bytes": 69666
+    }
+  ],
+  "browserExecution": "untested"
+}
