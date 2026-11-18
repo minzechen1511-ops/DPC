@@ -1,0 +1,161 @@
+{
+  "checkedAt": "2026-11-18T11:34:09.367Z",
+  "scope": "Isolated local API/domain exercise with genuine captured material. UI, production Firebase authentication and Firestore were not exercised.",
+  "stages": [
+    {
+      "id": "market_research",
+      "detail": {
+        "liveObservationCount": 275,
+        "manualEntry": "AUDIT-MANUAL-AMAZON",
+        "fileImport": "IMP-AUDIT-FED-SHED",
+        "unverifiedBeforeReview": true,
+        "originalEvidenceRetained": true,
+        "twoIndependentOrigins": true,
+        "duplicateReportCollapsed": true
+      }
+    },
+    {
+      "id": "topic_selection",
+      "detail": {
+        "gateA": "Explicit domain-function approval in isolated test",
+        "candidate": "NICHE-personal_finance",
+        "qualifiedHypothesis": true,
+        "expertiseAndIdentityUnknown": true
+      }
+    },
+    {
+      "id": "project_brief",
+      "detail": {
+        "targetAudience": "Unvalidated hypothesis: US adults who want a personal emergency-expense ledger.",
+        "creatorExpertise": "unknown"
+      }
+    },
+    {
+      "id": "uvz",
+      "detail": "Unknown: interview five prospective readers and test comprehension and willingness to pay before building a commercial product."
+    },
+    {
+      "id": "transformation_map",
+      "detail": "Original conceptual workflow; not measured intervention results."
+    },
+    {
+      "id": "reference_library",
+      "detail": {
+        "sourceURL": "https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm",
+        "sourceFingerprint": "[\"REF-FED-SHED-2025\",\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report\",\"\",\"www.federalreserve.gov\",null,null,\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"VERIFIED_FULL_TEXT\",\"The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.\",\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16\",{\"provider\":\"Trusted public page\",\"documentId\":\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"title\":\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report\",\"canonicalUrl\":\"https://www.federalreserve.gov/newsevents/pressreleases/other20260513a.htm\",\"authors\":[],\"publisher\":\"www.federalreserve.gov\",\"retrievedAt\":\"2026-11-18T11:21:44.484Z\",\"contentHash\":\"8bf2069aea0c4d9da95a5400b6e52477583d41dad974a41a42dbf5665be99175\",\"kind\":\"page_text\",\"excerpt\":\"The report indicates that 73 percent of adults reported either doing okay or living comfortably financially, consistent with 2024 but below the overall high of 78 percent in 2021. The share who would cover a $400 emergency expense using cash or its equivalent also remained unchanged from 2024 at 63 percent.\",\"locator\":\"Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16\"},\"2026-11-18T11:34:09.415Z\"]",
+        "retrievedParagraph": "Federal Reserve Board issues Economic Well-Being of U.S. Households in 2025 report · extracted paragraph 16",
+        "missingMetadata": [
+          "author not supplied",
+          "publication date not extracted"
+        ]
+      }
+    },
+    {
+      "id": "product_charter",
+      "detail": {
+        "gateB": "Explicit approval after exact real-source retrieval and chapter relevance review"
+      }
+    },
+    {
+      "id": "outline_builder",
+      "detail": {
+        "chapters": 1,
+        "targetWords": 600
+      }
+    },
+    {
+      "id": "content_studio",
+      "detail": {
+        "audit": {
+          "passages": 8,
+          "cited": 3,
+          "editorial": 5,
+          "reviewed": 8,
+          "needsReview": 0,
+          "unresolvedIds": []
+        },
+        "substantiveOriginalManuscript": true
+      }
+    },
+    {
+      "id": "workbook_studio",
+      "detail": {
+        "resource": "audit_resource",
+        "audit": {
+          "passages": 5,
+          "cited": 0,
+          "editorial": 5,
+          "reviewed": 5,
+          "needsReview": 0,
+          "unresolvedIds": []
+        }
+      }
+    },
+    {
+      "id": "quality_assurance",
+      "detail": {
+        "gateC": "Explicit approval after reviewing every manuscript/table/resource passage"
+      }
+    },
+    {
+      "id": "brand_design",
+      "detail": "Original Digital Product Studio identity retained; export quality must be reapproved after this edit."
+    },
+    {
+      "id": "pricing_launch",
+      "detail": {
+        "scenario": {
+          "monthlyUnits": 1,
+          "blendedAverageOrderValue": 15,
+          "grossMonthlyRevenue": 15,
+          "monthlyPlatformFees": 2,
+          "monthlyAcquisitionCostUsd": 50,
+          "effectiveCacPerSale": 50,
+          "netMonthlyProfit": -47,
+          "annualizedNetProfit": -564,
+          "profitMarginPercent": -313.3,
+          "netPerSale": 13,
+          "breakEvenUnits": 5
+        },
+        "assumptions": "100 visits, 1% conversion, $15 sale, 10% + $0.50 fee, $10 overhead, $50 acquisition; refunds, taxes, labor and actual demand unknown."
+      }
+    },
+    {
+      "id": "export_center",
+      "detail": {
+        "incompleteBuyerRejected": 422,
+        "authorReviewDownloaded": 200,
+        "backupDownloaded": 200,
+        "backupImported": 1,
+        "restoredApprovalsRevoked": true,
+        "apiRefreshAndStoreRestartPersisted": true
+      }
+    }
+  ],
+  "originalMaterialChecks": {
+    "count": 275,
+    "method": "Every retained original JSON item / numbered Amazon badge + title + ASIN link checked against extracted fields; SHA-256 verified. Captured subsets are not full page archives."
+  },
+  "marketPersistenceBytes": {
+    "beforeCompaction": 1011031,
+    "afterCompaction": 700537,
+    "allOriginalObservationsPreserved": true,
+    "cloudWriteNotTested": true
+  },
+  "buyerExport": {
+    "status": 200,
+    "reviewed": true,
+    "files": 23,
+    "allFileHashesVerified": true,
+    "warning": "An isolated acceptance exercise, not an approved commercial launch."
+  },
+  "liveCollectorExport": {
+    "status": 200,
+    "actualBackendReconciliation": true
+  },
+  "forgedCollectorExport": {
+    "status": 422,
+    "code": "MARKET_SOURCE_CHECK_FAILED"
+  },
+  "result": "Completed local API/domain exercise. Deployment, browser interactions and cloud persistence remain untested."
+}

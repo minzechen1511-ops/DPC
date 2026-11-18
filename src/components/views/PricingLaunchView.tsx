@@ -489,7 +489,7 @@ Return JSON with exact keys:
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
             <span className="text-xs font-medium text-slate-600 block">{lang === 'en' ? 'Net Margin / Break-Even' : '淨利率 / 損益兩平'}</span>
             <strong className="text-base font-bold font-mono tabular-nums text-slate-900 block mt-1">
-              {metrics.profitMarginPercent}% · {metrics.breakEvenUnits} {lang === 'en' ? 'sales' : '套'}
+              {metrics.profitMarginPercent}% · {metrics.breakEvenUnits === null ? (lang === 'en' ? 'No break-even at these unit costs' : '此單位成本下無法損益兩平') : `${metrics.breakEvenUnits} ${lang === 'en' ? 'sales' : '套'}`}
             </strong>
           </div>
         </div>

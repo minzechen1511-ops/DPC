@@ -1,3 +1,4 @@
+import { invalidateChangedApprovals } from '../../src/utils/approvalIntegrity.ts';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -65,8 +66,8 @@ export class LocalStore implements DataStore {
           jobSteps: Array.isArray(parsed.jobSteps) ? parsed.jobSteps : [],
           usageEvents: Array.isArray(parsed.usageEvents) ? parsed.usageEvents : [],
         };
-      } catch {
-        this.state = emptyState();
+      } catch (cause) {
+        throw new Error('Stored workspace could not be read. Original data was preserved; restore a valid backup before starting.', {cause});
       }
     }
   }
@@ -161,11 +162,11 @@ export class LocalStore implements DataStore {
     }
 
     const now = new Date().toISOString();
-    const clean = sanitizeProjectForExport({
+    const clean = invalidateChangedApprovals(row.data, sanitizeProjectForExport({
       ...input.project,
       projectId: input.projectId,
       updatedAt: now,
-    });
+    }));
     row.title = clean.charter?.productTitle || clean.name || row.title;
     row.stage = clean.workflow?.activeStage || row.stage;
     row.revision += 1;

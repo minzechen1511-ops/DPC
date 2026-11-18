@@ -178,6 +178,8 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
     const defs = inferObservationDefaults(obs);
     setReviewerRationale(obs.reviewerRationale || '');
     setReviewAssessment({
+      relationship: obs.reviewAssessment?.relationship,
+      relationshipRationale: obs.reviewAssessment?.relationshipRationale || '',
       establishes: obs.reviewAssessment?.establishes || '',
       dateScopeProductMatch: obs.reviewAssessment?.dateScopeProductMatch || 'exact_match',
       metricNature:
@@ -303,8 +305,8 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
         accessStatus: string;
         httpStatus: number | null;
         resolvedURL?: string;
-        checkedAt: string;
-        note: string;
+        lastCheckedAt: string;
+        lastCheckNote: string;
         error?: string;
       }>('/api/market/evidence/inspect-url', {
         method: 'POST',
@@ -315,8 +317,8 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
       } else {
         setUrlCheckInfo(
           `${res.data.accessStatus.toUpperCase()} (HTTP ${res.data.httpStatus ?? 'err'}) at ${new Date(
-            res.data.checkedAt
-          ).toLocaleTimeString()} — ${res.data.note} (Reachability check only; does not verify product claims.)`
+            res.data.lastCheckedAt
+          ).toLocaleString()} — ${res.data.lastCheckNote} (Reachability check only; does not verify product claims.)`
         );
       }
     } finally {
@@ -699,6 +701,7 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
               >
                 <option value="official_ranking">Official ranking</option>
                 <option value="reported_ranking">Reported ranking</option>
+                <option value="published_research">Published research / survey (context, not product demand)</option>
                 <option value="estimate">Estimate</option>
                 <option value="interest_signal">Interest signal</option>
                 <option value="search_result">Search result</option>
@@ -1379,6 +1382,8 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
                             <span className="text-slate-500">Supporting Excerpt & Attachment Provenance:</span>
                             <blockquote className="mt-1 p-2.5 bg-slate-50 border-l-2 border-teal-600 text-slate-800 italic">
                               “{inspectedObs.evidenceExcerpt || 'No excerpt captured'}”
+                              {inspectedObs.evidenceCapture && <details className="mt-2"><summary>Original collector material · SHA-256 {inspectedObs.evidenceCapture.sha256}</summary><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{inspectedObs.evidenceCapture.content}</pre></details>}
+                              {inspectedObs.rawImportedPayload && <details className="mt-2"><summary>Original imported row</summary><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{JSON.stringify(inspectedObs.rawImportedPayload,null,2)}</pre></details>}
                             </blockquote>
                             <div className="text-[11px] font-mono text-slate-500 mt-1 space-y-0.5">
                               <div>
@@ -1488,6 +1493,13 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
                           </label>
                         </div>
 
+                        <label className="block text-xs space-y-1">
+                          <span>Relationship to the opportunity (explicit review, optional)</span>
+                          <select className="w-full border rounded p-2" value={reviewAssessment.relationship || ''} onChange={e=>setReviewAssessment({...reviewAssessment,relationship:(e.target.value || undefined) as ObservationReviewAssessment['relationship']})}>
+                            <option value="">Conservative comparison by evidence type</option><option value="corroborates">Corroborating</option><option value="complements">Complementary</option><option value="contradicts">Contradictory</option>
+                          </select>
+                          {reviewAssessment.relationship && <textarea className="w-full border rounded p-2" aria-label="Source relationship rationale" placeholder="Explain which specific opportunity claim this corroborates, complements, or contradicts (min 20 characters)." value={reviewAssessment.relationshipRationale || ''} onChange={e=>setReviewAssessment({...reviewAssessment,relationshipRationale:e.target.value})}/>}
+                        </label>
                         <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                           <input
                             type="checkbox"

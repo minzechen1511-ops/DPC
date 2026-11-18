@@ -1,3 +1,4 @@
+import { evidenceChainKeys } from './evidenceChains.ts';
 import type {
   AudienceTopicHypothesis,
   CandidateEvidenceComparisonRow,
@@ -262,6 +263,10 @@ export function isReviewedFallbackEvidence(observation: MarketplaceObservation):
   if (defaults.acquisitionMethod === 'live_collector') return false;
   if (observation.reviewStatus !== 'manually_reviewed') return false;
   if (isObservationReviewStale(observation)) return false;
+  if (observation.reviewAssessment?.dateScopeProductMatch === 'mismatch') return false;
+  const dataMs = Date.parse(observation.dataAsOfDate || observation.observedAt || '');
+  const retrievalMs = Date.parse(observation.retrievedAt || '');
+  if (!Number.isFinite(dataMs) || !Number.isFinite(retrievalMs) || dataMs > retrievalMs + 300_000 || retrievalMs > Date.now() + 300_000) return false;
   if (!observation.reviewedAt || !Number.isFinite(Date.parse(observation.reviewedAt))) return false;
   if (!observation.reviewerRationale || observation.reviewerRationale.trim().length < 20) return false;
   if (!observation.evidenceExcerpt || observation.evidenceExcerpt.trim().length < 20) return false;
@@ -559,16 +564,17 @@ export function compareCandidateEvidence(
     (o) => !o.isSample && observationCategory(o) === category
   );
 
-  // Track dataset chain memberships across all non-sample domain records
+  const chainKeys = evidenceChainKeys(domainObs);
+  // Track independently originated dataset memberships, not arbitrary labels
   const byChain = new Map<string, MarketplaceObservation[]>();
   for (const obs of domainObs) {
-    const chain = (obs.evidenceChainId || obs.id).trim();
+    const chain = chainKeys.get(obs.id)!;
     byChain.set(chain, [...(byChain.get(chain) || []), obs]);
   }
 
   const qualified = domainObs.filter((o) => isGateAQualifiedEvidence(o, now));
   const qualifiedChainIds = Array.from(
-    new Set(qualified.map((o) => (o.evidenceChainId || o.id).trim()))
+    new Set(qualified.map((o) => chainKeys.get(o.id)!))
   );
 
   // Count distinct evidence natures across qualified independent chains
@@ -582,7 +588,7 @@ export function compareCandidateEvidence(
   });
   const hasInterestOrEstimate = qualified.some((o) => {
     const d = inferObservationDefaults(o);
-    return d.evidenceType === 'interest_signal' || d.evidenceType === 'estimate' || d.evidenceType === 'featured_collection';
+    return d.evidenceType === 'interest_signal' || d.evidenceType === 'published_research' || d.evidenceType === 'estimate' || d.evidenceType === 'featured_collection';
   });
   const rejectedOrMismatchInDomain = domainObs.some(
     (o) =>
@@ -593,7 +599,7 @@ export function compareCandidateEvidence(
 
   const evidenceComparison: CandidateEvidenceComparisonRow[] = domainObs.map((obs) => {
     const defaults = inferObservationDefaults(obs);
-    const chain = (obs.evidenceChainId || obs.id).trim();
+    const chain = chainKeys.get(obs.id)!;
     const peersInChain = (byChain.get(chain) || []).filter((p) => p.id !== obs.id).map((p) => p.id);
     const live = isCurrentMarketEvidence(obs, now);
     const manualValid = isReviewedFallbackEvidence(obs);
@@ -615,12 +621,14 @@ export function compareCandidateEvidence(
     if (peersInChain.length > 0) {
       relationship = 'duplicates_dataset';
     } else if (rejectedOrBlocked || obs.reviewAssessment?.dateScopeProductMatch === 'mismatch') {
-      relationship = 'contradicts';
+      relationship = 'excluded';
+    } else if (obs.reviewAssessment?.relationship && (obs.reviewAssessment.relationshipRationale || '').trim().length >= 20) {
+      relationship = obs.reviewAssessment.relationship;
     } else if (rejectedOrMismatchInDomain && qualifiedChainIds.length >= 1) {
       relationship = 'complements';
     } else if (
       qualifiedChainIds.length >= 2 &&
-      (defaults.evidenceType === 'interest_signal' || defaults.evidenceType === 'estimate') &&
+      (defaults.evidenceType === 'interest_signal' || defaults.evidenceType === 'published_research' || defaults.evidenceType === 'estimate') &&
       hasPrimaryOrLiveRanking
     ) {
       relationship = 'complements';
@@ -655,14 +663,14 @@ export function compareCandidateEvidence(
         ? 'Historical or aged snapshot (>14d / Keepa archive) does NOT establish current bestseller status.'
         : 'Does not measure unit sales volume, net margin, conversion rate, or creator-audience fit.';
 
-    let conflictOrLimitationNote = obs.dataLimitations;
+    let conflictOrLimitationNote = [obs.reviewAssessment?.relationshipRationale,obs.dataLimitations].filter(Boolean).join(' ');
     if (peersInChain.length > 0) {
-      conflictOrLimitationNote = `Shares evidenceChainId "${chain}" with [${peersInChain.join(', ')}] — collapsed into 1 chain to avoid double-counting. ${obs.dataLimitations}`;
+      conflictOrLimitationNote = `Shares underlying evidence origin "${chain}" with [${peersInChain.join(', ')}] — collapsed into 1 chain to avoid double-counting. ${obs.dataLimitations}`;
     } else if (stale) {
       const curr = computeObservationEvidenceHash(obs);
       conflictOrLimitationNote = `STALE REVIEW (${obs.reviewedEvidenceHash || 'prior'} -> ${curr}): Re-review required before counting toward Gate A.`;
     } else if (rejectedOrBlocked) {
-      conflictOrLimitationNote = `CONTRADICTION / EXCLUDED: ${obs.reviewerRationale || obs.dataLimitations}`;
+      conflictOrLimitationNote = `EXCLUDED (not evidence of a contrary claim): ${obs.reviewerRationale || obs.dataLimitations}`;
     } else if (relationship === 'complements') {
       conflictOrLimitationNote = `Complementary signal (different evidence type from primary chart; does not independently verify unit sales). ${obs.dataLimitations}`;
     }
@@ -721,14 +729,15 @@ function computeCandidateEvidenceAssessment(
   const collectorVerified = sorted.filter((s) => isCurrentMarketEvidence(s, now));
   const manualReviewed = sorted.filter((s) => isReviewedFallbackEvidence(s));
 
-  // Deduplicate overlapping reports sharing an underlying dataset chain
+  // Deduplicate both declared chains and known common data origins.
+  const chainKeys = evidenceChainKeys(sorted);
   const independentChainIds = Array.from(
-    new Set(sorted.map((s) => (s.evidenceChainId || s.id).trim()))
+    new Set(sorted.map((s) => chainKeys.get(s.id)!))
   );
 
   // Representative top observation per independent chain so duplicate articles cannot double-count
   const bestPerChain = independentChainIds.map((chainId) => {
-    const matching = sorted.filter((s) => (s.evidenceChainId || s.id).trim() === chainId);
+    const matching = sorted.filter((s) => chainKeys.get(s.id) === chainId);
     return matching[0];
   });
 

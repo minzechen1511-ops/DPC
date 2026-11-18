@@ -85,6 +85,7 @@ export function computeObservationEvidenceHash(obs: Partial<MarketplaceObservati
     obs.metricValue ?? null,
     (obs.metricUnit || '').trim(),
     (obs.dataAsOfDate || obs.observedAt || '').trim(),
+    (obs.retrievedAt || '').trim(),
     (obs.publicationDate || '').trim(),
     (obs.evidenceExcerpt || '').trim(),
     (obs.excerptLocator || '').trim(),
@@ -123,7 +124,7 @@ export function isObservationReviewStale(obs: MarketplaceObservation): boolean {
   if (obs.isSample) return false;
   if (obs.reviewStatus !== 'manually_reviewed') return false;
   const currentHash = computeObservationEvidenceHash(obs);
-  if (obs.reviewedEvidenceHash && obs.reviewedEvidenceHash !== currentHash) {
+  if (!obs.reviewedEvidenceHash || obs.reviewedEvidenceHash !== currentHash) {
     return true;
   }
   if (obs.evidenceVersionHash && obs.reviewedEvidenceHash && obs.evidenceVersionHash !== obs.reviewedEvidenceHash) {
@@ -243,7 +244,7 @@ export function evidenceLevelFromType(type: MarketEvidenceType, collector?: stri
   }
   if (type === 'featured_collection') return 'FEATURED_COLLECTION';
   if (type === 'seller_claim') return 'SELLER_CLAIM';
-  if (type === 'reported_ranking' || type === 'estimate' || type === 'interest_signal' || type === 'official_ranking') {
+  if (type === 'published_research' || type === 'reported_ranking' || type === 'estimate' || type === 'interest_signal' || type === 'official_ranking') {
     return 'PUBLIC_MARKET_INDEX';
   }
   return 'SEARCH_RESULT';
@@ -288,6 +289,8 @@ export interface ManualEvidenceInput {
 
 export function validateManualEvidenceDraft(input: ManualEvidenceInput): string[] {
   const errors: string[] = [];
+  if (!VALID_EVIDENCE_TYPES.has(input.evidenceType)) errors.push('Unsupported or missing evidence type; classify the actual supporting material explicitly.');
+  if (!VALID_SOURCE_CLASSES.has(input.sourceClass)) errors.push('Unsupported source class.');
   if (!input.productTitle || input.productTitle.trim().length < 3) {
     errors.push('Product or report title is required (min 3 characters).');
   }
@@ -318,6 +321,13 @@ export function validateManualEvidenceDraft(input: ManualEvidenceInput): string[
 
   if (!input.dataAsOfDate || !Number.isFinite(Date.parse(input.dataAsOfDate))) {
     errors.push('Valid data-as-of date (YYYY-MM-DD or ISO timestamp) is required.');
+  }
+  const retrievalMs = input.retrievedAt ? Date.parse(input.retrievedAt) : Date.now();
+  if (!Number.isFinite(retrievalMs) || retrievalMs > Date.now() + 300_000) {
+    errors.push('Retrieval date must be valid and cannot be in the future.');
+  }
+  if (Date.parse(input.dataAsOfDate) > retrievalMs + 300_000) {
+    errors.push('Data-as-of date cannot be later than retrieval date.');
   }
   if (!input.collectionMethodology || input.collectionMethodology.trim().length < 5) {
     errors.push('Collection method / methodology description is required.');
@@ -360,8 +370,7 @@ export function createManualObservationRecord(
 
   const nowIso = new Date().toISOString();
   const acquisitionMethod: MarketAcquisitionMethod =
-    acquisitionOverride ||
-    (input.acquisitionMethod === 'file_import' ? 'file_import' : 'manual_observation');
+    acquisitionOverride === 'file_import' || input.acquisitionMethod === 'file_import' ? 'file_import' : 'manual_observation';
 
   const safePrice = Number.isFinite(Number(input.currentPrice)) ? Number(input.currentPrice) : 0;
   const rankNum =
@@ -510,6 +519,7 @@ export function applyManualReviewDecision(
       : 'accepted';
 
   if (decision.status === 'manually_reviewed') {
+    if(decision.assessment?.relationship && (decision.assessment.relationshipRationale || '').trim().length < 20) return {error:'Explain the source relationship to the opportunity (min 20 characters).'};
     if (!decision.inspectedConfirmed) {
       return { error: 'Confirm that you have inspected the underlying source evidence before marking reviewed.' };
     }
@@ -571,6 +581,8 @@ export function applyManualReviewDecision(
       : 'estimated';
 
   const normalizedAssessment: ObservationReviewAssessment = {
+    relationship: decision.assessment?.relationship,
+    relationshipRationale: decision.assessment?.relationshipRationale?.trim(),
     establishes:
       (decision.assessment?.establishes || '').trim() ||
       `${defaults.evidenceType.replaceAll('_', ' ')} (${observation.rankScope || observation.category})`,
@@ -665,6 +677,7 @@ const VALID_SOURCE_CLASSES = new Set<MarketSourceClass>([
 ]);
 
 const VALID_EVIDENCE_TYPES = new Set<MarketEvidenceType>([
+  'published_research',
   'official_ranking',
   'reported_ranking',
   'estimate',
@@ -678,7 +691,7 @@ function mapMarketplaceValue(raw: string): MarketplaceObservation['marketplace']
   const val = raw.trim().toLowerCase();
   if (val.includes('amazon')) return 'Amazon Kindle';
   if (val.includes('apple')) return 'Apple Books';
-  if (val.includes('nytimes') || val.includes('new york times') || val === 'nyt') return 'NYT Best Sellers';
+  if (val.startsWith('nyt') || val.includes('nytimes') || val.includes('new york times') || val === 'nyt') return 'NYT Best Sellers';
   if (val.includes('keepa')) return 'Keepa';
   if (val.includes('google trends') || val.includes('trends')) return 'Google Trends';
   if (val.includes('gumroad')) return 'Gumroad';
@@ -747,7 +760,7 @@ export function previewImportedObservations(
   rawRecords.forEach((rec, idx) => {
     const marketplace = mapMarketplaceValue(String(rec.marketplace || rec.publisher || 'Other'));
     const srcClassRaw = String(rec.sourceClass || rec.source_class || 'supporting_context').trim() as MarketSourceClass;
-    const evTypeRaw = String(rec.evidenceType || rec.evidence_type || 'interest_signal').trim() as MarketEvidenceType;
+    const evTypeRaw = String(rec.evidenceType || rec.evidence_type || '').trim() as MarketEvidenceType;
 
     const draft: ManualEvidenceInput = {
       id: rec.id ? `IMP-${String(rec.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)}` : undefined,
@@ -762,7 +775,7 @@ export function previewImportedObservations(
       sourceURL: String(rec.sourceURL || rec.source_url || rec.reportUrl || '').trim(),
       sourceClass: VALID_SOURCE_CLASSES.has(srcClassRaw) ? srcClassRaw : 'supporting_context',
       acquisitionMethod: 'file_import',
-      evidenceType: VALID_EVIDENCE_TYPES.has(evTypeRaw) ? evTypeRaw : 'interest_signal',
+      evidenceType: evTypeRaw,
       observedRank: rec.observedRank || rec.rank ? Number(rec.observedRank || rec.rank) : undefined,
       rankScope: String(rec.rankScope || rec.rank_scope || '').trim() || undefined,
       metricName: String(rec.metricName || rec.metric_name || '').trim() || undefined,
@@ -770,6 +783,7 @@ export function previewImportedObservations(
       metricUnit: String(rec.metricUnit || rec.metric_unit || '').trim() || undefined,
       currentPrice: rec.currentPrice ? Number(rec.currentPrice) : 0,
       currency: String(rec.currency || 'USD').trim(),
+      retrievedAt: rec.retrievedAt ? String(rec.retrievedAt).trim() : undefined,
       dataAsOfDate: String(rec.dataAsOfDate || rec.data_as_of_date || rec.observedAt || '').trim(),
       publicationDate: String(rec.publicationDate || rec.publication_date || '').trim() || undefined,
       evidenceExcerpt: String(rec.evidenceExcerpt || rec.excerpt || '').trim(),
@@ -830,7 +844,7 @@ export function parseImportedObservations(
   };
 }
 
+// Header-only template: no fabricated market record is offered for import.
 export const SAMPLE_IMPORT_CSV_TEMPLATE = [
   'productTitle,publisher,sellerOrAuthor,marketplace,country,category,productFormat,productURL,sourceURL,sourceClass,evidenceType,observedRank,rankScope,metricName,metricValue,metricUnit,dataAsOfDate,publicationDate,evidenceExcerpt,excerptLocator,collectionMethodology,evidenceChainId,dataLimitations',
-  '"Atomic Habits (Combined Print & E-Book Example)","The New York Times","James Clear","NYT Best Sellers","US","Self-Help / Advice, How-To","Print & Ebook","https://www.nytimes.com/books/best-sellers/advice-how-to-and-miscellaneous/","https://www.nytimes.com/books/best-sellers/advice-how-to-and-miscellaneous/","secondary_report","reported_ranking",1,"NYT Advice, How-To & Miscellaneous (Combined Print & E-Book)","Weeks on List",240,"weeks","2026-11-15","2026-11-15","Weekly editorial list entry noting Advice & How-To category persistence across print and ebook editions.","NYT List Entry #1 · Print & E-Book edition note","Manual inspection of dated NYT Best Sellers archive","nyt-advice-2026-11-15","Combined print-and-ebook list does not isolate Kindle or digital-only sales velocity."',
 ].join('\n');

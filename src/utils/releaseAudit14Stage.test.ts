@@ -82,7 +82,8 @@ function makeRetrievedCard(id: string): ReferenceCard {
   };
 }
 
-test('End-to-end 14-stage release audit: Gate A->B->C, invalidation, backup/restore, and verified ZIP export', async () => {
+// SYNTHETIC CONTRACT TEST ONLY: invented publications and listings are never live research.
+test('Synthetic isolated 14-stage contract: Gate A->B->C, invalidation, backup/restore, and verified ZIP export', async () => {
   const today = new Date().toISOString().slice(0, 10);
 
   // Stage 1: Market Research (reviewed multi-source route with 2 independent chains)
@@ -353,6 +354,8 @@ Apply this framework immediately using the companion worksheet so every weekly c
       },
     ],
   };
+  assert.ok(gateIssues(project,'gateC').some(issue=>/current project inputs/.test(issue)), 'Brand/pricing changes invalidate the prior quality decision');
+  project=approveGate(project,'gateC');
   const readyBundle = await buildLearningBundle(project, sourceCheck);
   const readyManifest = JSON.parse((await readyBundle.zip.file('manifest.json')?.async('string')) || '{}');
   assert.equal(readyManifest.reviewed, true);

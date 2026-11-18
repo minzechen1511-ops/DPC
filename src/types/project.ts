@@ -65,6 +65,7 @@ export type MarketAcquisitionMethod =
   | 'file_import';
 
 export type MarketEvidenceType =
+  | 'published_research'
   | 'official_ranking'
   | 'reported_ranking'
   | 'estimate'
@@ -114,6 +115,8 @@ export interface ObservationReviewAssessment {
   metricNature: 'observed' | 'reported' | 'estimated';
   limitationsSummary: string;
   liveRetrievalUnavailableDisclosed?: boolean;
+  relationship?: 'corroborates' | 'complements' | 'contradicts';
+  relationshipRationale?: string;
 }
 
 export interface ObservationReviewHistoryEntry {
@@ -126,6 +129,7 @@ export interface ObservationReviewHistoryEntry {
 }
 
 export interface MarketplaceObservation {
+  evidenceCapture?: { content: string; mediaType: string; sha256: string; retrievedAt: string; sourceURL: string };
   isSample?: boolean;
   priceKnown?: boolean;
   collector?: 'apple-chart-v1' | 'amazon-chart-v1';
@@ -239,6 +243,7 @@ export type EvidenceRelationshipKind =
   | 'complements'
   | 'contradicts'
   | 'duplicates_dataset'
+  | 'excluded'
   | 'standalone';
 
 export interface CandidateEvidenceComparisonRow {
@@ -652,6 +657,7 @@ export interface WorkflowGate {
   gate: 'GATE_A_TOPIC' | 'GATE_B_STRATEGY' | 'GATE_C_QUALITY';
   isApproved: boolean;
   approvedAt?: string;
+  approvedFingerprint?: string;
   requiredFor: StageId[];
 }
 

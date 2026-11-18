@@ -12,35 +12,35 @@ export const PLATFORM_FEE_PRESETS: PlatformFeePreset[] = [
     name: 'Direct Checkout (Stripe 2.9% + $0.30)',
     feePercent: 2.9,
     fixedFeePerSale: 0.3,
-    notes: 'Highest margin direct-to-buyer checkout.',
+    notes: 'Illustrative fee assumption only; verify current processor, country, currency and tax charges.',
   },
   {
     id: 'lemonsqueezy',
     name: 'Lemon Squeezy (MoR 5% + $0.50)',
     feePercent: 5.0,
     fixedFeePerSale: 0.5,
-    notes: 'Merchant of record handles global VAT/sales tax.',
+    notes: 'Illustrative MoR fee assumption; verify current eligibility, tax handling and additional charges.',
   },
   {
     id: 'etsy',
     name: 'Etsy Digital (~9.5% + $0.45)',
     feePercent: 9.5,
     fixedFeePerSale: 0.45,
-    notes: 'Includes transaction, processing & listing fees with built-in marketplace search.',
+    notes: 'Illustrative combined fee assumption; regional processing, ads and taxes may add costs.',
   },
   {
     id: 'gumroad',
     name: 'Gumroad Direct (10% flat)',
     feePercent: 10.0,
     fixedFeePerSale: 0,
-    notes: 'Simple creator storefront with optional Discover marketplace.',
+    notes: 'Illustrative direct-sale fee assumption; verify current transaction and discovery fees.',
   },
   {
     id: 'kdp',
     name: 'Amazon KDP 70% Royalty (~30% platform)',
     feePercent: 30.0,
     fixedFeePerSale: 0,
-    notes: 'High-volume book channel for $2.99–$9.99 pricing.',
+    notes: 'Illustrative royalty assumption; territory, price, delivery costs and eligibility remain unknown.',
   },
 ];
 
@@ -69,7 +69,7 @@ export interface ProfitabilityResult {
   annualizedNetProfit: number;
   profitMarginPercent: number;
   netPerSale: number;
-  breakEvenUnits: number;
+  breakEvenUnits: number | null;
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -93,14 +93,14 @@ export function calculateProfitability(input: ProfitabilityInput): Profitability
   const blendedAov = intro * introShare + regular * regularShare + bundle * bundleShare;
   const grossMonthlyRevenue = monthlyUnits * blendedAov;
   const perSaleFee = blendedAov > 0 ? blendedAov * feeRate + fixedFee : 0;
-  const netPerSale = Math.max(0, blendedAov - perSaleFee);
+  const netPerSale = blendedAov - perSaleFee;
   const monthlyPlatformFees = monthlyUnits * perSaleFee;
   const totalFixedCosts = overhead + acquisitionCost;
   const netMonthlyProfit = grossMonthlyRevenue - monthlyPlatformFees - totalFixedCosts;
   const annualizedNetProfit = netMonthlyProfit * 12;
   const profitMarginPercent =
     grossMonthlyRevenue > 0 ? (netMonthlyProfit / grossMonthlyRevenue) * 100 : 0;
-  const breakEvenUnits = netPerSale > 0 ? Math.ceil(totalFixedCosts / netPerSale) : 0;
+  const breakEvenUnits = netPerSale > 0 ? Math.ceil(totalFixedCosts / netPerSale) : null;
   const effectiveCacPerSale =
     monthlyUnits > 0 ? Number((acquisitionCost / monthlyUnits).toFixed(2)) : null;
 

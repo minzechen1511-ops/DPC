@@ -65,7 +65,7 @@ test('2. Amazon collector requires explicit numbered badges, valid ASIN anchors,
   // Challenge / CAPTCHA rejected cleanly
   assert.throws(() => parseAmazonChart('<title>Robot Check</title>', now), /human verification/);
   // Sign-in returns empty without throwing fake observations
-  assert.deepEqual(parseAmazonChart('<title>Sign in</title>', now), []);
+  assert.throws(()=>parseAmazonChart('<title>Sign in</title>', now), /sign-in/);
   // Unexpected layout with ASIN cards but zero numbered badges throws cleanly rather than inferring rank from DOM order
   assert.throws(
     () => parseAmazonChart('<title>Amazon</title><div data-asin="B000000009"><a href="/dp/B000000009"><img alt="No badge"></a></div>', now),

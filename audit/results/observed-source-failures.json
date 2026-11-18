@@ -1,0 +1,22 @@
+{
+  "note": "Observed failures retained separately from later successful requests; extracted from actual tool/API outputs.",
+  "failures": [
+    {
+      "source": "Apple Books",
+      "checkedAt": "2026-11-18T11:14:45.043Z",
+      "status": "unavailable",
+      "count": 0,
+      "error": "The operation was aborted due to timeout",
+      "evidence": "baseline-local-market.json"
+    },
+    {
+      "source": "Apple Books",
+      "checkedAt": "2026-11-18T11:32:42.399Z",
+      "httpStatus": 502,
+      "url": "https://rss.marketingtools.apple.com/api/v2/us/books/top-paid/100/books.json",
+      "status": "unavailable",
+      "count": 0,
+      "error": "Apple feed redirect target returned HTTP 502."
+    }
+  ]
+}

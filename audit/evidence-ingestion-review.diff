@@ -1,0 +1,195 @@
+diff --git a/server/marketResearch.ts b/server/marketResearch.ts
+index 1c9f695..78a148f 100644
+--- a/server/marketResearch.ts
++++ b/server/marketResearch.ts
+@@ -3,0 +4 @@ import { lookup } from 'node:dns';
++import { createHash } from 'node:crypto';
+@@ -32,0 +34,3 @@ export type SourceReport = {
++  httpStatus?: number | null;
++  resolvedURL?: string;
++  responseSha256?: string;
+@@ -41,0 +46,17 @@ export interface MarketResearchResult {
++/** Compare evidentiary content with a record actually collected by this backend.
++ * Amazon retrieval clocks may advance; title/rank/scope and original material
++ * must still match. Apple additionally requires the same feed update time. */
++export function matchesCollectedObservation(observation:MarketplaceObservation, actual:MarketplaceObservation):boolean {
++  const keys:(keyof MarketplaceObservation)[]=['id','collector','marketplace','country','category','productTitle','sellerOrAuthor','productURL','sourceURL','observedRank','rankScope','evidenceType','evidenceLevel','evidenceExcerpt','excerptLocator','collectionMethodology','dataLimitations'];
++  if(!keys.every(key=>observation[key]===actual[key]))return false;
++  const evidence=observation.evidenceCapture;
++  if(!evidence?.content || createHash('sha256').update(evidence.content).digest('hex')!==evidence.sha256)return false;
++  try {
++    const raw=JSON.parse(evidence.content);
++    if(observation.collector==='apple-chart-v1')return observation.dataAsOfDate===actual.dataAsOfDate && raw.item?.name===actual.productTitle && raw.item?.url===actual.productURL && raw.index+1===actual.observedRank && new Date(raw.updated).toISOString()===actual.dataAsOfDate;
++    // Amazon embeds per-request session IDs in its original href. Compare
++    // the underlying ASIN and numbered badge, retaining the original href.
++    return raw.title===actual.productTitle && raw.rankBadge===`#${actual.observedRank}` && `https://www.amazon.com/dp/${raw.asin}`===actual.productURL && /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/.exec(raw.href || '')?.[1]===raw.asin;
++  } catch {return false;}
++}
++
+@@ -74 +95 @@ export function parseAppleChart(
+-  if (!feedUpdatedRaw || !Number.isFinite(updated) || age < -5 * 60_000 || age > 48 * 60 * 60_000) {
++  if (!feedUpdatedRaw || !Number.isFinite(updated) || !Number.isFinite(retrievedMs) || age < -5 * 60_000 || age > 48 * 60 * 60_000) {
+@@ -113,0 +135 @@ export function parseAppleChart(
++        evidenceCapture: capture(JSON.stringify({updated:feedUpdatedRaw,index:i,item}), 'application/json', retrievedAt, sourceURL),
+@@ -139 +161 @@ export function parseAmazonChart(
+-    return [];
++    throw new Error('Marketplace sign-in page returned; no observations validated.');
+@@ -148,0 +171 @@ export function parseAmazonChart(
++    const linkedAsin = /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/.exec(anchor.attr('href') || '')?.[1];
+@@ -150 +173 @@ export function parseAmazonChart(
+-    if (!asin || !/^[A-Z0-9]{10}$/.test(asin) || !rank || rank > 100 || !title || !anchor.length) return;
++    if (!asin || !/^[A-Z0-9]{10}$/.test(asin) || linkedAsin !== asin || !rank || rank > 100 || !title || !anchor.length) return;
+@@ -180,0 +204 @@ export function parseAmazonChart(
++      evidenceCapture: capture(JSON.stringify({asin,rankBadge:rankText,title,href:anchor.attr('href'),rankHtml:$.html(card.find('.zg-bdg-text').first())}), 'application/json', observedAt, sourceURL),
+@@ -213 +237,5 @@ async function readBoundedText(response: Awaited<ReturnType<typeof proxyFetch>>)
+-async function readSource(url: string): Promise<{ body: string; resolvedUrl: string }> {
++function capture(content:string,mediaType:string,retrievedAt:string,sourceURL:string) {
++  return {content,mediaType,retrievedAt,sourceURL,sha256:createHash('sha256').update(content).digest('hex')};
++}
++
++async function readSource(url: string): Promise<{ body: string; resolvedUrl: string; httpStatus:number }> {
+@@ -240 +268 @@ async function readSource(url: string): Promise<{ body: string; resolvedUrl: str
+-        throw new Error(`Apple feed redirect target returned HTTP ${redirected.status}.`);
++        throw Object.assign(new Error(`Apple feed redirect target returned HTTP ${redirected.status}.`),{httpStatus:redirected.status,resolvedURL:location});
+@@ -242 +270 @@ async function readSource(url: string): Promise<{ body: string; resolvedUrl: str
+-      return { body: await readBoundedText(redirected), resolvedUrl: location };
++      return { body: await readBoundedText(redirected), resolvedUrl: location, httpStatus:redirected.status };
+@@ -244 +272 @@ async function readSource(url: string): Promise<{ body: string; resolvedUrl: str
+-    throw new Error(`Source attempted unallowlisted redirect (HTTP ${response.status}). Refused for safety.`);
++    throw Object.assign(new Error(`Source attempted unallowlisted redirect (HTTP ${response.status}). Refused for safety.`),{httpStatus:response.status});
+@@ -249 +277 @@ async function readSource(url: string): Promise<{ body: string; resolvedUrl: str
+-    throw new Error(`Source returned HTTP ${response.status}. Access or network policy may require configuration.`);
++    throw Object.assign(new Error(`Source returned HTTP ${response.status}. Access or network policy may require configuration.`),{httpStatus:response.status});
+@@ -251 +279 @@ async function readSource(url: string): Promise<{ body: string; resolvedUrl: str
+-  return { body: await readBoundedText(response), resolvedUrl: url };
++  return { body: await readBoundedText(response), resolvedUrl: url, httpStatus:response.status };
+@@ -375,0 +404,3 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
++        let httpStatus:number|null=null;
++        let resolvedURL:string|undefined;
++        let responseSha256:string|undefined;
+@@ -377 +408,2 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
+-          const { body, resolvedUrl } = await readSource(source.url);
++          const { body, resolvedUrl, httpStatus:status } = await readSource(source.url);
++          httpStatus=status;resolvedURL=resolvedUrl;responseSha256=createHash('sha256').update(body).digest('hex');
+@@ -390,0 +423 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
++              httpStatus, resolvedURL, responseSha256,
+@@ -393,0 +427,2 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
++                : source.marketplace.startsWith('Amazon Kindle') || source.marketplace==='Apple Books'
++                ? 'Page reached, but collector extracted zero valid chart entries. Inspect the original response; no observations were validated.'
+@@ -404,0 +440,2 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
++              httpStatus: (error as {httpStatus?:number}).httpStatus ?? httpStatus,
++              resolvedURL: (error as {resolvedURL?:string}).resolvedURL ?? resolvedURL, responseSha256,
+@@ -437,0 +475,2 @@ export async function collectMarketResearch(): Promise<MarketResearchResult> {
++        httpStatus: rpt.httpStatus,
++        resolvedURL: rpt.resolvedURL || seed.resolvedURL,
+diff --git a/src/components/market/ManualEvidenceReviewPanel.tsx b/src/components/market/ManualEvidenceReviewPanel.tsx
+index 155edf2..05f227b 100644
+--- a/src/components/market/ManualEvidenceReviewPanel.tsx
++++ b/src/components/market/ManualEvidenceReviewPanel.tsx
+@@ -180,0 +181,2 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
++      relationship: obs.reviewAssessment?.relationship,
++      relationshipRationale: obs.reviewAssessment?.relationshipRationale || '',
+@@ -306,2 +308,2 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
+-        checkedAt: string;
+-        note: string;
++        lastCheckedAt: string;
++        lastCheckNote: string;
+@@ -318,2 +320,2 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
+-            res.data.checkedAt
+-          ).toLocaleTimeString()} — ${res.data.note} (Reachability check only; does not verify product claims.)`
++            res.data.lastCheckedAt
++          ).toLocaleString()} — ${res.data.lastCheckNote} (Reachability check only; does not verify product claims.)`
+@@ -701,0 +704 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
++                <option value="published_research">Published research / survey (context, not product demand)</option>
+@@ -1381,0 +1385,2 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
++                              {inspectedObs.evidenceCapture && <details className="mt-2"><summary>Original collector material · SHA-256 {inspectedObs.evidenceCapture.sha256}</summary><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{inspectedObs.evidenceCapture.content}</pre></details>}
++                              {inspectedObs.rawImportedPayload && <details className="mt-2"><summary>Original imported row</summary><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{JSON.stringify(inspectedObs.rawImportedPayload,null,2)}</pre></details>}
+@@ -1490,0 +1496,7 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
++                        <label className="block text-xs space-y-1">
++                          <span>Relationship to the opportunity (explicit review, optional)</span>
++                          <select className="w-full border rounded p-2" value={reviewAssessment.relationship || ''} onChange={e=>setReviewAssessment({...reviewAssessment,relationship:(e.target.value || undefined) as ObservationReviewAssessment['relationship']})}>
++                            <option value="">Conservative comparison by evidence type</option><option value="corroborates">Corroborating</option><option value="complements">Complementary</option><option value="contradicts">Contradictory</option>
++                          </select>
++                          {reviewAssessment.relationship && <textarea className="w-full border rounded p-2" aria-label="Source relationship rationale" placeholder="Explain which specific opportunity claim this corroborates, complements, or contradicts (min 20 characters)." value={reviewAssessment.relationshipRationale || ''} onChange={e=>setReviewAssessment({...reviewAssessment,relationshipRationale:e.target.value})}/>}
++                        </label>
+diff --git a/src/types/project.ts b/src/types/project.ts
+index 1a9f209..7895849 100644
+--- a/src/types/project.ts
++++ b/src/types/project.ts
+@@ -67,0 +68 @@ export type MarketEvidenceType =
++  | 'published_research'
+@@ -116,0 +118,2 @@ export interface ObservationReviewAssessment {
++  relationship?: 'corroborates' | 'complements' | 'contradicts';
++  relationshipRationale?: string;
+@@ -128,0 +132 @@ export interface MarketplaceObservation {
++  evidenceCapture?: { content: string; mediaType: string; sha256: string; retrievedAt: string; sourceURL: string };
+@@ -241,0 +246 @@ export type EvidenceRelationshipKind =
++  | 'excluded'
+@@ -654,0 +660 @@ export interface WorkflowGate {
++  approvedFingerprint?: string;
+diff --git a/src/utils/manualEvidenceReview.ts b/src/utils/manualEvidenceReview.ts
+index 86dae37..ba99994 100644
+--- a/src/utils/manualEvidenceReview.ts
++++ b/src/utils/manualEvidenceReview.ts
+@@ -87,0 +88 @@ export function computeObservationEvidenceHash(obs: Partial<MarketplaceObservati
++    (obs.retrievedAt || '').trim(),
+@@ -126 +127 @@ export function isObservationReviewStale(obs: MarketplaceObservation): boolean {
+-  if (obs.reviewedEvidenceHash && obs.reviewedEvidenceHash !== currentHash) {
++  if (!obs.reviewedEvidenceHash || obs.reviewedEvidenceHash !== currentHash) {
+@@ -246 +247 @@ export function evidenceLevelFromType(type: MarketEvidenceType, collector?: stri
+-  if (type === 'reported_ranking' || type === 'estimate' || type === 'interest_signal' || type === 'official_ranking') {
++  if (type === 'published_research' || type === 'reported_ranking' || type === 'estimate' || type === 'interest_signal' || type === 'official_ranking') {
+@@ -290,0 +292,2 @@ export function validateManualEvidenceDraft(input: ManualEvidenceInput): string[
++  if (!VALID_EVIDENCE_TYPES.has(input.evidenceType)) errors.push('Unsupported or missing evidence type; classify the actual supporting material explicitly.');
++  if (!VALID_SOURCE_CLASSES.has(input.sourceClass)) errors.push('Unsupported source class.');
+@@ -321,0 +325,7 @@ export function validateManualEvidenceDraft(input: ManualEvidenceInput): string[
++  const retrievalMs = input.retrievedAt ? Date.parse(input.retrievedAt) : Date.now();
++  if (!Number.isFinite(retrievalMs) || retrievalMs > Date.now() + 300_000) {
++    errors.push('Retrieval date must be valid and cannot be in the future.');
++  }
++  if (Date.parse(input.dataAsOfDate) > retrievalMs + 300_000) {
++    errors.push('Data-as-of date cannot be later than retrieval date.');
++  }
+@@ -363,2 +373 @@ export function createManualObservationRecord(
+-    acquisitionOverride ||
+-    (input.acquisitionMethod === 'file_import' ? 'file_import' : 'manual_observation');
++    acquisitionOverride === 'file_import' || input.acquisitionMethod === 'file_import' ? 'file_import' : 'manual_observation';
+@@ -512,0 +522 @@ export function applyManualReviewDecision(
++    if(decision.assessment?.relationship && (decision.assessment.relationshipRationale || '').trim().length < 20) return {error:'Explain the source relationship to the opportunity (min 20 characters).'};
+@@ -573,0 +584,2 @@ export function applyManualReviewDecision(
++    relationship: decision.assessment?.relationship,
++    relationshipRationale: decision.assessment?.relationshipRationale?.trim(),
+@@ -667,0 +680 @@ const VALID_EVIDENCE_TYPES = new Set<MarketEvidenceType>([
++  'published_research',
+@@ -681 +694 @@ function mapMarketplaceValue(raw: string): MarketplaceObservation['marketplace']
+-  if (val.includes('nytimes') || val.includes('new york times') || val === 'nyt') return 'NYT Best Sellers';
++  if (val.startsWith('nyt') || val.includes('nytimes') || val.includes('new york times') || val === 'nyt') return 'NYT Best Sellers';
+@@ -750 +763 @@ export function previewImportedObservations(
+-    const evTypeRaw = String(rec.evidenceType || rec.evidence_type || 'interest_signal').trim() as MarketEvidenceType;
++    const evTypeRaw = String(rec.evidenceType || rec.evidence_type || '').trim() as MarketEvidenceType;
+@@ -765 +778 @@ export function previewImportedObservations(
+-      evidenceType: VALID_EVIDENCE_TYPES.has(evTypeRaw) ? evTypeRaw : 'interest_signal',
++      evidenceType: evTypeRaw,
+@@ -772,0 +786 @@ export function previewImportedObservations(
++      retrievedAt: rec.retrievedAt ? String(rec.retrievedAt).trim() : undefined,
+@@ -832,0 +847 @@ export function parseImportedObservations(
++// Header-only template: no fabricated market record is offered for import.
+@@ -835 +849,0 @@ export const SAMPLE_IMPORT_CSV_TEMPLATE = [
+-  '"Atomic Habits (Combined Print & E-Book Example)","The New York Times","James Clear","NYT Best Sellers","US","Self-Help / Advice, How-To","Print & Ebook","https://www.nytimes.com/books/best-sellers/advice-how-to-and-miscellaneous/","https://www.nytimes.com/books/best-sellers/advice-how-to-and-miscellaneous/","secondary_report","reported_ranking",1,"NYT Advice, How-To & Miscellaneous (Combined Print & E-Book)","Weeks on List",240,"weeks","2026-11-15","2026-11-15","Weekly editorial list entry noting Advice & How-To category persistence across print and ebook editions.","NYT List Entry #1 · Print & E-Book edition note","Manual inspection of dated NYT Best Sellers archive","nyt-advice-2026-11-15","Combined print-and-ebook list does not isolate Kindle or digital-only sales velocity."',
+diff --git a/src/utils/projectMigration.ts b/src/utils/projectMigration.ts
+index 716fa05..7d2742f 100644
+--- a/src/utils/projectMigration.ts
++++ b/src/utils/projectMigration.ts
+@@ -27,0 +28 @@ export function migrateObservationRecord(rawObs: Partial<MarketplaceObservation>
++    evidenceCapture: rawObs.evidenceCapture,
+@@ -108 +109,2 @@ export function migrateObservationRecord(rawObs: Partial<MarketplaceObservation>
+-  // Bind hash for legacy pre-hash manually_reviewed records that have complete rationale + excerpt + date
++  // Migration is not a review action. Keep original material/history, but require
++  // a fresh explicit review when the prior decision did not bind its evidence.
+@@ -112,2 +114 @@ export function migrateObservationRecord(rawObs: Partial<MarketplaceObservation>
+-    normalized.reviewedAt &&
+-    (normalized.reviewerRationale || '').trim().length >= 20
++    normalized.reviewedAt
+@@ -115 +116 @@ export function migrateObservationRecord(rawObs: Partial<MarketplaceObservation>
+-    normalized.reviewedEvidenceHash = currentHash;
++    normalized.reviewStatus = 'unverified';
