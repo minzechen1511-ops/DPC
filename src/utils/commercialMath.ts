@@ -55,6 +55,7 @@ export interface ProfitabilityInput {
   platformFeePercent: number;
   fixedFeePerSale: number;
   monthlyOverheadUsd: number;
+  monthlyAcquisitionCostUsd?: number;
 }
 
 export interface ProfitabilityResult {
@@ -62,6 +63,8 @@ export interface ProfitabilityResult {
   blendedAverageOrderValue: number;
   grossMonthlyRevenue: number;
   monthlyPlatformFees: number;
+  monthlyAcquisitionCostUsd: number;
+  effectiveCacPerSale: number | null;
   netMonthlyProfit: number;
   annualizedNetProfit: number;
   profitMarginPercent: number;
@@ -84,6 +87,7 @@ export function calculateProfitability(input: ProfitabilityInput): Profitability
   const feeRate = clamp(input.platformFeePercent, 0, 95) / 100;
   const fixedFee = clamp(input.fixedFeePerSale, 0, 50);
   const overhead = clamp(input.monthlyOverheadUsd, 0, 1_000_000);
+  const acquisitionCost = clamp(input.monthlyAcquisitionCostUsd ?? 0, 0, 1_000_000);
 
   const monthlyUnits = Math.round(visitors * conv);
   const blendedAov = intro * introShare + regular * regularShare + bundle * bundleShare;
@@ -91,17 +95,22 @@ export function calculateProfitability(input: ProfitabilityInput): Profitability
   const perSaleFee = blendedAov > 0 ? blendedAov * feeRate + fixedFee : 0;
   const netPerSale = Math.max(0, blendedAov - perSaleFee);
   const monthlyPlatformFees = monthlyUnits * perSaleFee;
-  const netMonthlyProfit = grossMonthlyRevenue - monthlyPlatformFees - overhead;
+  const totalFixedCosts = overhead + acquisitionCost;
+  const netMonthlyProfit = grossMonthlyRevenue - monthlyPlatformFees - totalFixedCosts;
   const annualizedNetProfit = netMonthlyProfit * 12;
   const profitMarginPercent =
     grossMonthlyRevenue > 0 ? (netMonthlyProfit / grossMonthlyRevenue) * 100 : 0;
-  const breakEvenUnits = netPerSale > 0 ? Math.ceil(overhead / netPerSale) : 0;
+  const breakEvenUnits = netPerSale > 0 ? Math.ceil(totalFixedCosts / netPerSale) : 0;
+  const effectiveCacPerSale =
+    monthlyUnits > 0 ? Number((acquisitionCost / monthlyUnits).toFixed(2)) : null;
 
   return {
     monthlyUnits,
     blendedAverageOrderValue: Number(blendedAov.toFixed(2)),
     grossMonthlyRevenue: Number(grossMonthlyRevenue.toFixed(2)),
     monthlyPlatformFees: Number(monthlyPlatformFees.toFixed(2)),
+    monthlyAcquisitionCostUsd: Number(acquisitionCost.toFixed(2)),
+    effectiveCacPerSale,
     netMonthlyProfit: Number(netMonthlyProfit.toFixed(2)),
     annualizedNetProfit: Number(annualizedNetProfit.toFixed(2)),
     profitMarginPercent: Number(profitMarginPercent.toFixed(1)),

@@ -27,8 +27,33 @@ test('calculateProfitability computes blended AOV, platform fees, net profit, an
   // Net = 3200 - 320 - 200 = 2680
   assert.equal(result.netMonthlyProfit, 2680);
   assert.equal(result.annualizedNetProfit, 32160);
+  assert.equal(result.monthlyAcquisitionCostUsd, 0);
+  assert.equal(result.effectiveCacPerSale, 0);
   assert.equal(result.netPerSale, 28.8);
   assert.equal(result.breakEvenUnits, Math.ceil(200 / 28.8));
+});
+
+test('calculateProfitability incorporates acquisition cost and effective CAC per sale', () => {
+  const result = calculateProfitability({
+    introductoryPrice: 19,
+    regularPrice: 29,
+    bundlePrice: 49,
+    monthlyVisitors: 2000,
+    conversionRatePercent: 2.5,
+    bundleSharePercent: 20,
+    introSharePercent: 10,
+    platformFeePercent: 10,
+    fixedFeePerSale: 0,
+    monthlyOverheadUsd: 200,
+    monthlyAcquisitionCostUsd: 500,
+  });
+
+  // 2000 * 2.5% = 50 units, gross = 50 * 32 = 1600, fees = 160, fixed = 200 + 500 = 700, net = 740
+  assert.equal(result.monthlyUnits, 50);
+  assert.equal(result.monthlyAcquisitionCostUsd, 500);
+  assert.equal(result.effectiveCacPerSale, 10);
+  assert.equal(result.netMonthlyProfit, 740);
+  assert.equal(result.breakEvenUnits, Math.ceil(700 / 28.8));
 });
 
 test('sanitizeProjectForStorage strips API keys while preserving project data and saved list operations', () => {

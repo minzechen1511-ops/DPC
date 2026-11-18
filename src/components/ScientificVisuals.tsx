@@ -344,16 +344,19 @@ export const ScoreSpectrumBars: React.FC<{
 export const UnitEconomicsChart: React.FC<{
   metrics: ProfitabilityResult;
   monthlyOverheadUsd: number;
+  monthlyAcquisitionCostUsd?: number;
   lang?: Language;
-}> = ({ metrics, monthlyOverheadUsd, lang = 'en' }) => {
+}> = ({ metrics, monthlyOverheadUsd, monthlyAcquisitionCostUsd = 0, lang = 'en' }) => {
   const gross = Math.max(1, metrics.grossMonthlyRevenue);
   const net = Math.max(0, metrics.netMonthlyProfit);
   const overhead = Math.max(0, monthlyOverheadUsd);
-  const fees = Math.max(0, gross - net - overhead);
+  const acquisition = Math.max(0, monthlyAcquisitionCostUsd);
+  const fees = Math.max(0, metrics.monthlyPlatformFees);
 
   const netPct = Math.round((net / gross) * 100);
   const feesPct = Math.round((fees / gross) * 100);
-  const overheadPct = Math.max(0, 100 - netPct - feesPct);
+  const acqPct = Math.round((acquisition / gross) * 100);
+  const overheadPct = Math.max(0, Math.min(100 - netPct - feesPct - acqPct, Math.round((overhead / gross) * 100)));
 
   return (
     <div className="p-4 rounded-xl bg-slate-50/90 border border-slate-200 space-y-3">
@@ -379,6 +382,12 @@ export const UnitEconomicsChart: React.FC<{
             title={`Platform Fees: ${feesPct}%`}
           />
         )}
+        {acqPct > 0 && (
+          <div
+            style={{ width: `${acqPct}%`, backgroundColor: '#7c3aed' }}
+            title={`Acquisition Spend: ${acqPct}%`}
+          />
+        )}
         {overheadPct > 0 && (
           <div
             style={{ width: `${overheadPct}%`, backgroundColor: '#d97706' }}
@@ -395,6 +404,10 @@ export const UnitEconomicsChart: React.FC<{
         <span className="inline-flex items-center gap-2">
           <span className="w-3 h-3 rounded-xs bg-sky-600 inline-block" />
           {lang === 'en' ? 'Platform Fees' : '通路手續費'}: {feesPct}%
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="w-3 h-3 rounded-xs bg-violet-600 inline-block" />
+          {lang === 'en' ? 'Acquisition Spend' : '獲客投放成本'}: {acqPct}%
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="w-3 h-3 rounded-xs bg-amber-600 inline-block" />

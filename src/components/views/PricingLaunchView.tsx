@@ -51,6 +51,7 @@ export const PricingLaunchView: React.FC<PricingLaunchViewProps> = ({
   const [bundleSharePercent, setBundleSharePercent] = useState<number>(25);
   const [introSharePercent] = useState<number>(15);
   const [monthlyOverheadUsd, setMonthlyOverheadUsd] = useState<number>(150);
+  const [monthlyAcquisitionCostUsd, setMonthlyAcquisitionCostUsd] = useState<number>(0);
 
   useEffect(() => {
     setPricing(project.pricingReport);
@@ -76,8 +77,9 @@ export const PricingLaunchView: React.FC<PricingLaunchViewProps> = ({
         platformFeePercent: activePreset.feePercent,
         fixedFeePerSale: activePreset.fixedFeePerSale,
         monthlyOverheadUsd,
+        monthlyAcquisitionCostUsd,
       }),
-    [pricing, monthlyVisitors, conversionRatePercent, bundleSharePercent, introSharePercent, activePreset, monthlyOverheadUsd]
+    [pricing, monthlyVisitors, conversionRatePercent, bundleSharePercent, introSharePercent, activePreset, monthlyOverheadUsd, monthlyAcquisitionCostUsd]
   );
 
   const commitChanges = (nextPricing = pricing, nextSales = sales) => {
@@ -373,7 +375,7 @@ Return JSON with exact keys:
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
           <label className="block space-y-1.5 lg:col-span-2">
             <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Distribution Channel' : '銷售通路費率預設'}</span>
             <select
@@ -426,7 +428,7 @@ Return JSON with exact keys:
           </label>
 
           <label className="block space-y-1.5">
-            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Monthly Costs ($)' : '月固定成本 ($)'}</span>
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Fixed Costs ($)' : '月固定成本 ($)'}</span>
             <input
               type="number"
               min={0}
@@ -436,10 +438,22 @@ Return JSON with exact keys:
               className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
             />
           </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-sm font-semibold text-slate-800">{lang === 'en' ? 'Monthly Ad / CAC ($)' : '月獲客投放 ($)'}</span>
+            <input
+              type="number"
+              min={0}
+              step={25}
+              value={monthlyAcquisitionCostUsd}
+              onChange={(e) => setMonthlyAcquisitionCostUsd(Number(e.target.value))}
+              className="w-full font-mono tabular-nums bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900"
+            />
+          </label>
         </div>
 
         {/* Tabular-Nums Profit Projections */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
             <span className="text-xs font-medium text-slate-600 block">{lang === 'en' ? 'Monthly Units' : '預估月銷量'}</span>
             <strong className="text-xl font-bold font-mono tabular-nums text-slate-900 mt-0.5 block">{metrics.monthlyUnits}</strong>
@@ -452,6 +466,12 @@ Return JSON with exact keys:
             <span className="text-xs font-medium text-slate-600 block">{lang === 'en' ? 'Gross Revenue' : '月總營收'}</span>
             <strong className="text-xl font-bold font-mono tabular-nums text-slate-900 mt-0.5 block">
               ${metrics.grossMonthlyRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </strong>
+          </div>
+          <div className="p-4 rounded-xl bg-violet-50/70 border border-violet-200">
+            <span className="text-xs font-semibold text-violet-900 block">{lang === 'en' ? 'Effective CAC / Sale' : '單筆獲客成本'}</span>
+            <strong className="text-xl font-bold font-mono tabular-nums text-violet-800 mt-0.5 block">
+              {metrics.effectiveCacPerSale === null ? '—' : `$${metrics.effectiveCacPerSale.toFixed(2)}`}
             </strong>
           </div>
           <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200">
@@ -475,7 +495,33 @@ Return JSON with exact keys:
         </div>
 
         {/* Integrated Unit Economics Visual Bar */}
-        <UnitEconomicsChart metrics={metrics} monthlyOverheadUsd={monthlyOverheadUsd} lang={lang} />
+        <UnitEconomicsChart
+          metrics={metrics}
+          monthlyOverheadUsd={monthlyOverheadUsd}
+          monthlyAcquisitionCostUsd={monthlyAcquisitionCostUsd}
+          lang={lang}
+        />
+
+        {/* Scenario Assumptions & Unverified Commercial Unknowns */}
+        <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200 text-xs text-amber-950 space-y-1.5 leading-relaxed">
+          <div className="font-bold uppercase tracking-wider text-amber-900">
+            {lang === 'en'
+              ? 'Scenario Assumptions & Commercial Unknowns (Not Empirical Sales Forecasts)'
+              : '試算假設條件與未驗證商業未知數（非實測銷售保證）'}
+          </div>
+          <ul className="list-disc pl-5 space-y-0.5">
+            <li>
+              {lang === 'en'
+                ? `Explicit scenario inputs: ${monthlyVisitors.toLocaleString()} monthly visits, ${conversionRatePercent}% visitor-to-buyer conversion, ${introSharePercent}%/${100 - introSharePercent - bundleSharePercent}%/${bundleSharePercent}% tier mix, $${monthlyOverheadUsd}/mo overhead, and $${monthlyAcquisitionCostUsd}/mo paid acquisition spend ($0 assumes strictly organic traffic).`
+                : `目前模型假設條件：月訪客 ${monthlyVisitors.toLocaleString()} 人、轉換率 ${conversionRatePercent}%、各階梯佔比 ${introSharePercent}%/${100 - introSharePercent - bundleSharePercent}%/${bundleSharePercent}%、月固定成本 $${monthlyOverheadUsd}、月廣告獲客投放 $${monthlyAcquisitionCostUsd}（$0 代表僅算自然流量）。`}
+            </li>
+            <li>
+              {lang === 'en'
+                ? 'Unmeasured commercial unknowns excluded from formula: actual refund/chargeback rate, price elasticity at launch vs regular tiers, regional VAT/sales-tax obligations outside MoR channels, and paid ad CPC/CAC fluctuations.'
+                : '公式尚未納入且仍屬未知數的商業變因：實際退款與爭議率、首發與常態定價的價格彈性、非 MoR 通路之跨國稅負，以及付費廣告單次點擊/獲客波動。'}
+            </li>
+          </ul>
+        </div>
       </div>
 
       {/* Editable Sales Page Copy */}

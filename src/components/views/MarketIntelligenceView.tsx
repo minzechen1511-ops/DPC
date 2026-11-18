@@ -1157,6 +1157,71 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                           </div>
                         )}
 
+                        {/* Always-Visible Supporting Observation IDs, Original Links, Dates & Limitations */}
+                        <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200 space-y-2 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-bold uppercase tracking-wider text-slate-800">
+                              {lang === 'en'
+                                ? `Supporting Evidence (${allLinked.length} observation${allLinked.length === 1 ? '' : 's'})`
+                                : `支持證據明細（共 ${allLinked.length} 筆觀察紀錄）`}
+                            </span>
+                            <span className="font-mono text-[11px] text-slate-600">
+                              {lang === 'en' ? 'IDs:' : '紀錄 ID：'}{' '}
+                              {topic.sourceObservationIds.join(', ') || 'None'}
+                            </span>
+                          </div>
+                          {allLinked.length === 0 ? (
+                            <p className="text-amber-900">
+                              {lang === 'en'
+                                ? 'No backing observation records remain linked in current workspace.'
+                                : '目前工作區尚未連結對應觀察紀錄。'}
+                            </p>
+                          ) : (
+                            <ul className="space-y-1.5">
+                              {allLinked.map((obs) => {
+                                const obsUrl = obs.sourceURL || obs.productURL;
+                                const obsDate = obs.dataAsOfDate || obs.observedAt;
+                                return (
+                                  <li
+                                    key={obs.id}
+                                    className="bg-white border border-slate-200/90 rounded-lg px-3 py-2 space-y-1"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="font-mono text-[11px] text-slate-700 flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+                                        <strong className="text-slate-900">{obs.id}</strong>
+                                        <span>{obs.marketplace}</span>
+                                        {obs.observedRank && <span>#{obs.observedRank}</span>}
+                                        <span>date: {obsDate || 'unknown'}</span>
+                                        {obs.observedAt && obs.dataAsOfDate && obs.observedAt !== obs.dataAsOfDate && (
+                                          <span className="text-slate-500">retrieved: {obs.observedAt.slice(0, 10)}</span>
+                                        )}
+                                      </div>
+                                      {obsUrl ? (
+                                        <a
+                                          href={obsUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900 underline underline-offset-2 shrink-0"
+                                        >
+                                          <span>{lang === 'en' ? 'Original Source' : '原始來源連結'}</span>
+                                          <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      ) : (
+                                        <span className="text-amber-800 font-mono text-[11px]">No URL recorded</span>
+                                      )}
+                                    </div>
+                                    <div className="text-slate-700 font-medium truncate">{obs.productTitle}</div>
+                                    <div className="text-[11px] text-amber-900">
+                                      <strong>{lang === 'en' ? 'Limitation:' : '證據限制：'}</strong>{' '}
+                                      {obs.dataLimitations || 'Unrecorded limitation; inspect source directly.'}
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+
                         {/* Research Gap Note */}
                         {topic.researchGapNote && (
                           <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-lg">

@@ -354,6 +354,7 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
     setImportPreview(null);
     setImportCommitMessage('');
     setImportError('');
+    e.target.value = '';
   };
 
   const handlePreviewImport = async () => {

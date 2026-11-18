@@ -94,6 +94,7 @@ export const MyProjectsView: React.FC<MyProjectsViewProps> = ({
       }
     };
     reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleResetBlank = () => {

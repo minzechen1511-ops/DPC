@@ -708,12 +708,16 @@ export default function App() {
   };
 
   const handleUpdateProductBible = (updatedBible: ProductBible) => {
-    setProject((prev) => ({
-      ...prev,
-      isBlankProject: false,
-      updatedAt: new Date().toISOString(),
-      productBible: updatedBible,
-    }));
+    setProject((prev) => {
+      const revoked = revokeApprovals(prev, 'gateC');
+      return {
+        ...prev,
+        isBlankProject: false,
+        updatedAt: new Date().toISOString(),
+        productBible: updatedBible,
+        workflow: revoked.workflow,
+      };
+    });
   };
 
   const handleUpdateBrand = (updatedBrand: DigitalProductProject['brand']) => {

@@ -182,6 +182,13 @@ export async function saveProjectToFirestore(
     aiSettings: sanitized.aiSettings,
   });
 
+  const encodedBytes = new TextEncoder().encode(JSON.stringify(payloadFields)).byteLength;
+  if (encodedBytes > 950_000) {
+    throw new Error(
+      `Project payload (${Math.round(encodedBytes / 1024)} KB) is approaching Firestore's 1 MiB document limit. Trim embedded images or large imports before syncing.`
+    );
+  }
+
   try {
     const revision = await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
