@@ -30,12 +30,33 @@ Available scripts:
 Copy `.env.example` and keep secrets strictly in server-side environment variables — never commit keys or expose secrets in client bundles:
 
 - `NODE_ENV` — `"development"` or `"production"`
-- `PORT` — HTTP listen port (default `3000`)
+- `PORT` — HTTP listen port (default `3000`, bound on `0.0.0.0`)
 - `DPC_DATA_DIR` — Optional override directory for server workflow SQLite/JSON storage
 - `GEMINI_API_KEY` — Server-side Google Gemini API key injected into AI Studio / Cloud Run secrets
 - `HTTPS_PROXY` / `HTTP_PROXY` — Inherited automatically by `undici.EnvHttpProxyAgent` for outbound research requests
 
 All research fetches (`/api/market/research`, `/api/market/resources/check`, `/api/market/evidence/inspect-url`, `/api/references/*`) run server-side with private-network SSRF checks, TLS verification, 15s timeouts, 3 MB response limits, and explicit redirect restrictions.
+
+### Codex / External Sandbox Environment Settings (Owner Action Required Outside App Code)
+
+Editing application files does **not** alter external Codex container networking or setup scripts. Apply these settings directly in your Codex environment configuration:
+
+- **Install script**: `bun install --frozen-lockfile`
+- **Start command**: `npm run dev` (development) or `npm run build && npm start` (production), bound to `0.0.0.0:${PORT:-3000}`
+- **Node & Package Manager**: Node 22/24 LTS + Bun 1.4.4 (`node_modules` installed from existing `bun.lock`)
+- **TLS & Proxy**: Preserve inherited `HTTPS_PROXY`/`HTTP_PROXY` env vars and CA verification
+- **Gate A Research Host Allowlist** (preserve package-manager preset + add only implemented hosts; omit `api.keepa.com` since no Keepa API key integration is implemented):
+  - `rss.applemarketingtools.com` and `rss.marketingtools.apple.com` (canonical Apple RSS/JSON chart redirect target)
+  - `books.apple.com`
+  - `www.amazon.com`
+  - `www.nytimes.com`
+  - `keepa.com`
+  - `trends.google.com`
+  - `www.etsy.com`
+  - `gumroad.com`
+  - `payhip.com`
+- **Gate B Academic Reference Host Allowlist (Preserve Existing)**:
+  - `api.crossref.org`, `www.ebi.ac.uk`, `europepmc.org`, `www.who.int`, `www.oecd.org`, `openstax.org`, `www.worldbank.org`, `www.imf.org`, `www.fao.org` (and permitted `.gov` / `.edu` / `.ac.uk` public research sources)
 
 ## 14-Stage Manual Workflow & Gates
 

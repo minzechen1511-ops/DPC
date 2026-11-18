@@ -444,6 +444,12 @@ export default function App() {
     );
   };
 
+  const handleEditObservation = (updated: MarketplaceObservation) => {
+    updateProjectObservations((prev) =>
+      prev.map((item) => (item.id === updated.id ? updated : item))
+    );
+  };
+
   const handleDeleteObservation = (obsId: string) => {
     updateProjectObservations((prev) => prev.filter((item) => item.id !== obsId));
   };
@@ -466,11 +472,18 @@ export default function App() {
     setActiveView('topic_selection');
   };
 
-  const handleSelectTopic = (topicId: string) =>
-    setProject((prev) => ({
-      ...propagateTopicToDownstream(prev, topicId, lang),
-      isBlankProject: false,
-    }));
+  const handleSelectTopic = (topicId: string, selectedAudienceHypothesisId?: string) =>
+    setProject((prev) => {
+      const next = propagateTopicToDownstream(prev, topicId, lang, selectedAudienceHypothesisId);
+      const revoked = revokeApprovals({ ...next, isBlankProject: false }, 'gateA');
+      return {
+        ...revoked,
+        workflow: {
+          ...revoked.workflow,
+          activeStage: prev.workflow.activeStage,
+        },
+      };
+    });
   const handleApproveGateA = () => setProject((prev) => approveGate({ ...prev, isBlankProject: false }, 'gateA'));
 
   const [checkingReferences, setCheckingReferences] = useState(false);
@@ -1014,6 +1027,7 @@ export default function App() {
             onRefreshResearch={handleRunMarketDiscovery}
             onCheckResources={handleCheckResources}
             onAddManualObservation={handleAddManualObservation}
+            onEditObservation={handleEditObservation}
             onImportObservations={handleImportObservations}
             onReviewObservation={handleReviewObservation}
             onDeleteObservation={handleDeleteObservation}
@@ -1035,6 +1049,7 @@ export default function App() {
             onRefreshResearch={handleRunMarketDiscovery}
             onCheckResources={handleCheckResources}
             onAddManualObservation={handleAddManualObservation}
+            onEditObservation={handleEditObservation}
             onImportObservations={handleImportObservations}
             onReviewObservation={handleReviewObservation}
             onDeleteObservation={handleDeleteObservation}

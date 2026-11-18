@@ -1,6 +1,7 @@
 import { countManuscriptWords } from './textMetrics.ts';
 import type { DigitalProductProject, ReferenceCard } from '../types/project.ts';
 import { isGateAQualifiedEvidence } from './marketDiscoveryEngine.ts';
+import { isObservationReviewStale } from './manualEvidenceReview.ts';
 import { auditChapter, resourceEvidenceDocument } from './citationEvidence.ts';
 import { isRetrievedSource, chapterResearchFingerprint } from './sourceEvidence.ts';
 const reviewedSource = isRetrievedSource;
@@ -9,10 +10,14 @@ export function gateIssues(project: DigitalProductProject, gate: GateKey): strin
   const issues: string[] = [];
   const selected = project.marketResearch.topicCandidates.find(c => c.id === project.marketResearch.selectedTopicId);
   if (!selected) issues.push('Select a niche linked to current chart or manually reviewed marketplace evidence.');
-  else if (!selected.sourceObservationIds.length || !selected.sourceObservationIds.every(id => {
-    const source = project.marketResearch.platformEvidence.find(o => o.id === id);
-    return source && isGateAQualifiedEvidence(source);
-  })) issues.push('Refresh marketplace research or complete Manual Evidence Review: selected evidence is sample, missing, unreviewed, rejected/blocked, or older than 48 hours.');
+  else {
+    const linkedSources = selected.sourceObservationIds.map(id => project.marketResearch.platformEvidence.find(o => o.id === id));
+    if (linkedSources.some(src => src && isObservationReviewStale(src))) {
+      issues.push('One or more reviewed Gate A observations were edited after review (stale review). Re-inspect and approve updated evidence before approving Gate A.');
+    } else if (!selected.sourceObservationIds.length || !linkedSources.every(source => source && isGateAQualifiedEvidence(source))) {
+      issues.push('Refresh marketplace research or complete Manual Evidence Review: selected evidence is sample, missing, unreviewed, stale, rejected/blocked, or older than 48 hours.');
+    }
+  }
   if (gate === 'gateA') return issues;
   if (!project.workflow.gates.gateA.isApproved) issues.push('Approve Gate A before approving the product strategy.');
   if (!project.charter.productTitle.trim() || !project.charter.targetAudience.trim() || !project.charter.learningObjectives.length) issues.push('Complete the charter title, target audience and learning objectives.');

@@ -16,20 +16,27 @@ Seeded Gate A research resources:
 
 An HTTP 200 check proves network reachability only; it never verifies page claims or bestseller status.
 
-## Manual Evidence Review & CSV/JSON Import
+## Manual Evidence Review, Structured Checklist & 2-Step CSV/JSON Import
 
 When external platforms block automated fetchers or provide context reports (NYT, Keepa, Google Trends, creator listings), use **Manual Evidence Review**:
 
 - Homepage URLs (`keepa.com/`, `trends.google.com/trends/`, `nytimes.com/books/best-sellers/`, etc.) and private network URLs are rejected.
-- Every record retains separate **Source Class**, **Acquisition Method** (`live_collector`, `manual_observation`, `file_import`), **Evidence Type**, and **Review Status** (`unverified`, `retrieved_checked`, `manually_reviewed`, `blocked`, `rejected`).
-- Manual entries and CSV/JSON imports always enter `unverified`, cannot be approved by a checkbox alone without an inspected excerpt, locator/attachment, and written rationale (>= 20 chars), and are never relabeled as live collector-verified.
-- Multiple articles derived from the same dataset share one `evidenceChainId` and collapse cleanly when evaluating Gate A recommendations so duplicated coverage never inflates scores.
+- Every record retains separate **Publisher**, **Source Class**, **Acquisition Method** (`live_collector`, `manual_observation`, `file_import`), **Evidence Type**, and **Review Status** (`unverified`, `retrieved_checked`, `manually_reviewed`, `blocked`, `rejected`).
+- **2-Step CSV/JSON Import**: Files and pasted tables are previewed with a SHA-256 `attachmentHash`, row numbers, raw row preservation, and per-row error diagnostics before committing as `file_import` + `unverified`.
+- **5-Criteria Structured Review Checklist**: Approving or qualifying fallback evidence requires inspecting the excerpt/locator and recording: (1) what the observation establishes, (2) date/scope/product match (blocking `accepted` when `mismatch` is selected), (3) metric nature (`observed`, `reported`, `estimated`), (4) limitations/manual disclosure, and (5) written reviewer rationale (`>= 20` chars).
+- **Evidence-Version Hash & Edit Invalidation**: Each observation stores `evidenceVersionHash` vs `reviewedEvidenceHash` plus `reviewHistory`. Editing any evidentiary field automatically resets status to `unverified`, appends an `invalidated` entry, flags stale reviews, and revokes downstream Gate A approval.
+- Historical rankings (`> 14` days old or Keepa `historical` / `estimated`) never receive current bestseller labels or badges.
 
-## Evidence Strength vs. Product Suitability
+## Multi-Source Comparison Matrix & Audience-Topic Hypotheses
 
-Gate A separates **A. Evidence Strength** (credibility, recency, scope fit, and independent evidence chains) from **B. Product Suitability** (unvalidated audience/problem hypothesis and `UNMEASURED` creator fit). Only directly observed or human-reviewed demand contributes points (`demandSignal`, max 25); unmeasured factors remain labeled `Unmeasured` (`0`) until directly researched. Fiction and unknown categories are excluded. Legacy `isSample` records are excluded from real counts and cannot satisfy Gate A.
+Gate A separates **A. Evidence Strength** (credibility, recency, scope fit, and independent evidence chains) from **B. Product Suitability** (unvalidated audience/problem hypothesis and `UNMEASURED` creator fit):
 
-## Review Chain & Bundles
+- **Multi-Source Status**: Candidates require `>= 2` independent, non-stale qualified chains (`evidenceChainId`) to earn `Reviewed Multi-Source`; 1 chain reports `Single-Source Evidence`; 0 chains reports `Needs Evidence`.
+- **Comparison Matrix**: Displays supporting, complementary, contradictory, stale, unverified, and dataset-duplicated records together per domain, explicitly disclosing when ranking and interest signals complement each other without measuring unit sales.
+- **Audience-Topic Hypotheses**: Presents 2–3 plausible target audience angles with uncertainties so the creator explicitly selects one hypothesis for Stage 3 without fabricating creator expertise.
 
-1. Upstream evidence edits or revocations invalidate affected Gate A, B, and C approvals.
-2. Bundle exports (`research/marketplace-evidence.json`, `review/publication-review.json`, and `START-HERE.html`) preserve live collector counts, manually reviewed counts, sample counts, and full observation provenance alongside integrity hashes (`manifest.json`).
+## Review Chain, Migration & Bundles
+
+1. `migrateProjectSchema()` upgrades legacy projects cleanly without dropping real observations, file attachment hashes, review history, or Gate B `referenceLibrary.cards`, while quarantining legacy `OBS-01..05` demo fixtures as `isSample: true`.
+2. Upstream evidence edits or revocations invalidate affected Gate A, B, and C approvals.
+3. Bundle exports (`research/marketplace-evidence.json`, `review/publication-review.json`, and `START-HERE.html`) preserve live collector counts, manually reviewed counts, stale review counts, multi-source comparisons, sample counts, and full observation provenance alongside integrity hashes (`manifest.json`).

@@ -56,12 +56,20 @@ export async function buildLearningBundle(rawProject: DigitalProductProject, sou
   add('research/reference-library.md',compileReferenceLibraryMarkdown(project));
   add('research/source-records.json',JSON.stringify(project.referenceLibrary.cards,null,2));
   const { isCurrentMarketEvidence, isReviewedFallbackEvidence } = await import('./marketDiscoveryEngine.ts');
+  const { isObservationReviewStale } = await import('./manualEvidenceReview.ts');
   const marketObs = project.marketResearch?.platformEvidence || [];
+  const selectedCandidate = (project.marketResearch?.topicCandidates || []).find(
+    (c) => c.id === project.marketResearch?.selectedTopicId
+  );
   const marketSummary = {
     liveCollectorCount: marketObs.filter((o) => isCurrentMarketEvidence(o)).length,
     manuallyReviewedCount: marketObs.filter((o) => isReviewedFallbackEvidence(o)).length,
+    staleReviewCount: marketObs.filter((o) => isObservationReviewStale(o)).length,
     sampleCount: marketObs.filter((o) => Boolean(o.isSample)).length,
     rejectedOrBlockedCount: marketObs.filter((o) => o.reviewStatus === 'rejected' || o.reviewStatus === 'blocked').length,
+    selectedCandidateMultiSourceStatus: selectedCandidate?.multiSourceStatus || 'NEEDS_EVIDENCE',
+    selectedCandidateChains: selectedCandidate?.independentChainIds || [],
+    selectedCandidateComparisonCount: selectedCandidate?.evidenceComparison?.length || 0,
     gateAIssues: gateIssues(project, 'gateA'),
   };
   add(

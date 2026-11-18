@@ -3,6 +3,7 @@ import { AppConfig } from '../config.ts';
 import { DataStore, RevisionConflictError } from '../db/store.ts';
 import { DigitalProductProject } from '../../src/types/project.ts';
 import { sanitizeProjectForExport } from '../../src/utils/projectSanitizer.ts';
+import { migrateProjectSchema } from '../../src/utils/projectMigration.ts';
 import { gateIssues, revokeApprovals } from '../../src/utils/gatePolicy.ts';
 import { verifyReferenceRecords } from '../referenceResearch.ts';
 import { isRetrievedSource } from '../../src/utils/sourceEvidence.ts';
@@ -185,7 +186,7 @@ export function createProjectRouter(deps: {
         continue;
       }
 
-      const sanitized = sanitizeProjectForExport(item);
+      const sanitized = sanitizeProjectForExport(migrateProjectSchema(item));
       const safeProject = revokeApprovals(
         {
           ...sanitized,

@@ -1,5 +1,6 @@
 import type { DigitalProductProject } from '../types/project.ts';
 import { sanitizeProjectForExport } from './projectSanitizer.ts';
+import { migrateProjectSchema } from './projectMigration.ts';
 
 const ACTIVE_PROJECT_KEY = 'dps_active_project_id_v1';
 const SAVED_PROJECTS_KEY = 'dps_saved_projects_v1';
@@ -10,7 +11,7 @@ const UI_LANG_KEY = 'dps_ui_lang_v1';
  * Strip sensitive API keys & legacy desktop artifacts before storing or exporting project state.
  */
 export function sanitizeProjectForStorage(project: DigitalProductProject): DigitalProductProject {
-  return sanitizeProjectForExport(project);
+  return sanitizeProjectForExport(migrateProjectSchema(project));
 }
 
 export function upsertSavedProject(

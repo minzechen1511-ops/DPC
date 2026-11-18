@@ -4,6 +4,8 @@ import type {
   MarketplaceObservation,
   MarketReviewStatus,
   MarketSourceClass,
+  ObservationReviewAssessment,
+  ObservationReviewHistoryEntry,
 } from '../types/project.ts';
 import { INITIAL_GATE_A_RESOURCES } from './marketResourceDirectory.ts';
 
@@ -30,6 +32,104 @@ function normalizeUrlForCompare(raw: string): string {
   } catch {
     return raw.trim().toLowerCase();
   }
+}
+
+export function defaultPublisherForMarketplace(marketplace: MarketplaceObservation['marketplace']): string {
+  switch (marketplace) {
+    case 'Apple Books':
+      return 'Apple Books';
+    case 'Amazon Kindle':
+      return 'Amazon';
+    case 'NYT Best Sellers':
+      return 'The New York Times';
+    case 'Keepa':
+      return 'Keepa';
+    case 'Google Trends':
+      return 'Google Trends';
+    case 'Etsy':
+      return 'Etsy';
+    case 'Gumroad':
+      return 'Gumroad';
+    case 'Payhip':
+      return 'Payhip';
+    case 'Google Play Books':
+      return 'Google Play';
+    case 'Kobo':
+      return 'Rakuten Kobo';
+    default:
+      return 'Independent / Specified Publisher';
+  }
+}
+
+/**
+ * Deterministic canonical evidence-version fingerprint across all evidentiary fields.
+ * Editing any evidentiary field changes this hash so prior approvals become stale cleanly.
+ */
+export function computeObservationEvidenceHash(obs: Partial<MarketplaceObservation>): string {
+  const canonicalPayload = JSON.stringify([
+    (obs.productTitle || '').trim(),
+    (obs.publisher || '').trim(),
+    (obs.sellerOrAuthor || '').trim(),
+    (obs.marketplace || '').trim(),
+    (obs.country || 'US').trim(),
+    (obs.category || '').trim(),
+    (obs.productFormat || '').trim(),
+    (obs.productURL || '').trim(),
+    (obs.sourceURL || '').trim(),
+    (obs.sourceClass || '').trim(),
+    (obs.acquisitionMethod || '').trim(),
+    (obs.evidenceType || '').trim(),
+    obs.observedRank ?? null,
+    (obs.rankScope || '').trim(),
+    (obs.metricName || '').trim(),
+    obs.metricValue ?? null,
+    (obs.metricUnit || '').trim(),
+    (obs.dataAsOfDate || obs.observedAt || '').trim(),
+    (obs.publicationDate || '').trim(),
+    (obs.evidenceExcerpt || '').trim(),
+    (obs.excerptLocator || '').trim(),
+    (obs.evidenceAttachmentRef || '').trim(),
+    (obs.attachmentHash || '').trim(),
+    (obs.collectionMethodology || '').trim(),
+    (obs.keepaProvenance || 'not_applicable').trim(),
+    (obs.evidenceChainId || '').trim(),
+    (obs.dataLimitations || '').trim(),
+  ]);
+
+  let h1 = 0x811c9dc5;
+  let h2 = 0xdeadbeef;
+  for (let i = 0; i < canonicalPayload.length; i++) {
+    const code = canonicalPayload.charCodeAt(i);
+    h1 ^= code;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= code + i;
+    h2 = Math.imul(h2, 0x85ebca6b);
+  }
+  return `ev_${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+export async function computeSha256Hex(content: string): Promise<string> {
+  if (typeof globalThis.crypto?.subtle?.digest === 'function') {
+    const bytes = new TextEncoder().encode(content);
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return computeObservationEvidenceHash({ evidenceExcerpt: content });
+}
+
+export function isObservationReviewStale(obs: MarketplaceObservation): boolean {
+  if (obs.isSample) return false;
+  if (obs.reviewStatus !== 'manually_reviewed') return false;
+  const currentHash = computeObservationEvidenceHash(obs);
+  if (obs.reviewedEvidenceHash && obs.reviewedEvidenceHash !== currentHash) {
+    return true;
+  }
+  if (obs.evidenceVersionHash && obs.reviewedEvidenceHash && obs.evidenceVersionHash !== obs.reviewedEvidenceHash) {
+    return true;
+  }
+  return false;
 }
 
 export function isResourceHomepageUrl(rawUrl: string): boolean {
@@ -88,6 +188,7 @@ export function inferObservationDefaults(obs: MarketplaceObservation): {
   acquisitionMethod: MarketAcquisitionMethod;
   evidenceType: MarketEvidenceType;
   reviewStatus: MarketReviewStatus;
+  publisher: string;
 } {
   const sourceClass: MarketSourceClass =
     obs.sourceClass ||
@@ -131,7 +232,9 @@ export function inferObservationDefaults(obs: MarketplaceObservation): {
       ? 'retrieved_checked'
       : 'unverified');
 
-  return { sourceClass, acquisitionMethod, evidenceType, reviewStatus };
+  const publisher = (obs.publisher || defaultPublisherForMarketplace(obs.marketplace)).trim();
+
+  return { sourceClass, acquisitionMethod, evidenceType, reviewStatus, publisher };
 }
 
 export function evidenceLevelFromType(type: MarketEvidenceType, collector?: string): MarketplaceObservation['evidenceLevel'] {
@@ -149,6 +252,7 @@ export function evidenceLevelFromType(type: MarketEvidenceType, collector?: stri
 export interface ManualEvidenceInput {
   id?: string;
   productTitle: string;
+  publisher?: string;
   sellerOrAuthor?: string;
   marketplace: MarketplaceObservation['marketplace'];
   country?: string;
@@ -172,6 +276,10 @@ export interface ManualEvidenceInput {
   evidenceExcerpt: string;
   excerptLocator: string;
   evidenceAttachmentRef?: string;
+  attachmentHash?: string;
+  importFileName?: string;
+  importRowNumber?: number;
+  rawImportedPayload?: Record<string, unknown>;
   collectionMethodology: string;
   dataLimitations: string;
   keepaProvenance?: MarketplaceObservation['keepaProvenance'];
@@ -261,9 +369,10 @@ export function createManualObservationRecord(
       ? Math.round(Number(input.observedRank))
       : undefined;
 
-  const observation: MarketplaceObservation = {
+  const baseObservation: MarketplaceObservation = {
     id: input.id?.trim() || `MAN-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     marketplace: input.marketplace,
+    publisher: (input.publisher || defaultPublisherForMarketplace(input.marketplace)).trim(),
     country: (input.country || 'US').trim(),
     category: input.category.trim(),
     productTitle: input.productTitle.trim(),
@@ -286,6 +395,10 @@ export function createManualObservationRecord(
     evidenceExcerpt: input.evidenceExcerpt.trim(),
     excerptLocator: input.excerptLocator.trim(),
     evidenceAttachmentRef: input.evidenceAttachmentRef?.trim() || undefined,
+    attachmentHash: input.attachmentHash?.trim() || undefined,
+    importFileName: input.importFileName?.trim() || undefined,
+    importRowNumber: input.importRowNumber,
+    rawImportedPayload: input.rawImportedPayload,
     collectionMethodology: input.collectionMethodology.trim(),
     keepaProvenance: input.keepaProvenance || 'not_applicable',
     evidenceChainId: input.evidenceChainId?.trim() || `chain-${normalizeUrlForCompare(input.sourceURL)}`,
@@ -299,15 +412,82 @@ export function createManualObservationRecord(
     isSample: false,
   };
 
-  return { observation, errors: [] };
+  baseObservation.evidenceVersionHash = computeObservationEvidenceHash(baseObservation);
+  return { observation: baseObservation, errors: [] };
+}
+
+export function editManualObservationRecord(
+  existing: MarketplaceObservation,
+  updatedInput: ManualEvidenceInput
+): { observation?: MarketplaceObservation; errors: string[] } {
+  if (existing.isSample) {
+    return { errors: ['Sample fixture records cannot be edited into real evidence.'] };
+  }
+  if (existing.collector === 'apple-chart-v1' || existing.collector === 'amazon-chart-v1') {
+    return { errors: ['Live collector records are immutable read-only chart captures; log a separate manual note instead.'] };
+  }
+
+  const preservedAcquisition: MarketAcquisitionMethod =
+    existing.acquisitionMethod === 'file_import' ? 'file_import' : 'manual_observation';
+
+  const rebuilt = createManualObservationRecord(
+    {
+      ...updatedInput,
+      id: existing.id,
+      retrievedAt: existing.retrievedAt,
+      importFileName: existing.importFileName,
+      importRowNumber: existing.importRowNumber,
+      attachmentHash: updatedInput.attachmentHash || existing.attachmentHash,
+      rawImportedPayload: existing.rawImportedPayload,
+    },
+    preservedAcquisition
+  );
+
+  if (!rebuilt.observation) {
+    return { errors: rebuilt.errors };
+  }
+
+  const oldHash = existing.evidenceVersionHash || computeObservationEvidenceHash(existing);
+  const nextHash = rebuilt.observation.evidenceVersionHash!;
+  const changed = oldHash !== nextHash;
+  const wasReviewed = existing.reviewStatus === 'manually_reviewed';
+
+  const nextHistory: ObservationReviewHistoryEntry[] = [...(existing.reviewHistory || [])];
+  if (wasReviewed && changed) {
+    nextHistory.push({
+      timestamp: new Date().toISOString(),
+      status: 'unverified',
+      outcome: 'invalidated',
+      rationale: 'Evidentiary fields were edited after prior review; previous approval invalidated pending fresh review.',
+      evidenceVersionHash: oldHash,
+    });
+  }
+
+  return {
+    observation: {
+      ...rebuilt.observation,
+      // Any edit to evidentiary content forces unverified until re-reviewed cleanly
+      reviewStatus: changed ? 'unverified' : existing.reviewStatus || 'unverified',
+      reviewOutcome: changed ? undefined : existing.reviewOutcome,
+      reviewedAt: changed ? undefined : existing.reviewedAt,
+      reviewerRationale: changed ? undefined : existing.reviewerRationale,
+      reviewAssessment: changed ? undefined : existing.reviewAssessment,
+      reviewedEvidenceHash: changed ? undefined : existing.reviewedEvidenceHash,
+      reviewHistory: nextHistory,
+    },
+    errors: [],
+  };
 }
 
 export function applyManualReviewDecision(
   observation: MarketplaceObservation,
   decision: {
     status: 'manually_reviewed' | 'blocked' | 'rejected' | 'unverified';
+    outcome?: 'accepted' | 'qualified' | 'rejected' | 'blocked';
     rationale: string;
     inspectedConfirmed: boolean;
+    assessment?: Partial<ObservationReviewAssessment>;
+    requireStructuredChecklist?: boolean;
   }
 ): { observation?: MarketplaceObservation; error?: string } {
   if (observation.isSample) {
@@ -319,6 +499,15 @@ export function applyManualReviewDecision(
   const hasLocator =
     Boolean((observation.excerptLocator || '').trim()) ||
     Boolean((observation.evidenceAttachmentRef || '').trim());
+
+  const resolvedOutcome: 'accepted' | 'qualified' | 'rejected' | 'blocked' =
+    decision.status === 'rejected'
+      ? 'rejected'
+      : decision.status === 'blocked'
+      ? 'blocked'
+      : decision.outcome === 'qualified'
+      ? 'qualified'
+      : 'accepted';
 
   if (decision.status === 'manually_reviewed') {
     if (!decision.inspectedConfirmed) {
@@ -339,6 +528,29 @@ export function applyManualReviewDecision(
     if (isResourceHomepageUrl(observation.sourceURL || observation.productURL || '')) {
       return { error: 'Cannot approve an observation pointing only to a resource homepage.' };
     }
+
+    if (decision.requireStructuredChecklist) {
+      const establishes = (decision.assessment?.establishes || '').trim();
+      const lim = (decision.assessment?.limitationsSummary || '').trim();
+      if (establishes.length < 10) {
+        return { error: 'Specify what this observation actually establishes (min 10 characters).' };
+      }
+      if (!decision.assessment?.dateScopeProductMatch) {
+        return { error: 'Assess whether the date, ranking/metric scope, and product match your topic.' };
+      }
+      if (!decision.assessment?.metricNature) {
+        return { error: 'Classify whether the key metric is directly observed, reported, or estimated.' };
+      }
+      if (lim.length < 10) {
+        return { error: 'Summarize scope and limitation boundaries for this review (min 10 characters).' };
+      }
+      if (resolvedOutcome === 'accepted' && decision.assessment.dateScopeProductMatch === 'mismatch') {
+        return {
+          error:
+            'An observation with a date/scope/product mismatch cannot be Accepted without qualification. Choose "Qualify", "Block", or "Reject".',
+        };
+      }
+    }
   } else if ((decision.status === 'blocked' || decision.status === 'rejected') && trimmedRationale.length < 10) {
     return { error: 'Provide a clear reason (>= 10 characters) when blocking or rejecting an observation.' };
   }
@@ -351,15 +563,59 @@ export function applyManualReviewDecision(
       ? 'live_collector'
       : defaults.acquisitionMethod;
 
+  const inferredMetricNature: ObservationReviewAssessment['metricNature'] =
+    defaults.evidenceType === 'official_ranking'
+      ? 'observed'
+      : defaults.evidenceType === 'reported_ranking'
+      ? 'reported'
+      : 'estimated';
+
+  const normalizedAssessment: ObservationReviewAssessment = {
+    establishes:
+      (decision.assessment?.establishes || '').trim() ||
+      `${defaults.evidenceType.replaceAll('_', ' ')} (${observation.rankScope || observation.category})`,
+    dateScopeProductMatch: decision.assessment?.dateScopeProductMatch || 'exact_match',
+    metricNature: decision.assessment?.metricNature || inferredMetricNature,
+    limitationsSummary: (decision.assessment?.limitationsSummary || observation.dataLimitations || '').trim(),
+    liveRetrievalUnavailableDisclosed: Boolean(decision.assessment?.liveRetrievalUnavailableDisclosed),
+  };
+
+  const evHash = computeObservationEvidenceHash({
+    ...observation,
+    publisher: defaults.publisher,
+    sourceClass: defaults.sourceClass,
+    acquisitionMethod: preservedAcquisition,
+    evidenceType: defaults.evidenceType,
+  });
+
+  const reviewedAt = new Date().toISOString();
+  const nextHistory: ObservationReviewHistoryEntry[] = [
+    ...(observation.reviewHistory || []),
+    {
+      timestamp: reviewedAt,
+      status: decision.status,
+      outcome: resolvedOutcome,
+      rationale: trimmedRationale,
+      evidenceVersionHash: evHash,
+      establishes: normalizedAssessment.establishes,
+    },
+  ];
+
   return {
     observation: {
       ...observation,
+      publisher: defaults.publisher,
       sourceClass: defaults.sourceClass,
       acquisitionMethod: preservedAcquisition,
       evidenceType: defaults.evidenceType,
       reviewStatus: decision.status,
+      reviewOutcome: decision.status === 'unverified' ? undefined : resolvedOutcome,
+      reviewAssessment: normalizedAssessment,
+      reviewHistory: nextHistory,
       reviewerRationale: trimmedRationale,
-      reviewedAt: new Date().toISOString(),
+      reviewedAt,
+      evidenceVersionHash: evHash,
+      reviewedEvidenceHash: decision.status === 'manually_reviewed' ? evHash : undefined,
     },
   };
 }
@@ -433,10 +689,19 @@ function mapMarketplaceValue(raw: string): MarketplaceObservation['marketplace']
   return 'Other Research Source';
 }
 
-export function parseImportedObservations(
+export interface ImportPreviewResult {
+  fileName: string;
+  fileHash: string;
+  totalRows: number;
+  validRows: MarketplaceObservation[];
+  rejectedRows: Array<{ row: number; productTitle?: string; errors: string[] }>;
+}
+
+export function previewImportedObservations(
   rawText: string,
-  filename: string
-): { imported: MarketplaceObservation[]; rejected: Array<{ row: number; errors: string[] }> } {
+  filename: string,
+  fileHash?: string
+): ImportPreviewResult {
   if (!rawText || rawText.length > MAX_IMPORT_BYTES) {
     throw new Error(`Import payload must be non-empty and under ${MAX_IMPORT_BYTES / 1000} KB.`);
   }
@@ -473,18 +738,23 @@ export function parseImportedObservations(
     throw new Error(`Import exceeds maximum of ${MAX_IMPORT_ROWS} rows per upload.`);
   }
 
-  const imported: MarketplaceObservation[] = [];
-  const rejected: Array<{ row: number; errors: string[] }> = [];
+  const effectiveHash =
+    fileHash?.trim() || computeObservationEvidenceHash({ evidenceExcerpt: rawText, productTitle: filename });
+
+  const validRows: MarketplaceObservation[] = [];
+  const rejectedRows: Array<{ row: number; productTitle?: string; errors: string[] }> = [];
 
   rawRecords.forEach((rec, idx) => {
+    const marketplace = mapMarketplaceValue(String(rec.marketplace || rec.publisher || 'Other'));
     const srcClassRaw = String(rec.sourceClass || rec.source_class || 'supporting_context').trim() as MarketSourceClass;
     const evTypeRaw = String(rec.evidenceType || rec.evidence_type || 'interest_signal').trim() as MarketEvidenceType;
 
     const draft: ManualEvidenceInput = {
       id: rec.id ? `IMP-${String(rec.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)}` : undefined,
       productTitle: String(rec.productTitle || rec.title || '').trim(),
-      sellerOrAuthor: String(rec.sellerOrAuthor || rec.publisher || rec.author || 'Not listed').trim(),
-      marketplace: mapMarketplaceValue(String(rec.marketplace || rec.publisher || 'Other')),
+      publisher: String(rec.publisher || defaultPublisherForMarketplace(marketplace)).trim(),
+      sellerOrAuthor: String(rec.sellerOrAuthor || rec.author || rec.publisher || 'Not listed').trim(),
+      marketplace,
       country: String(rec.country || 'US').trim(),
       category: String(rec.category || '').trim(),
       productFormat: String(rec.productFormat || rec.format || 'Digital Download').trim(),
@@ -505,35 +775,62 @@ export function parseImportedObservations(
       evidenceExcerpt: String(rec.evidenceExcerpt || rec.excerpt || '').trim(),
       excerptLocator: String(rec.excerptLocator || rec.locator || '').trim(),
       evidenceAttachmentRef: filename,
+      attachmentHash: effectiveHash,
+      importFileName: filename,
+      importRowNumber: idx + 1,
+      rawImportedPayload: { ...rec },
       collectionMethodology: String(
         rec.collectionMethodology || rec.methodology || `Imported from ${filename}`
       ).trim(),
       keepaProvenance: rec.keepaProvenance || 'not_applicable',
       evidenceChainId: String(rec.evidenceChainId || rec.evidence_chain_id || '').trim() || undefined,
-      dataLimitations: String(
-        rec.dataLimitations || rec.limitations || ''
-      ).trim(),
+      dataLimitations: String(rec.dataLimitations || rec.limitations || '').trim(),
     };
 
     const created = createManualObservationRecord(draft, 'file_import');
     if (created.observation) {
       // Force file_import & unverified regardless of any status columns in the uploaded file!
-      imported.push({
+      validRows.push({
         ...created.observation,
         acquisitionMethod: 'file_import',
         reviewStatus: 'unverified',
+        reviewOutcome: undefined,
         reviewedAt: undefined,
         reviewerRationale: undefined,
+        reviewedEvidenceHash: undefined,
       });
     } else {
-      rejected.push({ row: idx + 1, errors: created.errors });
+      rejectedRows.push({
+        row: idx + 1,
+        productTitle: draft.productTitle || undefined,
+        errors: created.errors,
+      });
     }
   });
 
-  return { imported, rejected };
+  return {
+    fileName: filename,
+    fileHash: effectiveHash,
+    totalRows: rawRecords.length,
+    validRows,
+    rejectedRows,
+  };
+}
+
+export function parseImportedObservations(
+  rawText: string,
+  filename: string,
+  fileHash?: string
+): { imported: MarketplaceObservation[]; rejected: Array<{ row: number; errors: string[] }>; fileHash: string } {
+  const preview = previewImportedObservations(rawText, filename, fileHash);
+  return {
+    imported: preview.validRows,
+    rejected: preview.rejectedRows.map(({ row, errors }) => ({ row, errors })),
+    fileHash: preview.fileHash,
+  };
 }
 
 export const SAMPLE_IMPORT_CSV_TEMPLATE = [
-  'productTitle,sellerOrAuthor,marketplace,country,category,productFormat,productURL,sourceURL,sourceClass,evidenceType,observedRank,rankScope,metricName,metricValue,metricUnit,dataAsOfDate,publicationDate,evidenceExcerpt,excerptLocator,collectionMethodology,evidenceChainId,dataLimitations',
-  '"Atomic Habits (Combined Print & E-Book Example)","James Clear","NYT Best Sellers","US","Self-Help / Advice, How-To","Print & Ebook","https://www.nytimes.com/books/best-sellers/advice-how-to-and-miscellaneous/","https://www.nytimes.com/books/best-sellers/advice-how-to-and-miscellaneous/","secondary_report","reported_ranking",1,"NYT Advice, How-To & Miscellaneous (Combined Print & E-Book)","Weeks on List",240,"weeks","2026-11-15","2026-11-15","Weekly editorial list entry noting Advice & How-To category persistence across print and ebook editions.","NYT List Entry #1 · Print & E-Book edition note","Manual inspection of dated NYT Best Sellers archive","nyt-advice-2026-11-15","Combined print-and-ebook list does not isolate Kindle or digital-only sales velocity."',
+  'productTitle,publisher,sellerOrAuthor,marketplace,country,category,productFormat,productURL,sourceURL,sourceClass,evidenceType,observedRank,rankScope,metricName,metricValue,metricUnit,dataAsOfDate,publicationDate,evidenceExcerpt,excerptLocator,collectionMethodology,evidenceChainId,dataLimitations',
+  '"Atomic Habits (Combined Print & E-Book Example)","The New York Times","James Clear","NYT Best Sellers","US","Self-Help / Advice, How-To","Print & Ebook","https://www.nytimes.com/books/best-sellers/advice-how-to-and-miscellaneous/","https://www.nytimes.com/books/best-sellers/advice-how-to-and-miscellaneous/","secondary_report","reported_ranking",1,"NYT Advice, How-To & Miscellaneous (Combined Print & E-Book)","Weeks on List",240,"weeks","2026-11-15","2026-11-15","Weekly editorial list entry noting Advice & How-To category persistence across print and ebook editions.","NYT List Entry #1 · Print & E-Book edition note","Manual inspection of dated NYT Best Sellers archive","nyt-advice-2026-11-15","Combined print-and-ebook list does not isolate Kindle or digital-only sales velocity."',
 ].join('\n');

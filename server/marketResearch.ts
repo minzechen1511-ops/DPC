@@ -85,6 +85,7 @@ export function parseAppleChart(
       {
         id: `apple-${item.id}`,
         marketplace: 'Apple Books' as const,
+        publisher: 'Apple Books',
         country: 'US',
         category: (item.genres || []).map((g: any) => g.name).join(' > ') || 'Books',
         productTitle: item.name,
@@ -152,6 +153,7 @@ export function parseAmazonChart(
     results.push({
       id: `amazon-${asin}`,
       marketplace: 'Amazon Kindle',
+      publisher: 'Amazon',
       country: 'US',
       category: categoryLabel,
       productTitle: title,

@@ -1,10 +1,14 @@
 import type {
+  AudienceTopicHypothesis,
+  CandidateEvidenceComparisonRow,
   CandidateEvidenceLabel,
   CandidateEvidenceStrength,
   CandidateProductSuitability,
   DigitalProductProject,
+  EvidenceRelationshipKind,
   GateAResourceEntry,
   MarketplaceObservation,
+  MultiSourceStatus,
   ProductFormat,
   ScoreFactorAssessment,
   TopicCandidate,
@@ -14,7 +18,9 @@ import { BLANK_PROJECT } from '../data/demoProject.ts';
 import { Language } from './i18n.ts';
 import { apiFetch } from '../services/apiClient.ts';
 import {
+  computeObservationEvidenceHash,
   inferObservationDefaults,
+  isObservationReviewStale,
   isPrivateOrInvalidPublicUrl,
   isResourceHomepageUrl,
 } from './manualEvidenceReview.ts';
@@ -230,6 +236,24 @@ export function isCurrentMarketEvidence(observation: MarketplaceObservation, now
   );
 }
 
+export function isHistoricalOrAgedRanking(observation: MarketplaceObservation, now = Date.now()): boolean {
+  if (observation.keepaProvenance === 'historical' || observation.keepaProvenance === 'estimated') {
+    return true;
+  }
+  const defaults = inferObservationDefaults(observation);
+  if (
+    defaults.evidenceType === 'official_ranking' ||
+    defaults.evidenceType === 'reported_ranking' ||
+    defaults.evidenceType === 'estimate'
+  ) {
+    const ms = Date.parse(observation.dataAsOfDate || observation.observedAt || '');
+    if (Number.isFinite(ms) && now - ms > 14 * 24 * 60 * 60 * 1000) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function isReviewedFallbackEvidence(observation: MarketplaceObservation): boolean {
   if (observation.isSample) return false;
   // Live collector records are checked by isCurrentMarketEvidence (with 48h window)
@@ -237,6 +261,7 @@ export function isReviewedFallbackEvidence(observation: MarketplaceObservation):
   const defaults = inferObservationDefaults(observation);
   if (defaults.acquisitionMethod === 'live_collector') return false;
   if (observation.reviewStatus !== 'manually_reviewed') return false;
+  if (isObservationReviewStale(observation)) return false;
   if (!observation.reviewedAt || !Number.isFinite(Date.parse(observation.reviewedAt))) return false;
   if (!observation.reviewerRationale || observation.reviewerRationale.trim().length < 20) return false;
   if (!observation.evidenceExcerpt || observation.evidenceExcerpt.trim().length < 20) return false;
@@ -397,6 +422,285 @@ const NICHE_BLUEPRINTS: Record<string, NicheBlueprint> = {
   },
 };
 
+function buildAudienceTopicHypotheses(
+  category: string,
+  qualifiedSources: MarketplaceObservation[]
+): AudienceTopicHypothesis[] {
+  const sourceRef =
+    qualifiedSources
+      .slice(0, 3)
+      .map((s) => `${s.marketplace}${s.observedRank ? ` #${s.observedRank}` : ''}`)
+      .join(', ') || 'linked Gate A observations';
+
+  switch (category) {
+    case 'productivity_systems':
+      return [
+        {
+          id: `${category}-hyp-solo-consultants`,
+          audienceLabel: 'Solo service operators & independent consultants standardizing client delivery',
+          productAngle: 'Client onboarding SOP templates, scope triage matrices, and weekly cadence logs',
+          evidenceBasis: `Informed by category signals (${sourceRef}); assumes buyers prefer repeatable SOP checklists over vague theory.`,
+          uncertainty: 'Hypothesis only — creator has not verified solo consultant willingness to pay or channel CAC.',
+        },
+        {
+          id: `${category}-hyp-creators`,
+          audienceLabel: 'Digital creators managing multi-channel research, production, and release calendars',
+          productAngle: 'Single-source capture boards, release checklists, and editorial quality gates',
+          evidenceBasis: `Informed by workflow signals (${sourceRef}); emphasizes operational organization rather than creator income claims.`,
+          uncertainty: 'Hypothesis only — template vs playbook format preference must be validated directly.',
+        },
+        {
+          id: `${category}-hyp-ops-generalists`,
+          audienceLabel: 'Self-employed generalists reducing administrative time-leaks each week',
+          productAngle: '20-minute Friday audit playbook & recurring routine scorecard',
+          evidenceBasis: `Broad domain pattern (${sourceRef}); lowest niche specificity until buyer interviews narrow pain points.`,
+          uncertainty: 'Broad segment may require tighter problem framing to avoid generic productivity saturation.',
+        },
+      ];
+    case 'wellness_habits':
+      return [
+        {
+          id: `${category}-hyp-overworked-professionals`,
+          audienceLabel: 'Full-time desk workers recovering from scattered focus and evening burnout',
+          productAngle: 'Workday shutdown scripts, minimum-viable daily baselines, and 14-day sleep hygiene log',
+          evidenceBasis: `Aligned with habit & burnout topic signals (${sourceRef}); avoids medical claims by sticking to behavioral checklists.`,
+          uncertainty: 'Educational habit design only; not clinical therapy. Willingness to pay at $12–$24 untested.',
+        },
+        {
+          id: `${category}-hyp-caregivers`,
+          audienceLabel: 'Busy caregivers seeking 10-minute flexible routines that survive unpredictable schedules',
+          productAngle: 'Fallback habit tiers, energy trigger audit sheets, and zero-guilt reset logs',
+          evidenceBasis: `Grounded in self-help/habit category attention (${sourceRef}) focusing on resilient minimum routines.`,
+          uncertainty: 'Assumes printable/GoodNotes format appeal; validate format preference before workbook production.',
+        },
+      ];
+    case 'personal_finance':
+      return [
+        {
+          id: `${category}-hyp-early-career`,
+          audienceLabel: 'Early-career earners organizing fixed bills, irregular annual costs, and debt sequences',
+          productAngle: '30-day cashflow baseline table, sinking-fund calculator sheet, and monthly 15-minute check-in',
+          evidenceBasis: `Informed by budgeting & personal finance signals (${sourceRef}); strictly educational template tools.`,
+          uncertainty: 'Not licensed financial advice. Price sensitivity and spreadsheet vs ebook preference require buyer checks.',
+        },
+        {
+          id: `${category}-hyp-first-home`,
+          audienceLabel: 'Prospective first-time homebuyers comparing closing fees and maintenance reserves',
+          productAngle: 'Pre-purchase hidden-cost audit workbook and mortgage readiness checklist',
+          evidenceBasis: `Inspired by real-estate & personal finance signals (${sourceRef}); targets concrete financial preparation tasks.`,
+          uncertainty: 'Regional mortgage rules vary widely; educational checklists require clear jurisdiction disclaimers.',
+        },
+      ];
+    case 'freelance_career':
+      return [
+        {
+          id: `${category}-hyp-independent-creatives`,
+          audienceLabel: 'Independent designers, writers, and developers formalizing 3-tier proposals',
+          productAngle: 'Discovery call question tree, Essential/Core/Extended proposal templates, and revision guardrails',
+          evidenceBasis: `Backed by freelance/career observations (${sourceRef}); solves concrete scoping friction without income promises.`,
+          uncertainty: 'Validate whether buyers expect Google Docs/Notion templates or editable PDF scripts.',
+        },
+        {
+          id: `${category}-hyp-new-consultants`,
+          audienceLabel: 'Mid-career specialists transitioning into fractional or project-based consulting',
+          productAngle: 'Scope-of-work matrix, milestone sign-off checklist, and post-delivery handoff kit',
+          evidenceBasis: `Supported by career/consulting demand signals (${sourceRef}); structured execution focus.`,
+          uncertainty: 'Consult B2B/freelance communities directly to verify pricing elasticity ($19–$59).',
+        },
+      ];
+    case 'budget_living':
+      return [
+        {
+          id: `${category}-hyp-busy-families`,
+          audienceLabel: 'Working households cutting weeknight takeout and spoiled produce waste',
+          productAngle: 'Pantry-first inventory map, 5-dinner cross-utilization grid, and batch-prep cards',
+          evidenceBasis: `Grounded in budget-cooking category signals (${sourceRef}); avoids unverified grocery savings claims.`,
+          uncertainty: 'Dietary preferences (vegetarian, gluten-free, family size) may alter worksheet utility.',
+        },
+        {
+          id: `${category}-hyp-solo-budgeters`,
+          audienceLabel: 'Single/couple renters managing inflation with 30-minute batch-prepped staples',
+          productAngle: 'Small-batch ingredient matrix, unit-price comparison table, and leftover remix checklists',
+          evidenceBasis: `Informed by budget food planning context (${sourceRef}); targets low food waste for 1–2 person kitchens.`,
+          uncertainty: 'Check competing sub-$15 Etsy/Amazon printables before locking bundle scope.',
+        },
+      ];
+    default:
+      return [
+        {
+          id: `${category}-hyp-default-a`,
+          audienceLabel: 'Practical learners seeking structured worksheets and worked examples in this domain',
+          productAngle: 'Step-by-step execution playbook plus printable checklists',
+          evidenceBasis: `Derived from linked Gate A records (${sourceRef}).`,
+          uncertainty: 'Audience definition and willingness to pay remain unvalidated hypotheses.',
+        },
+        {
+          id: `${category}-hyp-default-b`,
+          audienceLabel: 'Self-directed organizers comparing existing tools and documented trade-offs',
+          productAngle: 'Decision matrices, baseline audits, and progress tracking logs',
+          evidenceBasis: `Derived from linked Gate A records (${sourceRef}).`,
+          uncertainty: 'Conduct buyer interviews before finalizing format and pricing.',
+        },
+      ];
+  }
+}
+
+export function compareCandidateEvidence(
+  allObservations: MarketplaceObservation[],
+  category: string,
+  now = Date.now()
+): {
+  multiSourceStatus: MultiSourceStatus;
+  evidenceComparison: CandidateEvidenceComparisonRow[];
+  qualifiedObservations: MarketplaceObservation[];
+  qualifiedChainIds: string[];
+} {
+  const domainObs = allObservations.filter(
+    (o) => !o.isSample && observationCategory(o) === category
+  );
+
+  // Track dataset chain memberships across all non-sample domain records
+  const byChain = new Map<string, MarketplaceObservation[]>();
+  for (const obs of domainObs) {
+    const chain = (obs.evidenceChainId || obs.id).trim();
+    byChain.set(chain, [...(byChain.get(chain) || []), obs]);
+  }
+
+  const qualified = domainObs.filter((o) => isGateAQualifiedEvidence(o, now));
+  const qualifiedChainIds = Array.from(
+    new Set(qualified.map((o) => (o.evidenceChainId || o.id).trim()))
+  );
+
+  // Count distinct evidence natures across qualified independent chains
+  const hasPrimaryOrLiveRanking = qualified.some((o) => {
+    const d = inferObservationDefaults(o);
+    return (
+      isCurrentMarketEvidence(o, now) ||
+      d.evidenceType === 'official_ranking' ||
+      d.evidenceType === 'reported_ranking'
+    );
+  });
+  const hasInterestOrEstimate = qualified.some((o) => {
+    const d = inferObservationDefaults(o);
+    return d.evidenceType === 'interest_signal' || d.evidenceType === 'estimate' || d.evidenceType === 'featured_collection';
+  });
+  const rejectedOrMismatchInDomain = domainObs.some(
+    (o) =>
+      o.reviewStatus === 'rejected' ||
+      o.reviewStatus === 'blocked' ||
+      o.reviewAssessment?.dateScopeProductMatch === 'mismatch'
+  );
+
+  const evidenceComparison: CandidateEvidenceComparisonRow[] = domainObs.map((obs) => {
+    const defaults = inferObservationDefaults(obs);
+    const chain = (obs.evidenceChainId || obs.id).trim();
+    const peersInChain = (byChain.get(chain) || []).filter((p) => p.id !== obs.id).map((p) => p.id);
+    const live = isCurrentMarketEvidence(obs, now);
+    const manualValid = isReviewedFallbackEvidence(obs);
+    const stale = isObservationReviewStale(obs);
+    const rejectedOrBlocked = obs.reviewStatus === 'rejected' || obs.reviewStatus === 'blocked';
+    const historicalAged = isHistoricalOrAgedRanking(obs, now);
+
+    const reviewState: CandidateEvidenceComparisonRow['reviewState'] = live
+      ? 'valid_live'
+      : manualValid
+      ? 'valid_manual'
+      : stale
+      ? 'stale_review'
+      : rejectedOrBlocked
+      ? 'rejected_blocked'
+      : 'unverified';
+
+    let relationship: EvidenceRelationshipKind = 'standalone';
+    if (peersInChain.length > 0) {
+      relationship = 'duplicates_dataset';
+    } else if (rejectedOrBlocked || obs.reviewAssessment?.dateScopeProductMatch === 'mismatch') {
+      relationship = 'contradicts';
+    } else if (rejectedOrMismatchInDomain && qualifiedChainIds.length >= 1) {
+      relationship = 'complements';
+    } else if (
+      qualifiedChainIds.length >= 2 &&
+      (defaults.evidenceType === 'interest_signal' || defaults.evidenceType === 'estimate') &&
+      hasPrimaryOrLiveRanking
+    ) {
+      relationship = 'complements';
+    } else if (qualifiedChainIds.length >= 2 && hasPrimaryOrLiveRanking && hasInterestOrEstimate && defaults.evidenceType !== 'official_ranking') {
+      relationship = 'complements';
+    } else if (qualifiedChainIds.length >= 2) {
+      relationship = 'corroborates';
+    }
+
+    const supports =
+      obs.reviewAssessment?.establishes ||
+      (live
+        ? `Live chart #${obs.observedRank} snapshot in ${obs.rankScope || obs.category}`
+        : rejectedOrBlocked
+        ? `Excluded (${obs.reviewStatus}): ${obs.reviewerRationale || 'Marked invalid during human review'}`
+        : stale
+        ? 'Evidentiary fields edited since last review — prior approval invalidated'
+        : defaults.evidenceType === 'reported_ranking'
+        ? `Reported ranking (#${obs.observedRank ?? '—'}) in ${obs.rankScope || obs.category}`
+        : defaults.evidenceType === 'interest_signal'
+        ? `Topic attention signal (${obs.metricName || 'Index'}: ${obs.metricValue ?? '—'} ${obs.metricUnit || ''})`
+        : defaults.evidenceType === 'estimate'
+        ? `Third-party historical/estimate observation (${obs.keepaProvenance || 'estimate'})`
+        : obs.evidenceExcerpt?.slice(0, 110) || defaults.evidenceType);
+
+    const cannotEstablish =
+      defaults.evidenceType === 'interest_signal'
+        ? 'Search/topic interest does NOT establish unit sales, revenue, or willingness to pay.'
+        : /combined|print/i.test(`${obs.rankScope || ''} ${obs.productFormat || ''}`)
+        ? 'Combined print/ebook ranking does not isolate digital-only sales.'
+        : historicalAged
+        ? 'Historical or aged snapshot (>14d / Keepa archive) does NOT establish current bestseller status.'
+        : 'Does not measure unit sales volume, net margin, conversion rate, or creator-audience fit.';
+
+    let conflictOrLimitationNote = obs.dataLimitations;
+    if (peersInChain.length > 0) {
+      conflictOrLimitationNote = `Shares evidenceChainId "${chain}" with [${peersInChain.join(', ')}] — collapsed into 1 chain to avoid double-counting. ${obs.dataLimitations}`;
+    } else if (stale) {
+      const curr = computeObservationEvidenceHash(obs);
+      conflictOrLimitationNote = `STALE REVIEW (${obs.reviewedEvidenceHash || 'prior'} -> ${curr}): Re-review required before counting toward Gate A.`;
+    } else if (rejectedOrBlocked) {
+      conflictOrLimitationNote = `CONTRADICTION / EXCLUDED: ${obs.reviewerRationale || obs.dataLimitations}`;
+    } else if (relationship === 'complements') {
+      conflictOrLimitationNote = `Complementary signal (different evidence type from primary chart; does not independently verify unit sales). ${obs.dataLimitations}`;
+    }
+
+    return {
+      observationId: obs.id,
+      productTitle: obs.productTitle,
+      marketplace: obs.marketplace,
+      sourceURL: obs.sourceURL || obs.productURL,
+      dataAsOfDate: obs.dataAsOfDate || obs.observedAt,
+      evidenceChainId: chain,
+      sourceClass: defaults.sourceClass,
+      acquisitionMethod: defaults.acquisitionMethod,
+      evidenceType: defaults.evidenceType,
+      reviewState,
+      supports,
+      cannotEstablish,
+      relationship,
+      sharesDatasetWithIds: peersInChain,
+      conflictOrLimitationNote,
+    };
+  });
+
+  const multiSourceStatus: MultiSourceStatus =
+    qualifiedChainIds.length >= 2
+      ? 'REVIEWED_MULTI_SOURCE'
+      : qualifiedChainIds.length === 1
+      ? 'SINGLE_SOURCE'
+      : 'NEEDS_EVIDENCE';
+
+  return {
+    multiSourceStatus,
+    evidenceComparison,
+    qualifiedObservations: qualified,
+    qualifiedChainIds,
+  };
+}
+
 function computeCandidateEvidenceAssessment(
   sources: MarketplaceObservation[],
   category: string,
@@ -434,6 +738,7 @@ function computeCandidateEvidenceAssessment(
       inferObservationDefaults(s).sourceClass === 'primary_marketplace' &&
       inferObservationDefaults(s).evidenceType === 'official_ranking'
   );
+  const hasHistoricalManualRanking = manualReviewed.some((s) => isHistoricalOrAgedRanking(s, now));
   const hasReportedRank = manualReviewed.some(
     (s) => inferObservationDefaults(s).evidenceType === 'reported_ranking'
   );
@@ -461,8 +766,12 @@ function computeCandidateEvidenceAssessment(
     const topRank = ranked[0]?.observedRank;
     demandSignal = topRank ? Math.min(18, Math.max(6, 20 - Math.ceil(topRank / 5))) : 10;
     demandStatus = 'REVIEWED_SIGNAL';
-    demandBasis = `Manually reviewed primary marketplace observation(s) (${manualReviewed.length} record(s), ${independentChainIds.length} independent chain(s)). Not collector-verified.`;
-    demandUncertainty = 'Captured via manual observation or import; verify currency and marketplace scope before assuming active velocity.';
+    demandBasis = hasHistoricalManualRanking
+      ? `Manually reviewed historical primary observation(s) (${manualReviewed.length} record(s), ${independentChainIds.length} chain(s)). Historical snapshot only — NOT current bestseller status.`
+      : `Manually reviewed primary marketplace observation(s) (${manualReviewed.length} record(s), ${independentChainIds.length} independent chain(s)). Not collector-verified.`;
+    demandUncertainty = hasHistoricalManualRanking
+      ? 'Historical or aged snapshot (>14 days old or Keepa historical archive); reflects past visibility only, not active velocity.'
+      : 'Captured via manual observation or import; verify currency and marketplace scope before assuming active velocity.';
   } else if (hasReportedRank) {
     evidenceLabel = 'SECONDARY_REPORTED_RANKING';
     evidenceStatus = 'REVIEWED_FALLBACK';
@@ -513,6 +822,8 @@ function computeCandidateEvidenceAssessment(
     recencySummary:
       ageHours === null
         ? 'Data-as-of date unavailable'
+        : hasHistoricalManualRanking
+        ? `Historical / aged observation (~${Math.round(ageHours / 24)}d old or archive curve; NOT current chart)`
         : ageHours <= 48
         ? `Data within ${ageHours}h window of retrieval`
         : `Data age ~${Math.round(ageHours / 24)}d (review recency before relying on snapshot)`,
@@ -687,6 +998,8 @@ export function deriveSynchronizedCandidates(
     const label = MARKET_CATEGORIES.find((c) => c.id === category)?.labelEn || category;
     const blueprint = NICHE_BLUEPRINTS[category];
     const assessment = computeCandidateEvidenceAssessment(sortedSources, category, now);
+    const comparison = compareCandidateEvidence(observations, category, now);
+    const audienceTopicHypotheses = buildAudienceTopicHypotheses(category, sortedSources);
     const id = `NICHE-${category}`;
     badgeEligibility.set(id, assessment.canReceiveVerifiedBadge);
 
@@ -695,6 +1008,9 @@ export function deriveSynchronizedCandidates(
       marketCategory: category,
       evidenceStatus: assessment.evidenceStatus,
       evidenceLabel: assessment.evidenceLabel,
+      multiSourceStatus: comparison.multiSourceStatus,
+      evidenceComparison: comparison.evidenceComparison,
+      audienceTopicHypotheses,
       evidenceStrength: assessment.evidenceStrength,
       productSuitability: assessment.productSuitability,
       factorAssessments: assessment.factorAssessments,
@@ -797,13 +1113,18 @@ export async function checkSeedResourceDirectory(): Promise<{
 export function propagateTopicToDownstream(
   project: DigitalProductProject,
   selectedTopicId: string,
-  lang: Language = 'en'
+  lang: Language = 'en',
+  selectedAudienceHypothesisId?: string
 ): DigitalProductProject {
   const candidate = project.marketResearch.topicCandidates.find((c) => c.id === selectedTopicId);
   if (!candidate) return project;
+  const chosenHypothesis = candidate.audienceTopicHypotheses?.find(
+    (h) => h.id === (selectedAudienceHypothesisId || candidate.selectedAudienceHypothesisId)
+  );
   if (
     project.marketResearch.selectedTopicId === selectedTopicId &&
-    project.charter.productTitle === candidate.title
+    project.charter.productTitle === candidate.title &&
+    (!selectedAudienceHypothesisId || candidate.selectedAudienceHypothesisId === selectedAudienceHypothesisId)
   ) {
     return project;
   }
@@ -844,6 +1165,13 @@ export function propagateTopicToDownstream(
   const existingExperience = (project.intake?.relevantExperience || '').trim();
   const existingExpertise = (project.intake?.expertise || '').trim();
 
+  const effectiveAudience = chosenHypothesis ? chosenHypothesis.audienceLabel : candidate.targetAudience;
+  const updatedCandidates = project.marketResearch.topicCandidates.map((c) =>
+    c.id === selectedTopicId && selectedAudienceHypothesisId
+      ? { ...c, selectedAudienceHypothesisId }
+      : c
+  );
+
   return {
     ...next,
     projectId: project.projectId,
@@ -854,15 +1182,17 @@ export function propagateTopicToDownstream(
     preferences: { ...project.preferences, language: lang === 'en' ? 'English' : '繁體中文' },
     aiSettings: project.aiSettings,
     brand: project.brand,
-    marketResearch: { ...project.marketResearch, selectedTopicId },
+    marketResearch: { ...project.marketResearch, selectedTopicId, topicCandidates: updatedCandidates },
     intake: {
       ...next.intake,
       projectName: candidate.title,
       creatorName: existingCreatorName,
       relevantExperience: existingExperience,
       expertise: existingExpertise,
-      productIdea: `${candidate.title} — ${candidate.subtitle}`,
-      targetAudience: candidate.targetAudience,
+      productIdea: chosenHypothesis
+        ? `${candidate.title} — ${chosenHypothesis.productAngle}`
+        : `${candidate.title} — ${candidate.subtitle}`,
+      targetAudience: effectiveAudience,
       problemsSolved: candidate.coreProblem,
       desiredTransformation: candidate.bigPromise,
       recommendedPrice: {
@@ -915,7 +1245,7 @@ export function propagateTopicToDownstream(
       ...next.charter,
       productTitle: candidate.title,
       subtitle: candidate.subtitle,
-      targetAudience: candidate.targetAudience,
+      targetAudience: effectiveAudience,
       primaryProblemSolved: candidate.coreProblem,
       centralPromise: candidate.bigPromise,
       deliveryFormat: candidate.suggestedFormat,

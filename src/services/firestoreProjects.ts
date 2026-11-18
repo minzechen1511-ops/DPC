@@ -16,6 +16,7 @@ import {
 import { db, handleFirestoreError, OperationType } from '../firebase.ts';
 import type { DigitalProductProject } from '../types/project.ts';
 import { sanitizeProjectForExport } from '../utils/projectSanitizer.ts';
+import { migrateProjectSchema } from '../utils/projectMigration.ts';
 import type { Language } from '../utils/i18n.ts';
 
 export interface FirestoreProjectRecord {
@@ -119,12 +120,14 @@ export function subscribeUserProjects(
       const list: FirestoreProjectRecord[] = snapshot.docs.map((docSnap) => {
         const raw = docSnap.data();
         const rev = typeof raw.revision === 'number' ? raw.revision : 1;
-        const normalized = sanitizeProjectForExport({
-          ...(raw as unknown as DigitalProductProject),
-          projectId: String(raw.projectId || docSnap.id),
-          createdAt: toIsoString(raw.createdAt),
-          updatedAt: toIsoString(raw.updatedAt),
-        });
+        const normalized = sanitizeProjectForExport(
+          migrateProjectSchema({
+            ...raw,
+            projectId: String(raw.projectId || docSnap.id),
+            createdAt: toIsoString(raw.createdAt),
+            updatedAt: toIsoString(raw.updatedAt),
+          })
+        );
         return {
           project: normalized,
           revision: rev,

@@ -320,3 +320,304 @@ test('10. Sample fixtures excluded; manual reviewed fallback unlocks Gate A; evi
   assert.equal(exportedEvidence.provenanceSummary.liveCollectorCount, 0);
   assert.equal(exportedEvidence.provenanceSummary.sampleCount, 0);
 });
+
+test('11. 2-step import preview preserves SHA-256 attachmentHash, row numbers & raw payloads without committing before confirm', async () => {
+  const { computeSha256Hex, previewImportedObservations } = await import('./manualEvidenceReview.ts');
+  const hash = await computeSha256Hex(SAMPLE_IMPORT_CSV_TEMPLATE);
+  const preview = previewImportedObservations(SAMPLE_IMPORT_CSV_TEMPLATE, 'editorial-batch.csv', hash);
+
+  assert.equal(preview.fileName, 'editorial-batch.csv');
+  assert.equal(preview.fileHash, hash);
+  assert.equal(preview.totalRows, 1);
+  assert.equal(preview.validRows.length, 1);
+  assert.equal(preview.rejectedRows.length, 0);
+
+  const row = preview.validRows[0];
+  assert.equal(row.publisher, 'The New York Times');
+  assert.equal(row.importFileName, 'editorial-batch.csv');
+  assert.equal(row.importRowNumber, 1);
+  assert.equal(row.attachmentHash, hash);
+  assert.ok(row.rawImportedPayload && row.rawImportedPayload.productTitle);
+  assert.equal(row.acquisitionMethod, 'file_import');
+  assert.equal(row.reviewStatus, 'unverified');
+});
+
+test('12. Structured 5-part review checklist blocks mismatch acceptance, and editing evidence invalidates prior approval & revokes Gate A', async () => {
+  const { editManualObservationRecord, isObservationReviewStale } = await import('./manualEvidenceReview.ts');
+  const draft = createManualObservationRecord({
+    productTitle: 'Historical Finance Rank Snapshot',
+    publisher: 'Keepa',
+    marketplace: 'Keepa',
+    category: 'Personal Finance & Budgeting',
+    productFormat: 'Kindle Ebook',
+    sourceURL: 'https://keepa.com/#!product/1-B0HIST0001',
+    sourceClass: 'primary_marketplace',
+    evidenceType: 'official_ranking',
+    observedRank: 8,
+    rankScope: 'Amazon Kindle Personal Finance (2025 historical curve)',
+    keepaProvenance: 'historical',
+    dataAsOfDate: '2025-10-01',
+    evidenceExcerpt: 'Historical rank trace stayed between #5 and #12 during October 2025 snapshot window.',
+    excerptLocator: 'Keepa Oct 2025 CSV export Row 4',
+    collectionMethodology: 'Manual Keepa historical CSV inspection',
+    dataLimitations: 'Historical October 2025 data only; does not establish current bestseller status.',
+  }).observation!;
+
+  // Mismatch cannot be accepted via structured checklist
+  const mismatchBlocked = applyManualReviewDecision(draft, {
+    status: 'manually_reviewed',
+    outcome: 'accepted',
+    inspectedConfirmed: true,
+    requireStructuredChecklist: true,
+    assessment: {
+      establishes: 'Historical oct 2025 chart position in personal finance.',
+      dateScopeProductMatch: 'mismatch',
+      metricNature: 'observed',
+      limitationsSummary: 'Historical 2025 archive does not show current performance.',
+    },
+    rationale: 'Checked Oct 2025 Keepa curve; clearly aged and cannot prove current bestseller rank.',
+  });
+  assert.equal(mismatchBlocked.observation, undefined);
+
+  // Qualify succeeds and records reviewHistory + hash
+  const qualified = applyManualReviewDecision(draft, {
+    status: 'manually_reviewed',
+    outcome: 'qualified',
+    inspectedConfirmed: true,
+    requireStructuredChecklist: true,
+    assessment: {
+      establishes: 'Historical 2025 topic durability for household finance guides.',
+      dateScopeProductMatch: 'partial_scope_match',
+      metricNature: 'observed',
+      limitationsSummary: 'Aged archive (>14 days) and historical Keepa trace; never a current bestseller badge.',
+      liveRetrievalUnavailableDisclosed: true,
+    },
+    rationale: 'Qualified as historical context signal only; aged archive cannot earn current bestseller badge.',
+  }).observation!;
+
+  assert.equal(qualified.reviewOutcome, 'qualified');
+  assert.equal(qualified.reviewHistory?.length, 1);
+  assert.equal(isObservationReviewStale(qualified), false);
+
+  // Historical observation must NEVER produce CURRENT_OFFICIAL_CHART or current bestseller badge
+  const histCandidates = deriveSynchronizedCandidates([qualified]);
+  assert.equal(histCandidates.length, 1);
+  assert.notEqual(histCandidates[0].evidenceLabel, 'CURRENT_OFFICIAL_CHART');
+  assert.equal(histCandidates[0].badge, undefined);
+  assert.match(histCandidates[0].evidenceStrength?.recencySummary || '', /historical/i);
+
+  // Simulate post-approval edit through editManualObservationRecord -> resets to unverified + records invalidated history
+  let proj = structuredClone(BLANK_PROJECT);
+  proj.marketResearch.platformEvidence = [qualified];
+  proj.marketResearch.topicCandidates = histCandidates;
+  proj = propagateTopicToDownstream(proj, histCandidates[0].id);
+  proj = approveGate(proj, 'gateA');
+  assert.equal(proj.workflow.gates.gateA.isApproved, true);
+
+  const edited = editManualObservationRecord(qualified, {
+    productTitle: qualified.productTitle,
+    publisher: qualified.publisher,
+    sellerOrAuthor: qualified.sellerOrAuthor,
+    marketplace: qualified.marketplace,
+    country: qualified.country,
+    category: qualified.category,
+    productFormat: qualified.productFormat,
+    sourceURL: qualified.sourceURL!,
+    sourceClass: 'primary_marketplace',
+    evidenceType: 'official_ranking',
+    observedRank: 18,
+    rankScope: qualified.rankScope,
+    keepaProvenance: 'historical',
+    dataAsOfDate: '2025-10-02',
+    evidenceExcerpt: 'Updated excerpt showing historical rank slipped to #18 in follow-up export.',
+    excerptLocator: 'Keepa Oct 2025 CSV export Row 5',
+    collectionMethodology: qualified.collectionMethodology!,
+    dataLimitations: qualified.dataLimitations,
+  }).observation!;
+
+  assert.equal(edited.reviewStatus, 'unverified');
+  assert.equal(edited.reviewHistory?.length, 2);
+  assert.equal(edited.reviewHistory?.[1].outcome, 'invalidated');
+  assert.equal(isGateAQualifiedEvidence(edited), false);
+
+  // Also test raw tampered observation triggering stale detection in gateIssues
+  const tampered: MarketplaceObservation = { ...qualified, observedRank: 99, evidenceExcerpt: 'Tampered excerpt text after approval signature' };
+  assert.equal(isObservationReviewStale(tampered), true);
+  assert.equal(isReviewedFallbackEvidence(tampered), false);
+  const tamperedProj = {
+    ...proj,
+    marketResearch: { ...proj.marketResearch, platformEvidence: [tampered] },
+  };
+  assert.ok(gateIssues(tamperedProj, 'gateA').some((m) => /stale/i.test(m)));
+});
+
+test('13. Multi-source comparison matrix handles corroborating, complementary, contradictory, duplicate-chain records & enforces multiSourceStatus', async () => {
+  const { compareCandidateEvidence } = await import('./marketDiscoveryEngine.ts');
+  const liveApple = liveAppleFixture('ms1', 'Business & Productivity Systems', 5);
+  const liveDuplicate = { ...liveApple, id: 'apple-ms1-dup', productTitle: 'Duplicate Copy Same Chain' };
+
+  const trendsObs = createManualObservationRecord({
+    productTitle: 'Notion SOP Templates US Search Interest',
+    publisher: 'Google Trends',
+    marketplace: 'Google Trends',
+    category: 'Business Productivity Systems',
+    productFormat: 'Search Interest Index',
+    sourceURL: 'https://trends.google.com/trends/explore?q=notion%20sop%20templates',
+    sourceClass: 'supporting_context',
+    evidenceType: 'interest_signal',
+    metricName: 'Relative Search Index',
+    metricValue: 81,
+    metricUnit: '0-100 index',
+    dataAsOfDate: new Date().toISOString().slice(0, 10),
+    evidenceExcerpt: 'Relative US search interest remained above 70 across 2026.',
+    excerptLocator: 'Google Trends interest curve',
+    collectionMethodology: 'Manual Google Trends inspection',
+    evidenceChainId: 'gtrends-sop-2026',
+    dataLimitations: 'Search attention index only; does not establish unit purchases.',
+  }).observation!;
+  const reviewedTrends = applyManualReviewDecision(trendsObs, {
+    status: 'manually_reviewed',
+    outcome: 'qualified',
+    inspectedConfirmed: true,
+    rationale: 'Reviewed Google Trends interest curve complementing Apple chart category visibility.',
+  }).observation!;
+
+  const rejectedContra = applyManualReviewDecision(
+    createManualObservationRecord({
+      productTitle: 'Conflicting Overstated Claim Listing',
+      publisher: 'Gumroad',
+      marketplace: 'Gumroad',
+      category: 'Business Productivity Systems',
+      productFormat: 'Notion Template',
+      sourceURL: 'https://gumroad.com/l/example-prod-claim',
+      sourceClass: 'supporting_context',
+      evidenceType: 'featured_collection',
+      dataAsOfDate: new Date().toISOString().slice(0, 10),
+      evidenceExcerpt: 'Creator page claims massive unverified demand without transparent sales data.',
+      excerptLocator: 'Listing header',
+      collectionMethodology: 'Manual Gumroad inspection',
+      evidenceChainId: 'gumroad-contra-1',
+      dataLimitations: 'Unsubstantiated creator claims.',
+    }).observation!,
+    {
+      status: 'rejected',
+      outcome: 'rejected',
+      inspectedConfirmed: true,
+      rationale: 'Rejected contradictory seller claim due to missing verifiable demand evidence.',
+    }
+  ).observation!;
+
+  const all = [liveApple, liveDuplicate, reviewedTrends, rejectedContra];
+  const comp = compareCandidateEvidence(all, 'productivity_systems');
+  assert.equal(comp.multiSourceStatus, 'REVIEWED_MULTI_SOURCE');
+  assert.equal(comp.qualifiedChainIds.length, 2);
+
+  const dupRow = comp.evidenceComparison.find((r) => r.observationId === 'apple-ms1-dup')!;
+  const trendsRow = comp.evidenceComparison.find((r) => r.observationId === reviewedTrends.id)!;
+  const contraRow = comp.evidenceComparison.find((r) => r.observationId === rejectedContra.id)!;
+
+  assert.equal(dupRow.relationship, 'duplicates_dataset');
+  assert.equal(trendsRow.relationship, 'complements');
+  assert.match(trendsRow.cannotEstablish, /unit sales/i);
+  assert.equal(contraRow.relationship, 'contradicts');
+  assert.equal(contraRow.reviewState, 'rejected_blocked');
+
+  // Single-chain only -> SINGLE_SOURCE
+  const singleComp = compareCandidateEvidence([liveApple, liveDuplicate], 'productivity_systems');
+  assert.equal(singleComp.multiSourceStatus, 'SINGLE_SOURCE');
+
+  // Unverified only -> NEEDS_EVIDENCE
+  const needsComp = compareCandidateEvidence([trendsObs], 'productivity_systems');
+  assert.equal(needsComp.multiSourceStatus, 'NEEDS_EVIDENCE');
+});
+
+test('14. Audience-topic hypothesis selection propagates chosen angle cleanly without inventing creator credentials', () => {
+  const live = liveAppleFixture('ah1', 'Business Productivity Systems', 2);
+  const candidates = deriveSynchronizedCandidates([live]);
+  const c = candidates[0];
+  assert.ok(c.audienceTopicHypotheses && c.audienceTopicHypotheses.length >= 2);
+
+  const secondHyp = c.audienceTopicHypotheses[1];
+  let project = structuredClone(BLANK_PROJECT);
+  project.marketResearch.platformEvidence = [live];
+  project.marketResearch.topicCandidates = candidates;
+  project = propagateTopicToDownstream(project, c.id, 'en', secondHyp.id);
+
+  assert.equal(project.intake.targetAudience, secondHyp.audienceLabel);
+  assert.equal(project.charter.targetAudience, secondHyp.audienceLabel);
+  assert.equal(project.intake.expertise, '');
+  assert.equal(project.intake.creatorName, '');
+});
+
+test('15. Legacy project migration preserves live/manual/import observations, attachment hashes & Gate B cards while quarantining OBS-01..05 demos', async () => {
+  const { migrateProjectSchema } = await import('./projectMigration.ts');
+  const legacyPayload = {
+    schemaVersion: '3.0',
+    projectId: 'proj_legacy_1',
+    name: 'Legacy Workspace',
+    preferences: { automationMode: 'selection_autopilot', autoApproveNonCritical: true },
+    marketResearch: {
+      platformEvidence: [
+        {
+          id: 'OBS-01',
+          marketplace: 'Amazon Kindle',
+          category: 'Cookbooks',
+          productTitle: 'Sample Cookbook',
+          sellerOrAuthor: 'Demo Author',
+          productURL: 'https://www.amazon.com/s?k=demo',
+          currentPrice: 9.99,
+          currency: 'USD',
+          observedRank: 4,
+          productFormat: 'Kindle',
+          observedAt: '2026-11-01',
+          evidenceLevel: 'VERIFIED_RANKING',
+          dataLimitations: 'Illustrative sample fixture only.',
+        },
+        {
+          id: 'MAN-REAL-1',
+          marketplace: 'NYT Best Sellers',
+          category: 'Personal Finance',
+          productTitle: 'Real Manual NYT Note',
+          sellerOrAuthor: 'Author A',
+          productURL: 'https://www.nytimes.com/books/best-sellers/2026/11/15/advice-how-to-and-miscellaneous/',
+          sourceURL: 'https://www.nytimes.com/books/best-sellers/2026/11/15/advice-how-to-and-miscellaneous/',
+          currentPrice: 0,
+          currency: 'USD',
+          productFormat: 'Print & Ebook',
+          observedAt: '2026-11-15',
+          dataAsOfDate: '2026-11-15',
+          evidenceExcerpt: 'Explicit real manual observation preserved during schema upgrade.',
+          excerptLocator: 'Advice List #3',
+          attachmentHash: 'sha256_preserved_hash',
+          acquisitionMethod: 'file_import',
+          reviewStatus: 'manually_reviewed',
+          reviewedAt: '2026-11-16T00:00:00.000Z',
+          reviewerRationale: 'Verified real NYT archive entry retained across migration.',
+          evidenceLevel: 'PUBLIC_MARKET_INDEX',
+          dataLimitations: 'Combined print and ebook list.',
+        },
+      ],
+    },
+    referenceLibrary: {
+      cards: [{ id: 'REF-01', sourceTitle: 'Academic Paper' }],
+    },
+  };
+
+  const migrated = migrateProjectSchema(legacyPayload);
+  assert.equal(migrated.schemaVersion, '4.0');
+  assert.equal(migrated.preferences.automationMode, 'manual_review');
+  assert.equal(migrated.preferences.autoApproveNonCritical, false);
+  assert.equal(migrated.marketResearch.resourceDirectory?.length, 9);
+  assert.equal(migrated.referenceLibrary.cards.length, 1);
+
+  const obsSample = migrated.marketResearch.platformEvidence.find((o) => o.id === 'OBS-01')!;
+  const obsReal = migrated.marketResearch.platformEvidence.find((o) => o.id === 'MAN-REAL-1')!;
+  assert.equal(obsSample.isSample, true);
+  assert.equal(obsSample.reviewStatus, 'unverified');
+  assert.equal(obsReal.isSample, false);
+  assert.equal(obsReal.attachmentHash, 'sha256_preserved_hash');
+  assert.equal(obsReal.acquisitionMethod, 'file_import');
+  assert.equal(obsReal.reviewStatus, 'manually_reviewed');
+  assert.ok(obsReal.reviewedEvidenceHash);
+});
+

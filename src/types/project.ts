@@ -108,6 +108,23 @@ export interface GateAResourceEntry {
   collectionMethod: ResourceCollectionMethod;
 }
 
+export interface ObservationReviewAssessment {
+  establishes: string;
+  dateScopeProductMatch: 'exact_match' | 'partial_scope_match' | 'mismatch';
+  metricNature: 'observed' | 'reported' | 'estimated';
+  limitationsSummary: string;
+  liveRetrievalUnavailableDisclosed?: boolean;
+}
+
+export interface ObservationReviewHistoryEntry {
+  timestamp: string;
+  status: MarketReviewStatus;
+  outcome: 'accepted' | 'qualified' | 'rejected' | 'blocked' | 'invalidated';
+  rationale: string;
+  evidenceVersionHash: string;
+  establishes?: string;
+}
+
 export interface MarketplaceObservation {
   isSample?: boolean;
   priceKnown?: boolean;
@@ -127,6 +144,7 @@ export interface MarketplaceObservation {
     | 'Keepa'
     | 'Google Trends'
     | 'Other Research Source';
+  publisher?: string;
   country?: string;
   category: string;
   productTitle: string;
@@ -148,13 +166,22 @@ export interface MarketplaceObservation {
   retrievedAt?: string;
   excerptLocator?: string;
   evidenceAttachmentRef?: string;
+  attachmentHash?: string;
+  importFileName?: string;
+  importRowNumber?: number;
+  rawImportedPayload?: Record<string, unknown>;
   collectionMethodology?: string;
   keepaProvenance?: 'historical' | 'estimated' | 'subscription_only' | 'authorized_api' | 'not_applicable';
   evidenceChainId?: string;
+  evidenceVersionHash?: string;
+  reviewedEvidenceHash?: string;
   sourceClass?: MarketSourceClass;
   acquisitionMethod?: MarketAcquisitionMethod;
   evidenceType?: MarketEvidenceType;
   reviewStatus?: MarketReviewStatus;
+  reviewOutcome?: 'accepted' | 'qualified' | 'rejected' | 'blocked';
+  reviewAssessment?: ObservationReviewAssessment;
+  reviewHistory?: ObservationReviewHistoryEntry[];
   reviewerRationale?: string;
   reviewedAt?: string;
   evidenceLevel: 'VERIFIED_RANKING' | 'FEATURED_COLLECTION' | 'SEARCH_RESULT' | 'SELLER_CLAIM' | 'PUBLIC_MARKET_INDEX';
@@ -202,10 +229,52 @@ export interface CandidateProductSuitability {
   nextValidationStep: string;
 }
 
+export type MultiSourceStatus =
+  | 'REVIEWED_MULTI_SOURCE'
+  | 'SINGLE_SOURCE'
+  | 'NEEDS_EVIDENCE';
+
+export type EvidenceRelationshipKind =
+  | 'corroborates'
+  | 'complements'
+  | 'contradicts'
+  | 'duplicates_dataset'
+  | 'standalone';
+
+export interface CandidateEvidenceComparisonRow {
+  observationId: string;
+  productTitle: string;
+  marketplace: string;
+  sourceURL: string;
+  dataAsOfDate: string;
+  evidenceChainId: string;
+  sourceClass: MarketSourceClass;
+  acquisitionMethod: MarketAcquisitionMethod;
+  evidenceType: MarketEvidenceType;
+  reviewState: 'valid_live' | 'valid_manual' | 'stale_review' | 'unverified' | 'rejected_blocked';
+  supports: string;
+  cannotEstablish: string;
+  relationship: EvidenceRelationshipKind;
+  sharesDatasetWithIds: string[];
+  conflictOrLimitationNote: string;
+}
+
+export interface AudienceTopicHypothesis {
+  id: string;
+  audienceLabel: string;
+  productAngle: string;
+  evidenceBasis: string;
+  uncertainty: string;
+}
+
 export interface TopicCandidate {
   marketCategory?: string;
   evidenceStatus?: 'CURRENT_CHART' | 'REVIEWED_FALLBACK' | 'SAMPLE';
   evidenceLabel?: CandidateEvidenceLabel;
+  multiSourceStatus?: MultiSourceStatus;
+  evidenceComparison?: CandidateEvidenceComparisonRow[];
+  audienceTopicHypotheses?: AudienceTopicHypothesis[];
+  selectedAudienceHypothesisId?: string;
   evidenceStrength?: CandidateEvidenceStrength;
   productSuitability?: CandidateProductSuitability;
   factorAssessments?: ScoreFactorAssessment[];

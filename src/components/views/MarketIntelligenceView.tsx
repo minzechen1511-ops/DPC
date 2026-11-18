@@ -34,11 +34,15 @@ import {
   isReviewedFallbackEvidence,
   observationCategory,
 } from '../../utils/marketDiscoveryEngine.ts';
-import { inferObservationDefaults } from '../../utils/manualEvidenceReview.ts';
+import {
+  isObservationReviewStale,
+  inferObservationDefaults,
+} from '../../utils/manualEvidenceReview.ts';
 import { gateIssues } from '../../utils/gatePolicy.ts';
 import { ScoreSpectrumBars } from '../ScientificVisuals.tsx';
 import { ResourceDirectoryPanel } from '../market/ResourceDirectoryPanel.tsx';
 import { ManualEvidenceReviewPanel } from '../market/ManualEvidenceReviewPanel.tsx';
+import { EvidenceLedgerTable, MultiSourceMatrix, multiSourceStatusMeta } from '../market/MultiSourceMatrix.tsx';
 
 export type MarketTabId = 'directory' | 'manual' | 'signals' | 'niches';
 
@@ -51,6 +55,7 @@ interface MarketIntelligenceViewProps {
   onRefreshResearch?: () => void | Promise<void>;
   onCheckResources?: () => void | Promise<void>;
   onAddManualObservation?: (obs: MarketplaceObservation) => void;
+  onEditObservation?: (obs: MarketplaceObservation) => void;
   onImportObservations?: (obsList: MarketplaceObservation[]) => void;
   onReviewObservation?: (obs: MarketplaceObservation) => void;
   onDeleteObservation?: (obsId: string) => void;
@@ -60,7 +65,7 @@ interface MarketIntelligenceViewProps {
     focusMarketplace?: string;
     searchQuery?: string;
   }) => void;
-  onSelectTopic?: (topicId: string) => void;
+  onSelectTopic?: (topicId: string, selectedAudienceHypothesisId?: string) => void;
   onApproveGateA?: () => void;
   initialTab?: MarketTabId;
   lang?: Language;
@@ -75,6 +80,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
   onRefreshResearch,
   onCheckResources,
   onAddManualObservation,
+  onEditObservation,
   onImportObservations,
   onReviewObservation,
   onDeleteObservation,
@@ -93,6 +99,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
   const gateAApproved = Boolean(workflow?.gates?.gateA?.isApproved) && blockers.length === 0;
 
   const [activeTab, setActiveTab] = useState<MarketTabId>(initialTab);
+  const [ledgerViewMode, setLedgerViewMode] = useState<'table' | 'cards'>('table');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedMarketplace, setSelectedMarketplace] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -101,16 +108,24 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [prefillResource, setPrefillResource] = useState<GateAResourceEntry | null>(null);
   const [focusedObsId, setFocusedObsId] = useState<string | null>(null);
+  const [draftAudienceByTopic, setDraftAudienceByTopic] = useState<Record<string, string>>({});
 
   const autoScannedRef = useRef<boolean>(false);
   const realObservations = observations.filter((o) => !o.isSample);
   const liveChartCount = realObservations.filter((o) => isCurrentMarketEvidence(o)).length;
   const reviewedFallbackCount = realObservations.filter((o) => isReviewedFallbackEvidence(o)).length;
+  const staleReviewCount = realObservations.filter((o) => isObservationReviewStale(o)).length;
   const unverifiedRealCount = realObservations.filter((o) => {
     const st = inferObservationDefaults(o).reviewStatus;
-    return !isGateAQualifiedEvidence(o) && st !== 'rejected' && st !== 'blocked';
+    return !isGateAQualifiedEvidence(o) && st !== 'rejected' && st !== 'blocked' && !isObservationReviewStale(o);
   }).length;
   const sampleCount = observations.filter((o) => o.isSample).length;
+
+  const resourceDir = marketResearch?.resourceDirectory || [];
+  const accessibleResources = resourceDir.filter((r) => r.accessStatus === 'accessible' || r.accessStatus === 'redirected').length;
+  const retrievedCount = realObservations.filter((o) => Boolean(o.retrievedAt) || Boolean(o.evidenceAttachmentRef)).length;
+  const extractedCount = realObservations.length;
+  const reviewedQualifiedCount = liveChartCount + reviewedFallbackCount;
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -385,6 +400,11 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
             <span className="bg-teal-50 text-teal-800 border border-teal-200 px-2.5 py-1 rounded-lg font-bold">
               {reviewedFallbackCount} {lang === 'en' ? 'manually reviewed' : '筆人工覆核'}
             </span>
+            {staleReviewCount > 0 && (
+              <span className="bg-amber-100 text-amber-950 border border-amber-300 px-2.5 py-1 rounded-lg font-bold">
+                {staleReviewCount} {lang === 'en' ? 'stale review' : '筆過期重審'}
+              </span>
+            )}
             {unverifiedRealCount > 0 && (
               <span className="bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-1 rounded-lg font-semibold">
                 {unverifiedRealCount} {lang === 'en' ? 'unverified' : '筆待覆核'}
@@ -404,6 +424,49 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
               {showSourcesPanel ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
           </div>
+        </div>
+
+        {/* 5-State Workflow Progression Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 text-xs">
+          {[
+            {
+              step: '1. Resource Available',
+              detail: `${accessibleResources}/${resourceDir.length || 9} reachable`,
+              done: accessibleResources > 0,
+            },
+            {
+              step: '2. Page Retrieved',
+              detail: `${retrievedCount} captured/attached`,
+              done: retrievedCount > 0,
+            },
+            {
+              step: '3. Observation Extracted',
+              detail: `${extractedCount} structured row(s)`,
+              done: extractedCount > 0,
+            },
+            {
+              step: '4. Evidence Reviewed',
+              detail: `${reviewedQualifiedCount} qualified`,
+              done: reviewedQualifiedCount > 0,
+            },
+            {
+              step: '5. Topic Approved',
+              detail: gateAApproved ? 'Gate A Approved' : 'Explicit Choice Pending',
+              done: gateAApproved,
+            },
+          ].map((item) => (
+            <div
+              key={item.step}
+              className={`px-3 py-2 rounded-xl border ${
+                item.done
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}
+            >
+              <div className="font-semibold truncate">{item.step}</div>
+              <div className="font-mono text-[11px] opacity-85 truncate tabular-nums">{item.detail}</div>
+            </div>
+          ))}
         </div>
 
         {/* Collapsible Live Collector Diagnostics */}
@@ -527,6 +590,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
           prefillResource={prefillResource}
           focusedObservationId={focusedObsId}
           onAddObservation={(obs) => onAddManualObservation?.(obs)}
+          onEditObservation={(obs) => onEditObservation?.(obs)}
           onImportObservations={(list) => onImportObservations?.(list)}
           onReviewObservation={(obs) => onReviewObservation?.(obs)}
           onDeleteObservation={onDeleteObservation}
@@ -555,15 +619,38 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
               ))}
             </div>
 
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.searchMarketplacePlaceholder}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-slate-300 rounded-xl bg-white"
-              />
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <div className="flex items-center p-1 bg-slate-100 rounded-lg text-xs shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setLedgerViewMode('table')}
+                  className={`px-2.5 py-1 rounded-md font-semibold ${
+                    ledgerViewMode === 'table' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
+                  }`}
+                >
+                  {lang === 'en' ? 'Table' : '表格'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLedgerViewMode('cards')}
+                  className={`px-2.5 py-1 rounded-md font-semibold ${
+                    ledgerViewMode === 'cards' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
+                  }`}
+                >
+                  {lang === 'en' ? 'Cards' : '卡片'}
+                </button>
+              </div>
+
+              <div className="relative flex-1 sm:w-72">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.searchMarketplacePlaceholder}
+                  className="w-full pl-10 pr-4 py-2 text-sm border border-slate-300 rounded-xl bg-white"
+                />
+              </div>
             </div>
           </div>
 
@@ -618,6 +705,13 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                 </button>
               </div>
             </div>
+          ) : ledgerViewMode === 'table' ? (
+            <EvidenceLedgerTable
+              observations={filteredObservations}
+              onInspectObservation={openManualReviewForObservation}
+              onPrioritizeSignal={handlePrioritizeSignal}
+              lang={lang}
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
               {filteredObservations.map((obs) => {
@@ -841,6 +935,11 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                   const allLinked = observations.filter((o) => topic.sourceObservationIds.includes(o.id));
                   const evStrength = topic.evidenceStrength;
                   const suitability = topic.productSuitability;
+                  const multiMeta = multiSourceStatusMeta(topic.multiSourceStatus, lang);
+                  const chosenHypothesisId =
+                    draftAudienceByTopic[topic.id] ||
+                    topic.selectedAudienceHypothesisId ||
+                    topic.audienceTopicHypotheses?.[0]?.id;
 
                   return (
                     <div
@@ -857,6 +956,9 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${evLabel.cls}`}>
                               {evLabel.label}
+                            </span>
+                            <span className={`text-xs font-mono font-semibold px-2.5 py-1 rounded-md border ${multiMeta.cls}`}>
+                              {multiMeta.label}
                             </span>
                             {badgeInfo && (
                               <span
@@ -885,7 +987,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
 
                             <button
                               type="button"
-                              onClick={() => onSelectTopic?.(topic.id)}
+                              onClick={() => onSelectTopic?.(topic.id, chosenHypothesisId)}
                               className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all inline-flex items-center gap-1.5 ${
                                 isSelected
                                   ? 'bg-emerald-600 text-white'
@@ -1009,6 +1111,52 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                           lang={lang}
                         />
 
+                        {/* Plausible Audience-Topic Combinations (Unapproved Hypotheses Until Chosen) */}
+                        {topic.audienceTopicHypotheses && topic.audienceTopicHypotheses.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                              {lang === 'en'
+                                ? 'Plausible Audience-Topic Hypotheses (Select Angle for Project Brief)'
+                                : '潛在受眾與切角假設（供人工挑選並帶入專案簡報）'}
+                            </div>
+                            <div className="grid grid-cols-1 gap-2">
+                              {topic.audienceTopicHypotheses.map((hyp) => {
+                                const activeHyp = chosenHypothesisId === hyp.id;
+                                return (
+                                  <label
+                                    key={hyp.id}
+                                    className={`p-3 rounded-xl border text-xs cursor-pointer transition-colors flex items-start gap-2.5 ${
+                                      activeHyp
+                                        ? 'border-indigo-600 bg-indigo-50/40'
+                                        : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`audience-${topic.id}`}
+                                      checked={activeHyp}
+                                      onChange={() => {
+                                        setDraftAudienceByTopic((prev) => ({ ...prev, [topic.id]: hyp.id }));
+                                        if (isSelected) {
+                                          onSelectTopic?.(topic.id, hyp.id);
+                                        }
+                                      }}
+                                      className="mt-0.5"
+                                    />
+                                    <div className="space-y-0.5">
+                                      <div className="font-bold text-slate-900">{hyp.audienceLabel}</div>
+                                      <div className="text-slate-700">{hyp.productAngle}</div>
+                                      <div className="text-[11px] text-slate-500">
+                                        {hyp.evidenceBasis} · <span className="text-amber-900">{hyp.uncertainty}</span>
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Research Gap Note */}
                         {topic.researchGapNote && (
                           <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-lg">
@@ -1017,7 +1165,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                           </div>
                         )}
 
-                        {/* Expand / Collapse Rubric & Evidence Trail */}
+                        {/* Expand / Collapse Rubric & Multi-Source Comparison */}
                         <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                           <span className="text-xs text-slate-600 inline-flex items-center gap-1.5 font-medium">
                             <Layers className="w-4 h-4 text-teal-600" />
@@ -1034,11 +1182,11 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                             <span>
                               {isExpanded
                                 ? lang === 'en'
-                                  ? 'Hide Rubric & Linked Observations'
-                                  : '收合細項評估與連結證據'
+                                  ? 'Hide Matrix, Rubric & Observations'
+                                  : '收合比對矩陣與實證細節'
                                 : lang === 'en'
-                                ? 'View Factor Rubric & Linked Evidence'
-                                : '查看指標拆解與連結實證'}
+                                ? 'View Multi-Source Matrix & Rubric'
+                                : '查看多來源比對矩陣與指標'}
                             </span>
                             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </button>
@@ -1046,6 +1194,13 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
 
                         {isExpanded && (
                           <div className="pt-4 border-t border-slate-100 space-y-4">
+                            <MultiSourceMatrix
+                              multiSourceStatus={topic.multiSourceStatus}
+                              rows={topic.evidenceComparison || []}
+                              onInspectObservation={openManualReviewForObservation}
+                              lang={lang}
+                            />
+
                             {topic.factorAssessments && topic.factorAssessments.length > 0 && (
                               <div className="overflow-x-auto border border-slate-200 rounded-xl">
                                 <table className="w-full text-left text-xs">
