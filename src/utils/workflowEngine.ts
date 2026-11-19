@@ -20,27 +20,27 @@ export const STAGE_ORDER: StageId[] = [
 
 export const STAGE_METADATA_EN: Record<StageId, { title: string; subtitle: string; icon: string }> = {
   market_research: {
-    title: '1. Market Research',
+    title: '1. Topic Discovery',
     subtitle: 'Inspectable research directory, live chart collectors, & manual evidence review',
     icon: 'TrendingUp',
   },
   topic_selection: {
-    title: '2. Topic Selection (Gate A)',
+    title: '1. Topic Discovery',
     subtitle: 'Evidence-linked niche proposals, separated evidence strength vs suitability, & Gate A approval',
     icon: 'Sparkles',
   },
   project_brief: {
-    title: '3. Recommended Project Brief',
-    subtitle: 'Creator background, audience pain points, brand voice & negative constraints',
+    title: '2. Recommended Project Brief',
+    subtitle: 'Recommended concept, audience hypothesis, outcome, format, boundaries and pricing assumptions',
     icon: 'FileText',
   },
   uvz: {
-    title: '4. Unique Value Zone (UVZ)',
-    subtitle: 'Skills convergence, commercial viability & 3 positioning options',
+    title: '3. Unique Value Zone (UVZ)',
+    subtitle: 'Three suggested positioning options; explicitly choose or edit before use',
     icon: 'Target',
   },
   transformation_map: {
-    title: '5. Transformation Map',
+    title: '4. Transformation Map',
     subtitle: 'Before current pain, Bridge practical action, After concrete milestones',
     icon: 'GitFork',
   },
@@ -93,27 +93,27 @@ export const STAGE_METADATA_EN: Record<StageId, { title: string; subtitle: strin
 
 export const STAGE_METADATA_ZH: Record<StageId, { title: string; subtitle: string; icon: string }> = {
   market_research: {
-    title: '1. 市場研究 (Market Research)',
+    title: '1. 題材探索',
     subtitle: '公開研究資源目錄、即時榜單採集與人工證據審查作業',
     icon: 'TrendingUp',
   },
   topic_selection: {
-    title: '2. 選題評估與核准 (Gate A)',
+    title: '1. 題材探索',
     subtitle: '證據連結選題、證據強度與產品適配拆解及 Gate A 人工核准',
     icon: 'Sparkles',
   },
   project_brief: {
-    title: '3. 推薦專案簡報',
-    subtitle: '創作者背景、受眾痛點、品牌聲音與排他邊界',
+    title: '2. 推薦專案簡報',
+    subtitle: '推薦概念、受眾假設、成果、形式、邊界與定價假設',
     icon: 'FileText',
   },
   uvz: {
-    title: '4. 獨特價值區 (UVZ)',
-    subtitle: '技能交集、商業可行性與三種市場定位方案',
+    title: '3. 獨特價值區（UVZ）',
+    subtitle: '三個定位建議，採用前請明確選擇或編輯',
     icon: 'Target',
   },
   transformation_map: {
-    title: '5. 客戶轉變地圖 (Transformation)',
+    title: '4. 轉變地圖',
     subtitle: 'Before 現況痛點、Bridge 實作橋樑、After 具體里程碑',
     icon: 'GitFork',
   },
@@ -185,9 +185,7 @@ export function checkStagePrerequisites(
       return { canRun: true };
 
     case 'topic_selection':
-      if (marketResearch.topicCandidates.length === 0) {
-        return { canRun: false, reason: '需先取得市場情報分析以產生候選題材。' };
-      }
+      // Topic Discovery includes scanning and manual evidence before a topic exists.
       return { canRun: true };
 
     case 'project_brief':

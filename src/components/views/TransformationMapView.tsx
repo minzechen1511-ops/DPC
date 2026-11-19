@@ -1,6 +1,6 @@
 import { generationError } from '../../utils/gateAJourney.ts';
 import { gateAJourneyText } from '../../utils/i18n.ts';
-import { gateAApproved, selectedPositioning, usableMap } from '../../utils/gateAJourney.ts';
+import { gateAApproved, selectedPositioning, usableMap, mapDraftReady } from '../../utils/gateAJourney.ts';
 import React, { useMemo, useState } from 'react';
 import { GitFork, Plus, Edit3, Save, X, Sparkles, RefreshCw, Compass } from 'lucide-react';
 import { DigitalProductProject, TransformationMap } from '../../types/project.ts';
@@ -77,6 +77,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
   const handleSynthesizeMap = async (titlesOnly = false) => {
     if (aiBusy) return;
     if (!gateAApproved(project) || !selectedPositioning(project) || aiBusy) return;
+    if (titlesOnly && (!mapDraftReady(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW')) return;
     setAiBusy(titlesOnly ? 'titles' : 'full');
     setAiError('');
     setAiSuccess('');
@@ -98,7 +99,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
       const updatedMap = titlesOnly
         ? parseTitleOptionsResponse(res?.content || '', transformationMap)
         : parseTransformationSynthesisResponse(res?.content || '', transformationMap);
-      onUpdateTransformationMap(updatedMap);
+      onUpdateTransformationMap({...updatedMap, selectedTitleId: ''});
       setEditingMap(false);
       setAiSuccess(
         titlesOnly
@@ -220,18 +221,22 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
             type="button"
             disabled={Boolean(aiBusy) || !gateAApproved(project) || !selectedPositioning(project)}
             onClick={() => {
-              if (!usableMap(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW') {void handleSynthesizeMap(false); return;}
+              if (!mapDraftReady(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW') {void handleSynthesizeMap(false); return;}
+              const title = transformationMap.titleOptions.find(item => item.id === transformationMap.selectedTitleId) || transformationMap.titleOptions.find(item => item.isRecommended) || transformationMap.titleOptions[0];
+              if (!title) return;
+              onSelectTitle(title.id);
               setActiveView('reference_library');
             }}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
-            <span>{!usableMap(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW' ? journey.generateMap : journey.continueMap}</span>
+            <span>{!mapDraftReady(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW' ? journey.generateMap : !usableMap(project) ? (lang === 'en' ? 'Use suggested title & continue' : '採用建議書名並繼續') : journey.continueMap}</span>
           </button>
         </div>
       </div>
 
       <p className="text-sm text-slate-700">{lang === 'en' ? `Carried forward: ${selectedPositioning(project)?.name || 'select a UVZ option first'}. The map turns that positioning into Before → Bridge → After and editable title/subtitle options. Reference Library will collect and review sources for these intended outcomes.` : `已承接：${selectedPositioning(project)?.name || '請先選擇 UVZ 方案'}。此步將定位轉為 Before → Bridge → After 與可編輯書名／副標題；接著前往來源研究庫，蒐集並審查支持這些目標的證據。`}</p>
       <div aria-live="polite">{aiBusy && <p role="status" className="text-sm text-teal-900">{lang === 'en' ? 'Generating a draft… Existing work is retained until this request succeeds.' : '正在生成草稿… 請求成功前會保留現有內容。'}</p>}{aiError && <p role="alert" className="p-3 text-sm rounded-lg bg-rose-50 text-rose-900">{aiError} {lang === 'en' ? 'Your previous draft is retained. Retry the generation action.' : '已保留原草稿，請重試生成。'}</p>}</div>
+      {titleOptions.length > 0 && project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW' && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{lang === 'en' ? 'Positioning or brief changed. The map below is an older draft. Regenerate it, or edit and save the matrix for the current context before using a title and continuing.' : '定位或簡報已變更，下方地圖為舊草稿。請重新生成，或依目前脈絡編輯並儲存矩陣，再採用書名並繼續。'}</p>}
       <details><summary className="cursor-pointer font-semibold text-teal-800 p-3 focus-visible:outline-2">{lang === 'en' ? 'Optional AI settings and regeneration' : '選用 AI 設定與重新生成'}</summary>
       {/* Guided Automated Synthesis Panel */}
       <div className="lab-panel p-6 lg:p-7 space-y-5 bg-gradient-to-br from-white via-teal-50/20 to-indigo-50/25">
@@ -307,7 +312,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
           <div className="flex flex-wrap gap-2.5 shrink-0">
             <button
               type="button"
-              disabled={Boolean(aiBusy)}
+              disabled={Boolean(aiBusy) || !mapDraftReady(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW'}
               onClick={() => handleSynthesizeMap(true)}
               className="px-4 py-3 text-sm font-semibold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-60"
             >
@@ -380,8 +385,8 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center space-y-3">
             <p className="text-sm text-slate-700 max-w-2xl mx-auto">
               {lang === 'en'
-                ? 'Click "Synthesize Full Map & Titles" or "Generate 3 Title Ideas Only" above so AI proposes commercial titles & subtitles grounded in your niche.'
-                : '目前尚未生成書名候選。請點擊上方「生成完整轉變地圖與書名」或「僅重新生成 3 組書名」，讓 AI 自動產出高吸引力書名。'}
+                ? 'Use “Generate map & title options” to draft Before → Bridge → After from your selected UVZ, or edit the matrix and add a title manually.'
+                : '請使用「生成轉變地圖與書名選項」，依所選 UVZ 起草 Before → Bridge → After，或手動編輯矩陣並新增書名。'}
             </p>
 
           </div>
@@ -394,6 +399,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
                   key={item.id}
                   type="button"
                   onClick={() => onSelectTitle(item.id)}
+                  disabled={Boolean(aiBusy) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW'}
                   className={`p-5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
                     isSelected
                       ? 'border-indigo-600 bg-indigo-50/25 ring-2 ring-indigo-500/20 shadow-xs'
@@ -405,7 +411,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
                       <span className="text-xs font-mono font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">{item.id}</span>
                       {item.isRecommended && (
                         <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                          {lang === 'en' ? 'Recommended' : '推薦'}
+                          {lang === 'en' ? 'Suggested · review before use' : '建議 · 採用前請審閱'}
                         </span>
                       )}
                     </div>

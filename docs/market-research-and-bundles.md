@@ -33,7 +33,7 @@ Gate A separates **A. Evidence Strength** (credibility, recency, scope fit, and 
 
 - **Multi-Source Status**: Candidates require `>= 2` independent, non-stale qualified chains (`evidenceChainId`) to earn `Reviewed Multi-Source`; 1 chain reports `Single-Source Evidence`; 0 chains reports `Needs Evidence`.
 - **Comparison Matrix**: Displays supporting, complementary, contradictory, stale, unverified, and dataset-duplicated records together per domain, explicitly disclosing when ranking and interest signals complement each other without measuring unit sales.
-- **Audience-Topic Hypotheses**: Presents 2–3 plausible target audience angles with uncertainties so the creator explicitly selects one hypothesis for Stage 3 without fabricating creator expertise.
+- **Audience-Topic Hypotheses**: Presents 2–3 plausible target audience angles with uncertainties so the creator explicitly selects one hypothesis for the recommended brief in the four-step setup without fabricating creator expertise.
 
 ## Review Chain, Migration & Bundles
 

@@ -1,5 +1,7 @@
 # Gate A journey revision
 
+Historical five-step implementation report. The current four-step UX supersedes its navigation and is documented in [Topic Discovery setup](TOPIC-DISCOVERY-SETUP.md). Earlier test results below describe that earlier revision.
+
 Inspected: 2026-11-19 (UTC+8), `minzechen1511-ops/DPC`, latest fetched `main` at `fd118431dc9c62a2d424a750a4ed93d01e619645`.
 
 Work is isolated in branch `codex/gate-a-journey`, worktree `DPC-gate-a`. The existing `DPC` worktree on `codex/release-acceptance-audit` contained substantial uncommitted changes; it was neither reset nor overwritten. No PR was created. This revision does not change later-stage designs or CI configuration.

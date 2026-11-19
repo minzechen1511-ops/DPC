@@ -93,20 +93,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const getNextRecommendedStep = (): { id: NavigationItem; label: string } => {
     const gates = project.workflow.gates;
-    const statuses = project.workflow.stageStatuses;
     const journeyNext = gateAJourney(project).next;
     const journeyIndex = GATE_A_STEPS.indexOf(journeyNext as any);
     if (journeyIndex >= 0) {
       return {id: journeyNext as NavigationItem, label: `${journeyIndex + 1}. ${gateAJourneyText[lang].steps[journeyIndex]}`};
-    }
-    if ((project.marketResearch?.platformEvidence || []).length === 0) {
-      return { id: 'market_research', label: lang === 'en' ? '1. Gather Market Evidence' : '1. 蒐集市場證據' };
-    }
-    if (!gates.gateA.isApproved || !project.marketResearch.selectedTopicId) {
-      return { id: 'topic_selection', label: lang === 'en' ? '2. Pick Niche (Gate A)' : '2. 選題核准 (Gate A)' };
-    }
-    if (statuses.project_brief !== 'COMPLETED') {
-      return { id: 'project_brief', label: lang === 'en' ? '3. 13-Field Brief' : '3. 13項專案設定' };
     }
     if (!gates.gateB.isApproved) {
       const hasRefs = (project.referenceLibrary.cards || []).some(isRetrievedSource);
@@ -139,7 +129,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       group: t.groupResearch,
       items: [
-        { id: 'market_research', label: t.navMarketResearch, icon: TrendingUp, isStage: true },
         { id: 'topic_selection', label: t.navTopicSelection, icon: Sparkles, isStage: true },
         { id: 'project_brief', label: t.navProjectBrief, icon: FileText, isStage: true },
         { id: 'uvz', label: t.navUvz, icon: Target, isStage: true },

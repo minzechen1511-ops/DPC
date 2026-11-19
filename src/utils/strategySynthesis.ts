@@ -207,8 +207,6 @@ export function parseUvzSynthesisResponse(
     normalizedOptions[0].isRecommended = true;
   }
 
-  const recommended = normalizedOptions.find((o) => o.isRecommended) || normalizedOptions[0];
-
   return {
     buyerProblems: cleanStringArray(parsed.buyerProblems, existingUvz?.buyerProblems || []),
     potentialSolutions: cleanStringArray(parsed.potentialSolutions, existingUvz?.potentialSolutions || []),
@@ -221,7 +219,7 @@ export function parseUvzSynthesisResponse(
       existingUvz?.differentiationOpportunities || []
     ),
     positioningOptions: normalizedOptions,
-    selectedOptionId: recommended.id,
+    selectedOptionId: '', // Generated suggestions require an explicit creator choice.
   };
 }
 
@@ -338,12 +336,10 @@ export function parseTitleOptionsResponse(
     normalizedTitles[0].isRecommended = true;
   }
 
-  const recommended = normalizedTitles.find((t) => t.isRecommended) || normalizedTitles[0];
-
   return {
     ...existingMap,
     titleOptions: normalizedTitles,
-    selectedTitleId: recommended.id,
+    selectedTitleId: '',
   };
 }
 
@@ -360,6 +356,10 @@ export function parseTransformationSynthesisResponse(
   const rawBridge = parsed.bridgeProcess && typeof parsed.bridgeProcess === 'object' ? parsed.bridgeProcess : {};
   const rawAfter = parsed.afterState && typeof parsed.afterState === 'object' ? parsed.afterState : {};
 
+  if (!cleanStringArray(rawBefore.currentPains).length || !cleanStringArray(rawBridge.keyMilestones).length || !cleanStringArray(rawAfter.tangibleOutcomes).length) {
+    throw new Error('AI response omitted required Before / Bridge / After milestones. Existing draft retained; retry generation.');
+  }
+
   const rawTitles = Array.isArray(parsed.titleOptions) ? parsed.titleOptions : [];
   const normalizedTitles = rawTitles
     .filter((item: any) => item && item.title)
@@ -372,7 +372,7 @@ export function parseTransformationSynthesisResponse(
       isRecommended: Boolean(item.isRecommended),
     }));
 
-  if (normalizedTitles.length === 0 && (!existingMap?.titleOptions || existingMap.titleOptions.length === 0)) {
+  if (normalizedTitles.length === 0) {
     throw new Error('AI response did not include valid transformation pillars or title options.');
   }
 
@@ -381,7 +381,6 @@ export function parseTransformationSynthesisResponse(
   if (finalTitles.length > 0 && !finalTitles.some((t) => t.isRecommended)) {
     finalTitles[0] = { ...finalTitles[0], isRecommended: true };
   }
-  const recommendedTitle = finalTitles.find((t) => t.isRecommended) || finalTitles[0];
 
   const base: TransformationMap = {
     beforeState: {
@@ -430,7 +429,7 @@ export function parseTransformationSynthesisResponse(
       ),
     },
     titleOptions: finalTitles,
-    selectedTitleId: recommendedTitle?.id || existingMap?.selectedTitleId || '',
+    selectedTitleId: '',
     bigPromise: String(parsed.bigPromise ?? '').trim() || existingMap?.bigPromise || '',
     uniqueSellingProposition:
       String(parsed.uniqueSellingProposition ?? '').trim() ||

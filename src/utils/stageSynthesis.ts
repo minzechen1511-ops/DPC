@@ -71,7 +71,7 @@ export function buildBriefSynthesisPrompt(
 UPSTREAM CONTEXT:
 - Selected Niche / Topic: ${ctx.topicTitle}
 - Current Subtitle / Hook: ${selectedTopic?.subtitle || project.charter?.subtitle || ''}
-- Creator / Brand: ${project.intake?.creatorName || project.brand?.profileName || 'Independent Creator'}
+- Creator / Brand: ${project.intake?.creatorName || 'Not provided — do not invent'}
 - Existing Audience Note: ${project.intake?.targetAudience || selectedTopic?.targetAudience || ''}
 - Existing Problem Note: ${project.intake?.problemsSolved || selectedTopic?.coreProblem || ''}
 - Product Format: ${ctx.productFormat}
@@ -124,7 +124,7 @@ export function parseBriefSynthesisResponse(
     relevantExperience:
       existingIntake.relevantExperience,
     expertise: existingIntake.expertise,
-    interests: String(parsed.interests ?? '').trim() || existingIntake.interests,
+    interests: existingIntake.interests,
     targetAudience: String(parsed.targetAudience ?? '').trim() || existingIntake.targetAudience,
     problemsSolved: String(parsed.problemsSolved ?? '').trim() || existingIntake.problemsSolved,
     productIdea: String(parsed.productIdea ?? '').trim() || existingIntake.productIdea,

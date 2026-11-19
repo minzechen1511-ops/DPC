@@ -103,7 +103,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
       });
       onRecordAiUsage?.(res?.usage, res?.model);
       const nextUvz = parseUvzSynthesisResponse(res?.content || '', uvz);
-      onUpdateUvz({...nextUvz, selectedOptionId: ''});
+      onUpdateUvz({...nextUvz, selectedOptionId: '', creatorExpertiseFit: !project.intake.expertise.trim() && !project.intake.relevantExperience.trim() ? (lang === 'en' ? 'Creator expertise is unknown. Topic evidence is not proof of creator-market fit; arrange qualified expert review for specialist claims.' : '創作者專業背景未知。題材證據不代表已證實創作者適配；專業主張需安排合格專家覆核。') : nextUvz.creatorExpertiseFit});
       setEditingProblems(false);
       setAiSuccess(
         lang === 'en'
@@ -191,11 +191,12 @@ export const UVZView: React.FC<UVZViewProps> = ({
             }}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
-            <span>{!options.length || project.workflow.stageStatuses.uvz === 'NEEDS_REVIEW' ? journey.generateUvz : journey.continueUvz}</span>
+            <span>{!options.length || project.workflow.stageStatuses.uvz === 'NEEDS_REVIEW' ? journey.generateUvz : options.some(option => option.id === uvz.selectedOptionId) ? (lang === 'en' ? 'Continue with selected positioning' : '使用所選定位並繼續') : journey.continueUvz}</span>
           </button>
         </div>
       </div>
 
+      {options.length > 0 && project.workflow.stageStatuses.uvz === 'NEEDS_REVIEW' && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{lang === 'en' ? 'The approved topic or brief changed. These positioning options are older drafts. Generate again or review/edit an option before explicitly choosing to use it.' : '核准題材或簡報已變更，下方定位為舊草稿。請重新生成，或審查／編輯方案後再明確選擇採用。'}</p>}
       <p className="text-sm text-slate-700">{lang === 'en' ? 'Uses your approved niche and available brief. Compare the recommendation, audience, promise, advantages and risks. Choose any option or add your own; no expertise or sales result is assumed.' : '承接已核准題材與現有簡報。請比較推薦理由、受眾、主張、優勢及風險；可任選方案或自訂，不預設專業能力或銷售成果。'}</p>
       <div aria-live="polite">{aiBusy && <p role="status" className="text-sm text-teal-900">{lang === 'en' ? 'Generating a draft… Existing work is retained until this request succeeds.' : '正在生成草稿… 請求成功前會保留現有內容。'}</p>}{aiError && <p role="alert" className="p-3 text-sm rounded-lg bg-rose-50 text-rose-900">{aiError} {lang === 'en' ? 'Your previous draft is retained. Retry the generation action.' : '已保留原草稿，請重試生成。'}</p>}</div>
       <details><summary className="cursor-pointer font-semibold text-teal-800 p-3 focus-visible:outline-2">{lang === 'en' ? 'Optional AI settings and regeneration' : '選用 AI 設定與重新生成'}</summary>
@@ -213,8 +214,8 @@ export const UVZView: React.FC<UVZViewProps> = ({
             </h2>
             <p className="text-xs text-slate-600 mt-1">
               {lang === 'en'
-                ? 'Unfamiliar with this niche? Select a strategic focus below and let Gemini analyze your Gate A niche + 13-Field Brief into 3 commercial positioning options, pain points, and differentiation angles.'
-                : '對所選主題還不夠熟悉？選擇下方策略切角並點擊生成，系統將根據 Gate A 市場題材與 13 項專案設定，自動推演 3 種商業定位、買家痛點與競爭差異化機會。'}
+                ? 'Optionally adjust the focus. Gemini uses the approved topic and available brief to draft three positioning options. Missing expertise remains a knowledge gap requiring review.'
+                : '可選擇調整策略切角。Gemini 將依核准題材與現有簡報生成三個定位草稿；未知的專業背景仍屬待審查的知識缺口。'}
             </p>
           </div>
           <span className="text-xs font-mono font-semibold text-teal-800 bg-teal-50 border border-teal-200 px-3 py-1 rounded-md shrink-0">
@@ -359,8 +360,8 @@ export const UVZView: React.FC<UVZViewProps> = ({
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center space-y-3">
             <p className="text-sm text-slate-700 max-w-2xl mx-auto">
               {lang === 'en'
-                ? 'No positioning options defined yet. Click "Generate UVZ Options & Pain Matrix" above to automatically create 3 positioning hypotheses requiring buyer validation tailored to your topic.'
-                : '目前尚未建立定位方案。請點擊上方「自動生成 3 種定位與痛點矩陣」，讓系統根據您的主題自動設計 3 種商業切角供您挑選。'}
+                ? 'Use “Generate 3 positioning options” to draft suggestions from your approved topic and brief, or add custom positioning. Each option still needs buyer validation.'
+                : '請使用「生成 3 個定位方案」，依核准題材與簡報起草建議，或新增自訂定位。每個方案仍需買家驗證。'}
             </p>
 
           </div>
@@ -382,7 +383,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
                       <span className="text-xs font-bold text-teal-800 font-mono bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-md">{opt.id}</span>
                       {opt.isRecommended && (
                         <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                          {lang === 'en' ? 'Recommended' : '推薦方案'}
+                          {lang === 'en' ? 'Suggested · review before use' : '建議 · 採用前請審閱'}
                         </span>
                       )}
                     </div>
@@ -553,7 +554,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
                   <span>{lang === 'en' ? 'Commercial Feasibility' : '商業變現可行性'}</span>
                 </div>
                 <p className="text-sm text-slate-700 leading-relaxed">
-                  {uvz?.commercialFeasibility || (lang === 'en' ? 'Run AI Synthesis to evaluate pricing ladder & demand fit.' : '執行 AI 分析後將顯示需求迫切度與套件定價變現評估。')}
+                  {uvz?.commercialFeasibility || (lang === 'en' ? 'Generate a draft to identify commercial assumptions and the buyer validation still needed.' : '生成草稿後將列出商業假設與仍需進行的買家驗證。')}
                 </p>
               </div>
 

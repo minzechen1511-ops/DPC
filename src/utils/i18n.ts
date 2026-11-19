@@ -2,8 +2,8 @@ export type Language = 'en' | 'zh';
 
 export const gateAJourneyText = {
   en: {
-    journey: 'Gate A journey · Market to product direction',
-    steps: ['Market Research', 'Topic Selection & Gate A', 'Recommended Project Brief', 'UVZ', 'Transformation Map'],
+    journey: 'Develop your product · Four-step setup',
+    steps: ['Topic Discovery', 'Recommended Project Brief', 'Unique Value Zone (UVZ)', 'Transformation Map'],
     current: 'Current', completed: 'Completed', blocked: 'Blocked · complete the previous decision', upcoming: 'Upcoming',
     control: 'AI prepares drafts. You select the niche and explicitly approve Gate A. No gate or evidence review is automatic.',
     continueBrief: 'Continue with this brief', continueUvz: 'Continue with recommendation',
@@ -14,8 +14,8 @@ export const gateAJourneyText = {
     noRunner: 'Per-stage AI assistance is available. Background generation and resumable guided jobs are not implemented. Saved drafts can be reopened; retry a failed stage without restarting the journey.',
   },
   zh: {
-    journey: 'Gate A 流程 · 從市場到產品方向',
-    steps: ['市場研究', '選題與 Gate A 核准', '推薦專案簡報', 'UVZ 定位', '轉變地圖'],
+    journey: '開發您的產品 · 四步驟設定',
+    steps: ['題材探索', '推薦專案簡報', '獨特價值區（UVZ）', '轉變地圖'],
     current: '目前階段', completed: '已完成', blocked: '尚未開放 · 請先完成前一項決策', upcoming: '接續階段',
     control: 'AI 協助準備草稿；選題與 Gate A 核准由您明確操作。系統不會自動核准關卡或證據覆核。',
     continueBrief: '使用此簡報繼續', continueUvz: '採用推薦定位並繼續',
@@ -44,7 +44,7 @@ export const translations = {
     words: 'Words',
     openrouterReady: 'Gemini Engine Ready',
     groupStart: 'Start',
-    groupResearch: 'Stages 1–5 · Market & Positioning',
+    groupResearch: 'Setup · Four steps',
     groupStrategy: 'Stages 6–8 · Research & Charter (Gate B)',
     groupContent: 'Stages 9–10 · Writing & Toolkits',
     groupPolish: 'Stages 11–14 · QA, Brand, Launch & Export (Gate C)',
@@ -52,11 +52,11 @@ export const translations = {
 
     navDashboard: 'Dashboard Overview',
     navNewProject: 'Create New Project',
-    navMarketResearch: '1. Market Research',
-    navTopicSelection: '2. Topic Selection (Gate A)',
-    navProjectBrief: '3. Recommended Project Brief',
-    navUvz: '4. UVZ Analysis',
-    navTransformationMap: '5. Transformation Map',
+    navMarketResearch: '1. Topic Discovery',
+    navTopicSelection: '1. Topic Discovery',
+    navProjectBrief: '2. Recommended Project Brief',
+    navUvz: '3. Unique Value Zone (UVZ)',
+    navTransformationMap: '4. Transformation Map',
     navReferenceLibrary: '6. Reference Library',
     navProductCharter: '7. Product Charter (Gate B)',
     navOutlineBuilder: '8. Outline Builder',
@@ -157,7 +157,7 @@ export const translations = {
     approveBriefCta: 'Continue with this brief →',
 
     // UVZ
-    uvzTitle: 'Unique Value Zone (UVZ Analysis)',
+    uvzTitle: 'Unique Value Zone (UVZ)',
     uvzSubtitle: 'Generate three comparable options from the approved niche and brief; creator fit remains unresolved when unknown.',
     buyerProblemsTitle: 'Buyer Problems Solved',
     solutionsTitle: 'Core Solution Architecture',
@@ -166,7 +166,7 @@ export const translations = {
     approveUvzCta: 'Confirm UVZ & Build Transformation Map →',
 
     // Transformation Map
-    mapTitle: 'Customer Transformation Map',
+    mapTitle: 'Transformation Map',
     mapSubtitle: 'Turn the selected UVZ into Before → Bridge → After and editable title options, then gather supporting references.',
     beforeStateTitle: '1. Before State (Current Symptoms & Drain)',
     bridgeProcessTitle: '2. The Bridge (Signature Methodology & Milestones)',
@@ -245,7 +245,7 @@ export const translations = {
     words: '字數',
     openrouterReady: 'Gemini 引擎已就緒',
     groupStart: '專案起點',
-    groupResearch: '步驟 1–5 · 市場研究與定位',
+    groupResearch: '產品設定 · 四步驟',
     groupStrategy: '步驟 6–8 · 文獻研究與憲章 (Gate B)',
     groupContent: '步驟 9–10 · 內容撰寫與伴隨工具',
     groupPolish: '步驟 11–14 · 審查、品牌、定價與匯出 (Gate C)',
@@ -253,11 +253,11 @@ export const translations = {
 
     navDashboard: 'Dashboard 總覽',
     navNewProject: '建立新專案',
-    navMarketResearch: '1. 市場研究 (Market Research)',
-    navTopicSelection: '2. 選題核准 (Gate A)',
-    navProjectBrief: '3. 推薦專案簡報',
-    navUvz: '4. 獨特價值區 UVZ',
-    navTransformationMap: '5. 客戶轉變地圖',
+    navMarketResearch: '1. 題材探索',
+    navTopicSelection: '1. 題材探索',
+    navProjectBrief: '2. 推薦專案簡報',
+    navUvz: '3. 獨特價值區（UVZ）',
+    navTransformationMap: '4. 轉變地圖',
     navReferenceLibrary: '6. 來源研究與知識庫',
     navProductCharter: '7. 產品憲章 (Gate B)',
     navOutlineBuilder: '8. 章節大綱規劃',
@@ -358,7 +358,7 @@ export const translations = {
     approveBriefCta: '使用此簡報並繼續至 UVZ →',
 
     // UVZ
-    uvzTitle: '獨特價值區 (UVZ Analysis)',
+    uvzTitle: '獨特價值區（UVZ）',
     uvzSubtitle: '依核准題材與簡報生成三個可比較方案；未知的創作者適配條件維持待確認。',
     buyerProblemsTitle: '買家痛點問題',
     solutionsTitle: '核心解決架構',
@@ -367,8 +367,8 @@ export const translations = {
     approveUvzCta: '確認 UVZ 並進入客戶轉變地圖 →',
 
     // Transformation Map
-    mapTitle: '客戶轉變地圖 (Transformation Map)',
-    mapSubtitle: '搭建從現狀痛點通往賦能成果的情感與實質橋樑',
+    mapTitle: '轉變地圖',
+    mapSubtitle: '依所選 UVZ 建立 Before → Bridge → After 與可編輯書名，再蒐集支持來源。',
     beforeStateTitle: '1. 現狀痛點與日常消耗 (Before State)',
     bridgeProcessTitle: '2. 橋樑方法論與關鍵里程碑 (The Bridge)',
     afterStateTitle: '3. 賦能狀態與實質收穫 (After State)',

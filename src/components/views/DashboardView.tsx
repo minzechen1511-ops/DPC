@@ -52,72 +52,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (journeyIndex >= 0) {
       return {stageId: journeyNext, title: gateAJourneyText[lang].steps[journeyIndex], detail: gateAJourneyText[lang].control, cta: lang === 'en' ? 'Continue recommended path' : '繼續推薦流程'};
     }
-    if ((marketResearch?.platformEvidence || []).length === 0) {
-      return {
-        stageId: 'market_research',
-        title: lang === 'en' ? 'Stage 1: Inspect Research Sources & Capture Evidence' : '階段 1：檢視研究資源並蒐集市場實證',
-        detail:
-          lang === 'en'
-            ? 'Review the Gate A resource directory, run live official chart collectors, or log dated observations in Manual Evidence Review.'
-            : '檢視公開研究資源目錄、掃描即時排行榜或透過人工證據審查記錄觀測資料。',
-        cta: lang === 'en' ? 'Open Market Research' : '前往市場研究',
-      };
-    }
-    if (!workflow?.gates?.gateA?.isApproved) {
-      return {
-        stageId: 'topic_selection',
-        title: lang === 'en' ? 'Stage 2: Select & Approve Niche Candidate (Gate A)' : '階段 2：評估推薦選題並核准 (Gate A)',
-        detail:
-          lang === 'en'
-            ? 'Inspect Evidence Strength vs. Product Suitability for each niche candidate and explicitly approve Gate A.'
-            : '分別檢視證據強度與產品適配假設，選定題材並手動核准 Gate A。',
-        cta: lang === 'en' ? 'Open Topic Selection' : '前往選題評估',
-      };
-    }
-    if (workflow?.stageStatuses?.project_brief !== 'COMPLETED') {
-      return {
-        stageId: 'project_brief',
-        title: lang === 'en' ? 'Stage 3: Define 13-Field Project Brief' : '階段 3：設定 13 項專案核心規範',
-        detail:
-          lang === 'en'
-            ? 'Refine buyer persona, core problem boundaries, safety guardrails, and editorial voice.'
-            : '完備目標受眾、問題邊界、安全準則與品牌語調規範。',
-        cta: lang === 'en' ? 'Open Project Brief' : '前往專案設定',
-      };
-    }
-    if (workflow?.stageStatuses?.uvz !== 'COMPLETED') {
-      return {
-        stageId: 'uvz',
-        title: lang === 'en' ? 'Stage 4: Define Unique Value Zone (UVZ)' : '階段 4：制定獨特價值區隔 (UVZ)',
-        detail:
-          lang === 'en'
-            ? 'Structure differentiated positioning wedges so your product stands apart from generic books.'
-            : '建立具差異化的市場定位切角與主張。',
-        cta: lang === 'en' ? 'Open UVZ Studio' : '前往 UVZ 策略',
-      };
-    }
-    if (workflow?.stageStatuses?.transformation_map !== 'COMPLETED') {
-      return {
-        stageId: 'transformation_map',
-        title: lang === 'en' ? 'Stage 5: Map Customer Transformation & Titles' : '階段 5：顧客轉變路徑與書名定位',
-        detail:
-          lang === 'en'
-            ? 'Structure the Before → Bridge → After roadmap and choose a clear title & subtitle.'
-            : '建立 Before → Bridge → After 轉變藍圖並選定書名定位。',
-        cta: lang === 'en' ? 'Open Transformation Map' : '前往轉變藍圖',
-      };
-    }
-    if (verifiedRefs < 1) {
-      return {
-        stageId: 'reference_library',
-        title: lang === 'en' ? 'Stage 6: Retrieve Grounded Research Sources (ARCE)' : '階段 6：建立來源實證文獻庫 (ARCE)',
-        detail:
-          lang === 'en'
-            ? 'Retrieve and verify real bibliographic references to back claims and satisfy Gate B.'
-            : '擷取真實文獻摘要與出處連結，滿足 Gate B 引用依據要求。',
-        cta: lang === 'en' ? 'Open Reference Library' : '前往來源研究',
-      };
-    }
     if (!workflow?.gates?.gateB?.isApproved || gateIssues(project, 'gateB').length > 0) {
       return {
         stageId: 'product_charter',
@@ -244,7 +178,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveView('market_research')}
+                onClick={() => setActiveView('topic_selection')}
                 className="px-5 py-3 text-sm font-semibold text-slate-900 bg-white hover:bg-slate-100 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap"
               >
                 <TrendingUp className="w-4 h-4 text-sky-700" />
@@ -302,7 +236,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             type="button"
-            onClick={() => setActiveView('market_research')}
+            onClick={() => setActiveView('topic_selection')}
             className={`p-4 lg:p-5 rounded-xl border text-left transition-all ${
               workflow?.gates?.gateA?.isApproved && !gateIssues(project, 'gateA').length
                 ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-400'
@@ -491,9 +425,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {[
-              { id: 'market_research', title: lang === 'en' ? '1. Market Research & Sources' : '1. 市場研究與資源檢核', icon: TrendingUp },
-              { id: 'topic_selection', title: lang === 'en' ? '2. Topic Selection (Gate A)' : '2. 選題評估與核准 (Gate A)', icon: Sparkles },
-              { id: 'project_brief', title: lang === 'en' ? '3. Project Brief (13 Fields)' : '3. 13項專案設定', icon: Feather },
+              { id: 'topic_selection', title: `1. ${gateAJourneyText[lang].steps[0]}`, icon: Sparkles },
+              { id: 'project_brief', title: `2. ${gateAJourneyText[lang].steps[1]}`, icon: Feather },
+              { id: 'uvz', title: `3. ${gateAJourneyText[lang].steps[2]}`, icon: Sparkles },
+              { id: 'transformation_map', title: `4. ${gateAJourneyText[lang].steps[3]}`, icon: TrendingUp },
               { id: 'reference_library', title: lang === 'en' ? '6. Reference Library' : '6. 來源研究與知識庫', icon: BookOpen },
               { id: 'product_charter', title: lang === 'en' ? '7. Product Charter (Gate B)' : '7. 產品憲章 (Gate B)', icon: Award },
               { id: 'content_studio', title: lang === 'en' ? '9. Content Studio' : '9. 長篇內容工廠', icon: Feather },

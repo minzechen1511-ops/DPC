@@ -149,7 +149,8 @@ test('parseUvzSynthesisResponse normalizes markdown-fenced JSON and assigns UVZ-
   assert.equal(parsed.positioningOptions.length, 3);
   assert.equal(parsed.positioningOptions[0].id, 'UVZ-01');
   assert.equal(parsed.positioningOptions[1].id, 'UVZ-02');
-  assert.equal(parsed.selectedOptionId, 'UVZ-02');
+  assert.equal(parsed.selectedOptionId, '');
+  assert.equal(parsed.positioningOptions[1].isRecommended, true);
   assert.equal(parsed.creatorExpertiseFit, 'Grounded in 10 years of lean operations consulting.');
   assert.deepEqual(parsed.differentiationOpportunities, [
     'Built for non-technical consultants',
@@ -180,7 +181,7 @@ test('buildTransformationSynthesisPrompt carries selected UVZ context and suppor
   assert.doesNotMatch(titlesOnly.userPrompt, /"beforeState"/);
 });
 
-test('parseTransformationSynthesisResponse populates Before/Bridge/After subfields and selects recommended title', () => {
+test('parseTransformationSynthesisResponse populates Before/Bridge/After subfields and leaves suggested title unselected', () => {
   const project = buildSampleProject();
   const raw = JSON.stringify({
     bigPromise: 'Move from ad-hoc firefighting to a calm, checklist-driven solo practice.',
@@ -211,7 +212,8 @@ test('parseTransformationSynthesisResponse populates Before/Bridge/After subfiel
   });
 
   const mapped = parseTransformationSynthesisResponse(raw, project.transformationMap);
-  assert.equal(mapped.selectedTitleId, 'TITLE-02');
+  assert.equal(mapped.selectedTitleId, '');
+  assert.equal(mapped.titleOptions[1].isRecommended, true);
   assert.equal(mapped.titleOptions[1].title, 'Zero-Chaos Solo Practice');
   assert.equal(mapped.bridgeProcess.signatureFrameworkName, 'The 3-Card Operator Loop');
   assert.deepEqual(mapped.beforeState.flawedAlternatives, ['Bloated enterprise PM software']);
@@ -243,6 +245,6 @@ test('parseTitleOptionsResponse refreshes title options without overwriting Befo
   );
   assert.equal(updated.bigPromise, 'Existing promise kept intact');
   assert.equal(updated.bridgeProcess.signatureFrameworkName, 'Custom Existing Loop');
-  assert.equal(updated.selectedTitleId, 'TITLE-01');
+  assert.equal(updated.selectedTitleId, '');
   assert.equal(updated.titleOptions[0].title, 'Fresh Title One');
 });

@@ -25,7 +25,7 @@ export const AutomationSettingsView: React.FC<Props> = ({project, onSavePreferen
       <ol className="list-decimal pl-5 space-y-2 text-sm">
         {GATE_A_STEPS.map((stage,index) => <li key={stage}><button type="button" onClick={() => setActiveView?.(stage)} className="underline text-teal-800 underline-offset-4 focus-visible:outline-2">{copy.steps[index]}</button></li>)}
       </ol>
-      <p className="text-sm text-slate-600">{lang === 'en' ? 'Run the scan, explicitly approve a selected niche, accept the prefilled brief, generate and choose UVZ positioning, then generate the map. Saved outputs remain editable. Failed requests leave the previous draft intact. Automatic sequence, pause and resume controls are intentionally unavailable.' : '依序執行掃描、明確核准選定題材、接受預填簡報、生成並選擇 UVZ 定位，再生成轉變地圖。已儲存內容皆可編輯，請求失敗保留原草稿。目前不提供自動串接、暫停或續跑控制。'}</p>
+      <p className="text-sm text-slate-600">{lang === 'en' ? 'Start in Topic Discovery: scan or review evidence and explicitly approve a chosen topic on the same page. Then accept the brief, choose UVZ positioning and draft the map. Saved outputs remain editable. Failed requests leave the previous draft intact. Automatic sequence, pause and resume controls are intentionally unavailable.' : '從題材探索開始：在同一頁掃描或審查證據並明確核准題材，再接受簡報、選擇 UVZ 定位並生成轉變地圖。已儲存內容皆可編輯，請求失敗保留原草稿。目前不提供自動串接、暫停或續跑控制。'}</p>
     </section>
     <form className="lab-panel p-5 sm:p-6 space-y-5" onSubmit={event => {
       event.preventDefault();

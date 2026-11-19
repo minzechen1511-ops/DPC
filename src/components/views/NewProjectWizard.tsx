@@ -57,11 +57,11 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({
           <span>{t.navNewProject}</span>
         </div>
         <h1 className="text-2xl font-extrabold text-slate-900">
-          {lang === 'en' ? 'Create a New High-Value Digital Product' : '建立新數位商品並開始市場研究'}
+          {lang === 'en' ? 'Start a digital product' : '開始數位商品開發'}
         </h1>
         <p className="text-sm text-slate-600 mt-1 max-w-4xl">
           {lang === 'en'
-            ? 'Configure market scope, target language, deliverable format, and research depth to launch live MTRE niche discovery.'
+            ? 'Start with Topic Discovery: scan sources, compare evidence and choose a topic on one page. Defaults are editable; no detailed creator form is required.'
             : '設定目標市場、輸出語言、產品型態與研究深度，立即啟動 MTRE 即時市場情報偵測與高變現選題推薦。'}
         </p>
       </div>
@@ -70,11 +70,11 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         <form onSubmit={handleSubmit} className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl p-6 lg:p-7 space-y-6">
           <div className="space-y-2">
-            <label className="block text-sm font-bold text-slate-800">
+            <label htmlFor="new-project-name" className="block text-sm font-bold text-slate-800">
               {lang === 'en' ? 'Project Name' : '專案暫定名稱'}
             </label>
             <input
-              type="text"
+              id="new-project-name" type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               className="w-full font-medium text-slate-900 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3"
@@ -82,6 +82,7 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({
             />
           </div>
 
+          <details><summary className="cursor-pointer font-semibold text-teal-800 mb-3">{lang === 'en' ? 'Optional project defaults' : '選用專案預設值'}</summary>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2">
               <label className="block text-sm font-bold text-slate-800">
@@ -146,12 +147,13 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({
             </div>
           </div>
 
+          </details>
           <button
             type="submit" disabled={creating}
             className="w-full py-3.5 px-6 text-base font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center justify-center gap-2.5 shadow-sm"
           >
             <Sparkles className="w-5 h-5 text-amber-300" />
-            <span>{lang === 'en' ? 'Create project & start Market Research →' : '啟動市場情報調查並推薦題材 →'}</span>
+            <span>{lang === 'en' ? 'Create project & discover topics →' : '建立專案並探索題材 →'}</span>
           </button>
         </form>
 

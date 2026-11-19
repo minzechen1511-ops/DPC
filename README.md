@@ -58,13 +58,19 @@ Editing application files does **not** alter external Codex container networking
 - **Gate B Academic Reference Host Allowlist (Preserve Existing)**:
   - `api.crossref.org`, `www.ebi.ac.uk`, `europepmc.org`, `www.who.int`, `www.oecd.org`, `openstax.org`, `www.worldbank.org`, `www.imf.org`, `www.fao.org` (and permitted `.gov` / `.edu` / `.ac.uk` public research sources)
 
-## 14-Stage Manual Workflow & Gates
+## Four-step setup and internal workflow
 
-Digital Product Studio preserves a strict human-reviewed 14-stage sequence (Autopilot is permanently disabled):
+The primary setup journey is **Topic Discovery → Recommended Project Brief → Unique Value Zone (UVZ) → Transformation Map**, followed by Reference Library. Topic Discovery combines the supported scan, evidence/source listings, manual evidence fallback, topic comparison and explicit Gate A approval. Legacy `market_research` navigation opens this same screen; its data, services and stage ID are retained.
+
+The brief starts with recommended content, not mandatory detailed intake. Creator facts remain blank unless provided. AI polish and detailed editing are optional. UVZ/title suggestions remain unselected until the creator explicitly uses them. Changed inputs mark dependent drafts for review.
+
+Real per-stage AI actions are available. The server job API stores metadata but has no generation worker; background setup generation, pause and resume are unavailable. Saved drafts can be reopened and individual failed requests retried. See [setup implementation and validation](docs/TOPIC-DISCOVERY-SETUP.md).
+
+The following 14 **internal stage IDs** remain for persisted-project compatibility and downstream gates:
 
 1. `market_research` — Resource Directory (9 seed sources), live chart collectors, & Manual Evidence Review
 2. `topic_selection` — Niche candidates with separated **Evidence Strength** vs. **Product Suitability** & **Gate A** approval
-3. `project_brief` — 13-Field Project Brief (never fabricates unapproved audience or creator expertise)
+3. `project_brief` — Recommended Project Brief (13-field model retained behind optional detailed editing)
 4. `uvz` — Unique Value Zone positioning
 5. `transformation_map` — Before → Bridge → After roadmap & title selection
 6. `reference_library` — Retrieved primary source excerpts & chapter relevance mapping

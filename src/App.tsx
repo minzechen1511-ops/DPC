@@ -1,5 +1,5 @@
 import { GateAJourneyNav } from './components/GateAJourneyNav.tsx';
-import { GATE_A_STEPS, gateAJourney, selectJourneyTopic } from './utils/gateAJourney.ts';
+import { GATE_A_STEPS, gateAJourney, selectJourneyTopic, setupStage, usableMap } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { isRetrievedSource } from './utils/sourceEvidence.ts';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -230,7 +230,7 @@ export default function App() {
 
             if (cloudList.length > 0) {
               const match = cloudList.find((p) => p.projectId === currentId) || cloudList[0];
-              if (!cloudHydratedRef.current && (GATE_A_STEPS as readonly string[]).includes(match.workflow.activeStage)) setActiveView(match.workflow.activeStage);
+              if (!cloudHydratedRef.current && ([...GATE_A_STEPS, 'reference_library'] as readonly string[]).includes(setupStage(match.workflow.activeStage))) setActiveView(setupStage(match.workflow.activeStage) as NavigationItem);
               if (!hasUnsavedCurrent || match.projectId !== currentId) {
                 skipAutosaveProjectIdRef.current = match.projectId;
                 dirtyProjectIdRef.current = null;
@@ -440,9 +440,10 @@ export default function App() {
     setProject(current => current.projectId === project.projectId ? update(current) : current);
   };
   const navigateJourney = (view: NavigationItem) => {
-    setActiveView(view);
-    if ((GATE_A_STEPS as readonly string[]).includes(view) || view === 'reference_library') {
-      setProject(current => ({...current, workflow: {...current.workflow, activeStage: view as any}}));
+    const destination = setupStage(view) as NavigationItem;
+    setActiveView(destination);
+    if ((GATE_A_STEPS as readonly string[]).includes(destination) || destination === 'reference_library') {
+      setProject(current => ({...current, workflow: {...current.workflow, activeStage: destination as any}}));
     }
   };
 
@@ -578,6 +579,7 @@ export default function App() {
   const handleSelectTopic = (topicId: string, selectedAudienceHypothesisId?: string) =>
     setProject((prev) => {
       const next = selectJourneyTopic(prev, topicId, lang, selectedAudienceHypothesisId);
+      if (next === prev) return prev;
       const revoked = revokeApprovals({ ...next, isBlankProject: false }, 'gateA');
       return {
         ...revoked,
@@ -622,7 +624,7 @@ export default function App() {
   const handleApproveGateC = () => approveWithSourceCheck('gateC');
 
   const handleUpdateIntake = (updatedIntake: any) => {
-    setGateAProject((prev) => ({
+    setGateAProject((prev) => JSON.stringify(prev.intake) === JSON.stringify(updatedIntake) && prev.workflow.stageStatuses.project_brief === 'COMPLETED' ? prev : ({
       ...prev,
       isBlankProject: false,
       updatedAt: new Date().toISOString(),
@@ -644,6 +646,7 @@ export default function App() {
     setGateAProject((prev) => {
       const revoked = revokeApprovals(prev, 'gateB');
       const selected = prev.uvz.positioningOptions.find((o) => o.id === optionId);
+      if (!selected || (prev.uvz.selectedOptionId === optionId && prev.workflow.stageStatuses.uvz === 'COMPLETED')) return prev;
       return {
         ...prev,
         isBlankProject: false,
@@ -704,6 +707,7 @@ export default function App() {
     setGateAProject((prev) => {
       const revoked = revokeApprovals(prev, 'gateB');
       const selected = prev.transformationMap.titleOptions.find((t) => t.id === titleId);
+      if (!selected || (prev.transformationMap.selectedTitleId === titleId && prev.workflow.stageStatuses.transformation_map === 'COMPLETED')) return prev;
       return {
         ...prev,
         isBlankProject: false,
@@ -712,7 +716,7 @@ export default function App() {
           ...revoked.workflow,
           stageStatuses: {
             ...revoked.workflow.stageStatuses,
-            transformation_map: titleId ? 'COMPLETED' : 'PARTIAL',
+            transformation_map: selected && usableMap({...prev, transformationMap: {...prev.transformationMap, selectedTitleId: titleId}}) ? 'COMPLETED' : 'PARTIAL',
           },
         },
         transformationMap: {
@@ -734,12 +738,10 @@ export default function App() {
 
   const handleUpdateTransformationMap = (updatedMap: TransformationMap) => {
     setGateAProject((prev) => {
-      if (prev.uvz.selectedOptionId !== project.uvz.selectedOptionId || JSON.stringify(prev.intake) !== JSON.stringify(project.intake)) return prev;
+      if (JSON.stringify(prev.uvz) !== JSON.stringify(project.uvz) || JSON.stringify(prev.intake) !== JSON.stringify(project.intake)) return prev;
       const revoked = revokeApprovals(prev, 'gateB');
       const selected = updatedMap.titleOptions.find((t) => t.id === updatedMap.selectedTitleId);
-      const isComplete =
-        updatedMap.titleOptions.length > 0 &&
-        (updatedMap.beforeState?.currentPains?.length > 0 || updatedMap.bridgeProcess?.keyMilestones?.length > 0);
+      const isComplete = usableMap({...prev, transformationMap: updatedMap});
       return {
         ...prev,
         isBlankProject: false,
@@ -1012,7 +1014,7 @@ export default function App() {
       },
       workflow: {
         ...BLANK_PROJECT.workflow,
-        activeStage: 'market_research',
+        activeStage: 'topic_selection',
         stageStatuses: {
           market_research: 'READY',
           topic_selection: 'READY',
@@ -1040,7 +1042,7 @@ export default function App() {
     skipAutosaveProjectIdRef.current = newProj.projectId;
     setProject(newProj);
     if (!(await persistProjectNow(newProj))) throw new Error('Project creation could not be saved. Your draft remains open; retry cloud sync before continuing.');
-    navigateJourney('market_research');
+    navigateJourney('topic_selection');
     void ensureUserProfile(authUser, langRef.current, newProj.projectId);
   };
 
@@ -1152,8 +1154,8 @@ export default function App() {
 
   const renderActiveView = () => {
     const flow = gateAJourney(project);
-    const index = GATE_A_STEPS.indexOf(activeView as any);
-    if (index >= 2 && !flow.available[index]) return <section className="lab-panel p-6 space-y-3" role="status">
+    const index = GATE_A_STEPS.indexOf(setupStage(activeView) as any);
+    if (index >= 1 && !flow.available[index]) return <section className="lab-panel p-6 space-y-3" role="status">
       <h1 className="text-xl font-semibold">{lang === 'en' ? 'Complete the previous decision first' : '請先完成前一項決策'}</h1>
       <p>{lang === 'en' ? 'Your saved drafts remain available. Follow the recommended path to approve the niche, accept the brief, or choose positioning before continuing.' : '已保留您的草稿。請依推薦流程核准題材、接受簡報或選擇定位後再繼續。'}</p>
       <button type="button" onClick={() => navigateJourney(flow.next as NavigationItem)} className="px-4 py-2 rounded-lg bg-teal-800 text-white">{lang === 'en' ? 'Continue recommended path' : '繼續推薦流程'}</button>
@@ -1195,7 +1197,7 @@ export default function App() {
             onSelectTopic={handleSelectTopic}
             onApproveGateA={handleApproveGateA}
             onRecordAiUsage={handleRecordAiUsage}
-            initialTab="scan"
+            initialTab="discover"
             lang={lang}
           />
         );
@@ -1218,7 +1220,7 @@ export default function App() {
             onSelectTopic={handleSelectTopic}
             onApproveGateA={handleApproveGateA}
             onRecordAiUsage={handleRecordAiUsage}
-            initialTab="niches"
+            initialTab="discover"
             lang={lang}
           />
         );

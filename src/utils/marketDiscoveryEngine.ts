@@ -333,7 +333,7 @@ const NICHE_BLUEPRINTS: Record<string, NicheBlueprint> = {
   productivity_systems: {
     title: 'Solo Operator Systems & Workflow Playbook',
     subtitle: 'Original execution manual, SOP architecture, and decision toolkit for solo operators',
-    targetAudienceHypothesis: 'Solo operators and freelancers seeking structured daily workflows (validate exact buyer persona in Stage 3)',
+    targetAudienceHypothesis: 'Solo operators and freelancers seeking structured daily workflows (validate the exact buyer persona in your recommended brief)',
     coreProblem: 'Operators lose time switching across unstandardized notes, tasks, and client handoffs without repeatable checklists.',
     bigPromise: 'Build a lightweight, structured operating cadence using repeatable SOP templates and weekly review scorecards.',
     suggestedFormat: 'ebook_toolkit',

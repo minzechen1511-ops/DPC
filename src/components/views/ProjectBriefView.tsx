@@ -130,17 +130,27 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
         </div>
       </div>
 
-      <section aria-label={journey.steps[2]} className="border border-slate-200 rounded-xl p-5 space-y-3">
-        <h2 className="text-lg font-semibold">{journey.steps[2]}</h2>
+      <section aria-label={journey.steps[1]} className="border border-slate-200 rounded-xl p-5 space-y-3">
+        <h2 className="text-lg font-semibold">{journey.steps[1]}</h2>
         <p className="text-sm text-slate-600">{lang === 'en' ? 'Carried forward from your selected, approved niche. Use this draft as-is; detailed fields and AI polish are optional. Unknown creator facts stay blank.' : '已承接您選定並核准的題材，可直接使用此草稿；詳細欄位與 AI 潤飾皆為選用。未知的創作者資料維持空白。'}</p>
         <dl className="grid gap-3 sm:grid-cols-2 text-sm">{[
           [lang === 'en' ? 'Audience hypothesis' : '受眾假設', intake.targetAudience],
           [lang === 'en' ? 'Problem' : '問題', intake.problemsSolved],
           [lang === 'en' ? 'Product direction' : '產品方向', intake.productIdea],
           [lang === 'en' ? 'Intended transformation' : '預期轉變', intake.desiredTransformation],
+          [lang === 'en' ? 'Delivery format · editable default' : '交付形式 · 可編輯預設值', project.preferences.productFormat],
+          [lang === 'en' ? 'Boundaries' : '內容邊界', intake.constraintsAndExclusions.productBoundaries || (lang === 'en' ? 'Educational draft; verify factual claims before publication.' : '教育用途草稿；出版前須查核事實主張。')],
+          [lang === 'en' ? 'Pricing hypothesis · not measured willingness to pay' : '定價假設 · 非已測得的付費意願', `${intake.recommendedPrice.currency || 'USD'} ${intake.recommendedPrice.introductoryTest} / ${intake.recommendedPrice.regular} / ${intake.recommendedPrice.premiumBundle}`],
         ].map(([label,value]) => <div key={label}><dt className="font-semibold text-slate-900">{label}</dt><dd className="text-slate-700 mt-1">{value || (lang === 'en' ? 'Not provided' : '尚未提供')}</dd></div>)}</dl>
       </section>
-      {/* Synthesise.ai Brief Co-Pilot Bar */}
+      <aside role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <strong>{lang === 'en' ? 'Creator knowledge and credibility' : '創作者知識與可信度'}</strong>
+        <p className="mt-1">{!intake.expertise.trim() && !intake.relevantExperience.trim()
+          ? (lang === 'en' ? 'Creator expertise is not provided. The audience/product evidence does not establish creator-market fit. Plan qualified expert review and supporting references before making factual or specialist claims.' : '尚未提供創作者專業背景。受眾／產品證據不代表已證實創作者與市場適配；提出事實或專業主張前，請安排合格專家覆核並提供支持文獻。')
+          : (lang === 'en' ? 'Your background is self-reported, and its relevance to this topic is not independently verified. If the topic is outside your expertise, arrange qualified expert review. Source and claim reviews are still required.' : '您的背景為自行提供，與此題材的關聯尚未經獨立查證。若題材超出您的專業，請安排合格專家覆核；仍需審查來源與主張。')}</p>
+      </aside>
+      <details><summary className="cursor-pointer font-semibold text-teal-800 py-3 focus-visible:outline-2">{lang === 'en' ? 'Optional: polish this brief with AI' : '選用：以 AI 潤飾此簡報'}</summary>
+
       <div className="lab-panel p-5 sm:p-6 bg-gradient-to-r from-teal-50/70 via-white to-sky-50/60 space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -184,6 +194,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
         />
       </div>
 
+      </details>
       {aiError && (
         <p role="alert" className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-sm font-medium">
           {aiError}
@@ -209,13 +220,14 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
             <div className="p-4 bg-slate-50/90 rounded-xl border border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-bold text-slate-800">1. {lang === 'en' ? 'Project Name' : '專案名稱'}</span>
-                <button type="button" onClick={() => handleToggleLock('projectName')} className="text-slate-500 hover:text-slate-700 p-1">
+                <button type="button" aria-label={lang === 'en' ? 'Toggle project name lock' : '切換專案名稱鎖定'} aria-pressed={Boolean(lockedFields['projectName'])} onClick={() => handleToggleLock('projectName')} className="text-slate-500 hover:text-slate-700 p-1">
                   {lockedFields['projectName'] ? <Lock className="w-4 h-4 text-amber-500" /> : <Unlock className="w-4 h-4" />}
                 </button>
               </div>
               <input
                 type="text"
                 disabled={lockedFields['projectName']}
+                aria-label={lang === 'en' ? 'Project name' : '專案名稱'}
                 value={intake.projectName}
                 onChange={(e) => setIntake({ ...intake, projectName: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl px-3.5 py-2.5"
@@ -225,13 +237,14 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
             <div className="p-4 bg-slate-50/90 rounded-xl border border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-bold text-slate-800">2. {lang === 'en' ? 'Creator / Brand Name' : '創作者/品牌名稱'}</span>
-                <button type="button" onClick={() => handleToggleLock('creatorName')} className="text-slate-500 hover:text-slate-700 p-1">
+                <button type="button" aria-label={lang === 'en' ? 'Toggle creator or brand name lock' : '切換創作者或品牌名稱鎖定'} aria-pressed={Boolean(lockedFields['creatorName'])} onClick={() => handleToggleLock('creatorName')} className="text-slate-500 hover:text-slate-700 p-1">
                   {lockedFields['creatorName'] ? <Lock className="w-4 h-4 text-amber-500" /> : <Unlock className="w-4 h-4" />}
                 </button>
               </div>
               <input
                 type="text"
                 disabled={lockedFields['creatorName']}
+                aria-label={lang === 'en' ? 'Creator or brand name' : '創作者或品牌名稱'}
                 value={intake.creatorName}
                 onChange={(e) => setIntake({ ...intake, creatorName: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl px-3.5 py-2.5"
@@ -241,6 +254,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
             <div className="p-4 bg-slate-50/90 rounded-xl border border-slate-200 space-y-2">
               <span className="font-bold text-slate-800 text-sm block">3. {lang === 'en' ? 'Experience Level' : '經驗等級'}</span>
               <select
+                aria-label={lang === 'en' ? 'Experience level' : '經驗等級'}
                 value={intake.experienceLevel}
                 onChange={(e) => setIntake({ ...intake, experienceLevel: e.target.value as any })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl px-3.5 py-2.5"
@@ -257,6 +271,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
               <span className="font-bold text-slate-800 text-sm block">4. {lang === 'en' ? 'Relevant Experience' : '相關實務經驗'}</span>
               <input
                 type="text"
+                aria-label={lang === 'en' ? 'Relevant experience' : '相關經驗'}
                 value={intake.relevantExperience}
                 onChange={(e) => setIntake({ ...intake, relevantExperience: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl px-3.5 py-2.5"
@@ -267,6 +282,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
               <span className="font-bold text-slate-800 text-sm block">5. {lang === 'en' ? 'Subject Matter Expertise' : '核心專業範疇'}</span>
               <input
                 type="text"
+                aria-label={lang === 'en' ? 'Subject matter expertise' : '主題專業'}
                 value={intake.expertise}
                 onChange={(e) => setIntake({ ...intake, expertise: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl px-3.5 py-2.5"
@@ -277,6 +293,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
               <span className="font-bold text-slate-800 text-sm block">6. {lang === 'en' ? 'Creator Focus & Interests' : '創作者研究興趣'}</span>
               <input
                 type="text"
+                aria-label={lang === 'en' ? 'Creator interests' : '創作者興趣'}
                 value={intake.interests}
                 onChange={(e) => setIntake({ ...intake, interests: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl px-3.5 py-2.5"
@@ -296,6 +313,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
               <span className="font-bold text-slate-800 text-sm block">7. {lang === 'en' ? 'Target Audience Definition' : '目標受眾設定'}</span>
               <textarea
                 rows={4}
+                aria-label={lang === 'en' ? 'Audience hypothesis' : '受眾假設'}
                 value={intake.targetAudience}
                 onChange={(e) => setIntake({ ...intake, targetAudience: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl p-3"
@@ -306,6 +324,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
               <span className="font-bold text-slate-800 text-sm block">8. {lang === 'en' ? 'Core Problems Solved' : '解決之痛點難題'}</span>
               <textarea
                 rows={4}
+                aria-label={lang === 'en' ? 'Core problem' : '核心問題'}
                 value={intake.problemsSolved}
                 onChange={(e) => setIntake({ ...intake, problemsSolved: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl p-3"
@@ -316,6 +335,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
               <span className="font-bold text-slate-800 text-sm block">9. {lang === 'en' ? 'Product Concept & Hook' : '產品概念與訴求'}</span>
               <textarea
                 rows={4}
+                aria-label={lang === 'en' ? 'Product concept' : '產品概念'}
                 value={intake.productIdea}
                 onChange={(e) => setIntake({ ...intake, productIdea: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl p-3"
@@ -326,6 +346,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
               <span className="font-bold text-slate-800 text-sm block">10. {lang === 'en' ? 'Desired Transformation Promise' : '核心承諾與轉變'}</span>
               <textarea
                 rows={4}
+                aria-label={lang === 'en' ? 'Intended outcome' : '預期成果'}
                 value={intake.desiredTransformation}
                 onChange={(e) => setIntake({ ...intake, desiredTransformation: e.target.value })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl p-3"
