@@ -15,7 +15,7 @@ The user's newer AI Studio provider implementation was preserved by pushing its 
 
 - Baseline: 114 tests passed on the preserved Studio commit.
 - Repair: 120 tests passed, zero failed; `npm run lint` (`tsc --noEmit`) and production build passed. Existing Vite native-config and large-chunk warnings remain.
-- The real public OpenRouter catalog was requested on 2026-11-19; it returned 16 zero-price text models at the check. This is catalog availability, not proof of a successful authenticated generation with every model. No sample catalog is substituted for failed research.
+- The real public OpenRouter catalog was requested on 2026-11-19; it initially returned 16 zero-text-token-price candidates. Hosted inspection identified two paid music generators with mixed text/audio output; those are excluded from the authoring catalog, leaving 14 text-only free models at that check. This is catalog availability, not proof of a successful authenticated generation with every model. No sample catalog is substituted for failed research.
 - Integration tests use explicit test doubles to verify authentication, key rejection, encryption/user isolation, anonymous catalog access, and routing to the exact requested free model. Client tests cover provider persistence after usage, transport/parse errors, key intake, and removal of the unverified connect control.
 - Live hosted connection checks and preview synchronization must be recorded in the handoff. Test-double results must never be reported as live credential spending or live OAuth authorization.
 

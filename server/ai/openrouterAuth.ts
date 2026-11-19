@@ -258,7 +258,7 @@ export function getOpenRouterCatalogStatus() {return {...catalogStatus};}
 
 export function parseOpenRouterModelCatalog(list: any[]): OpenRouterCatalogModel[] {
   const rate = (value: unknown) => typeof value === 'string' && value.trim() && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : NaN;
-  return list.filter(item => isValidOpenRouterModelId(item?.id) && (!item?.architecture?.output_modalities || item.architecture.output_modalities.includes('text'))).map(item => {
+  return list.filter(item => isValidOpenRouterModelId(item?.id) && (!item?.architecture?.output_modalities || item.architecture.output_modalities.length > 0 && item.architecture.output_modalities.every((mode:string)=>mode === 'text'))).map(item => {
     const prompt = rate(item?.pricing?.prompt);
     const completion = rate(item?.pricing?.completion);
     const isFree = prompt === 0 && completion === 0 && (!item?.pricing?.request || rate(item.pricing.request) === 0);

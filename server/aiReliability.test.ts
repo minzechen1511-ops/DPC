@@ -10,7 +10,7 @@ import {decryptSecret} from './security/crypto.ts';
 
 test('live catalog retains late free models and does not round cheap or missing prices down to free', () => {
   const paid=Array.from({length:70},(_,i)=>({id:`provider/paid-${i}`,pricing:{prompt:'0.000000001',completion:'0.000000002'}}));
-  const models=parseOpenRouterModelCatalog([...paid,{id:'provider/late:free',pricing:{prompt:'0',completion:'0'}},{id:'provider/unknown',pricing:{}},{id:'provider/image',pricing:{prompt:'0',completion:'0'},architecture:{output_modalities:['image']}}]);
+  const models=parseOpenRouterModelCatalog([...paid,{id:'provider/late:free',pricing:{prompt:'0',completion:'0'}},{id:'provider/unknown',pricing:{}},{id:'provider/image',pricing:{prompt:'0',completion:'0'},architecture:{output_modalities:['image']}},{id:'provider/paid-music',pricing:{prompt:'0',completion:'0'},architecture:{output_modalities:['text','audio']}}]);
   assert.equal(models[0].id,'provider/late:free');
   assert.equal(models.filter(model=>model.isFree).length,1);
   assert.equal(models.length,72);
