@@ -4,6 +4,7 @@ import path from 'path';
 import { AppConfig, ensurePersistentVaultKey, loadConfig } from './config.ts';
 import { createDataStore } from './db/index.ts';
 import { createApiRouter } from './apiRouter.ts';
+import { createOpenRouterCallbackHandler, PendingOpenRouterFlow } from './ai/openrouterAuth.ts';
 
 export async function startStandaloneServer(options: {
   distDir?: string;
@@ -26,6 +27,7 @@ export async function startStandaloneServer(options: {
   };
 
   const store = await createDataStore(config);
+  const openrouterFlowStore = new Map<string, PendingOpenRouterFlow>();
 
   const app = express();
   app.disable('x-powered-by');
@@ -72,7 +74,22 @@ export async function startStandaloneServer(options: {
   });
 
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api', createApiRouter({ store, config }));
+  app.use('/api', createApiRouter({ store, config, openrouterFlowStore }));
+
+  // Mount OpenRouter OAuth PKCE popup callback before Vite/static SPA catch-all
+  app.get(
+    [
+      '/auth/openrouter/callback/:flowId',
+      '/auth/openrouter/callback/:flowId/',
+      '/auth/openrouter/callback',
+      '/auth/openrouter/callback/',
+    ],
+    createOpenRouterCallbackHandler({
+      store,
+      config,
+      flowStore: openrouterFlowStore,
+    })
+  );
 
   if (!config.isProduction) {
     const { createServer: createViteServer } = await import('vite');

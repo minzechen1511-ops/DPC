@@ -611,15 +611,20 @@ export interface ModelInfo {
     completion: string | number;
   };
   isFree?: boolean;
+  tier?: 'standard' | 'paid';
+  provider?: 'gemini' | 'openrouter' | 'openai';
 }
 
 export type AIProviderType = 'openrouter' | 'gemini' | 'openai' | 'claude';
+export type TokenSaverMode = 'economy' | 'balanced' | 'deep';
 
 export interface AISettings {
   provider: AIProviderType;
   apiKey: string; // active provider key
   baseUrl: string;
   defaultModel: string;
+  tokenSaverMode?: TokenSaverMode;
+  allowRateLimitFallback?: boolean;
   freeOnly: boolean;
   allowPaidFallback: boolean;
   maxSpendPerRequest: number;

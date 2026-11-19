@@ -1,8 +1,12 @@
 export type GeminiModelId =
   | 'gemini-4-hydrogen'
   | 'gemini-3.1-flash-lite'
+  | 'gemini-4-neon'
   | 'gemini-4-argon'
   | 'gemini-4-carbon';
+
+export type TokenSaverMode = 'economy' | 'balanced' | 'deep';
+export type ThinkingLevelName = 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
 
 export type StudioCopilotRoleId =
   | 'strategist'
@@ -125,6 +129,49 @@ export function selectTaskGeminiModel(options: {
   return fallback;
 }
 
+export function resolveGeminiThinkingLevel(
+  model: string,
+  tokenSaverMode: TokenSaverMode = 'economy'
+): ThinkingLevelName {
+  const normalizedModel = String(model || '').trim().toLowerCase();
+  if (normalizedModel === 'gemini-3.1-flash-lite') {
+    if (tokenSaverMode === 'deep') return 'MEDIUM';
+    if (tokenSaverMode === 'balanced') return 'LOW';
+    return 'MINIMAL';
+  }
+  // gemini-4-hydrogen, gemini-4-neon, gemini-4-argon, gemini-4-carbon do NOT support MINIMAL (returns 400)
+  if (tokenSaverMode === 'deep') return 'HIGH';
+  if (tokenSaverMode === 'balanced') return 'MEDIUM';
+  return 'LOW';
+}
+
+export function getFallbackGeminiModels(
+  primaryModel: string,
+  options: { useSearch?: boolean; allowRateLimitFallback?: boolean } = {}
+): GeminiModelId[] {
+  if (options.useSearch || options.allowRateLimitFallback === false) {
+    return [];
+  }
+  const model = String(primaryModel || '').trim() as GeminiModelId;
+  if (model === 'gemini-4-hydrogen') {
+    return ['gemini-3.1-flash-lite'];
+  }
+  if (model === 'gemini-3.1-flash-lite') {
+    return ['gemini-4-hydrogen'];
+  }
+  return ['gemini-4-hydrogen', 'gemini-3.1-flash-lite'];
+}
+
+export function shouldFallbackGeminiError(err: unknown): boolean {
+  const rawErr = err as any;
+  const status = Number(rawErr?.statusCode || rawErr?.status || 0);
+  if (status === 400 || status === 403 || status === 404 || status === 429 || status === 502 || status === 503) {
+    return true;
+  }
+  const message = typeof rawErr?.message === 'string' ? rawErr.message : '';
+  return /resource_exhausted|quota exceeded|rate[- ]limit|not found|permission|billing/i.test(message);
+}
+
 export function prepareMultiTurnConversation(
   messages: InputChatMessage[],
   maxHistoryTurns = 30
@@ -191,6 +238,7 @@ export function buildStudioSystemInstruction(options: {
   projectContext?: Record<string, unknown> | string | null;
   useSearch?: boolean;
   lang?: string;
+  tokenSaverMode?: TokenSaverMode;
 }): string {
   const preset = resolveRolePreset(options.roleId);
   const parts: string[] = [];
@@ -209,6 +257,12 @@ export function buildStudioSystemInstruction(options: {
   if (options.useSearch) {
     parts.push(
       'Google Search Grounding is active. Base factual statements on retrieved search results, summarize clearly, and note uncertainty when search snippets lack details.'
+    );
+  }
+
+  if (options.tokenSaverMode === 'economy') {
+    parts.push(
+      'Token-Saver mode is active: keep explanations concise, avoid repetitive prose or filler, and include only essential facts and required JSON schema fields.'
     );
   }
 
@@ -276,3 +330,88 @@ export function extractGroundingResult(response: unknown): ExtractedGroundingInf
     sources,
   };
 }
+
+export function formatGeminiUpstreamError(
+  err: unknown,
+  fallbackMessage = 'Gemini AI generation failed.'
+): { message: string; statusCode: number; code: string; retryAfterSeconds?: number } {
+  const rawErr = err as any;
+  const rawMessage = typeof rawErr?.message === 'string' ? rawErr.message.trim() : '';
+  let statusCode = Number(rawErr?.statusCode || rawErr?.status || 0);
+  let code = typeof rawErr?.code === 'string' && rawErr.code.trim() ? rawErr.code.trim() : 'GEMINI_REQUEST_FAILED';
+
+  let parsedPayload: any = null;
+  const firstBrace = rawMessage.indexOf('{');
+  if (firstBrace >= 0) {
+    try {
+      parsedPayload = JSON.parse(rawMessage.slice(firstBrace));
+    } catch {
+      parsedPayload = null;
+    }
+  }
+
+  const errObj =
+    parsedPayload?.error && typeof parsedPayload.error === 'object' ? parsedPayload.error : parsedPayload;
+  if (errObj?.code && !statusCode) {
+    statusCode = Number(errObj.code);
+  }
+  const innerMessage = typeof errObj?.message === 'string' ? errObj.message.trim() : rawMessage;
+  const errStatus = String(errObj?.status || '');
+
+  let retryAfterSeconds: number | undefined;
+  let model: string | undefined;
+
+  const msgDelayMatch = innerMessage.match(/retry(?:\s+in|\s*after)?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*s/i);
+  if (msgDelayMatch) {
+    retryAfterSeconds = Math.ceil(Number(msgDelayMatch[1]));
+  }
+
+  if (Array.isArray(errObj?.details)) {
+    for (const detail of errObj.details) {
+      if (!retryAfterSeconds && typeof detail?.retryDelay === 'string') {
+        const match = detail.retryDelay.match(/(\d+(?:\.\d+)?)\s*s/i);
+        if (match) retryAfterSeconds = Math.ceil(Number(match[1]));
+      }
+      if (Array.isArray(detail?.violations)) {
+        for (const v of detail.violations) {
+          if (typeof v?.quotaDimensions?.model === 'string' && v.quotaDimensions.model.trim()) {
+            model = v.quotaDimensions.model.trim();
+          }
+        }
+      }
+    }
+  }
+  if (!model) {
+    const modelMatch = innerMessage.match(/model:\s*([a-z0-9._-]+)/i);
+    if (modelMatch) model = modelMatch[1];
+  }
+
+  const isRateLimit =
+    statusCode === 429 ||
+    errStatus === 'RESOURCE_EXHAUSTED' ||
+    /resource_exhausted|quota exceeded|rate[- ]limit/i.test(`${errStatus} ${innerMessage}`);
+
+  if (isRateLimit) {
+    const safeStatus = 429;
+    const waitNote = retryAfterSeconds ? `~${retryAfterSeconds}s` : '~45s';
+    const modelNote = model ? ` for ${model}` : '';
+    return {
+      statusCode: safeStatus,
+      code: 'GEMINI_RATE_LIMIT',
+      retryAfterSeconds,
+      message: `Gemini API rate limit reached${modelNote}. Please wait ${waitNote} before retrying, or attach a billing-enabled API key in Settings > Secrets for higher quota.`,
+    };
+  }
+
+  const safeStatus = statusCode >= 400 && statusCode < 600 ? statusCode : 502;
+  const readableMessage = innerMessage
+    ? innerMessage.split('\n')[0].trim()
+    : fallbackMessage;
+
+  return {
+    statusCode: safeStatus,
+    code,
+    message: readableMessage,
+  };
+}
+

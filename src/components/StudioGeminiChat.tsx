@@ -13,17 +13,24 @@ import {
   User as UserIcon,
   X,
 } from 'lucide-react';
-import type { DigitalProductProject } from '../types/project.ts';
+import type { DigitalProductProject, ModelInfo, TokenSaverMode } from '../types/project.ts';
 import type { Language } from '../utils/i18n.ts';
 import {
+  AI_CATALOG_UPDATED_EVENT,
+  type ActiveStudioProvider,
   type AiUsageMeta,
   type CopilotTurnMessage,
+  fetchModels,
   GEMINI_TASK_MODELS,
   type GeminiModelId,
+  normalizeStudioProvider,
+  OPENROUTER_CURATED_MODELS,
+  OPENAI_SERVER_MODELS,
   sendCopilotChat,
   STUDIO_COPILOT_ROLE_OPTIONS,
   type StudioCopilotRoleId,
   summarizeProjectForAiContext,
+  TOKEN_SAVER_MODES,
 } from '../services/aiService.ts';
 
 interface StudioGeminiChatProps {
@@ -31,7 +38,7 @@ interface StudioGeminiChatProps {
   onClose: () => void;
   project: DigitalProductProject;
   activeView: string;
-  onRecordAiUsage?: (usage?: AiUsageMeta, model?: string) => void;
+  onRecordAiUsage?: (usage?: AiUsageMeta, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
 }
 
@@ -74,10 +81,18 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
 }) => {
   const [messages, setMessages] = useState<CopilotTurnMessage[]>(() => loadStoredThread(project.projectId));
   const [roleId, setRoleId] = useState<StudioCopilotRoleId>('strategist');
-  const [modelId, setModelId] = useState<GeminiModelId>(() => {
-    const configured = project.aiSettings?.defaultModel as GeminiModelId | undefined;
-    return GEMINI_TASK_MODELS.some((m) => m.id === configured) ? configured! : 'gemini-4-hydrogen';
+  const [provider, setProvider] = useState<ActiveStudioProvider>(() =>
+    normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel)
+  );
+  const [modelId, setModelId] = useState<string>(() => {
+    return project.aiSettings?.defaultModel || 'gemini-4-hydrogen';
   });
+  const [tokenSaverMode, setTokenSaverMode] = useState<TokenSaverMode>(
+    project.aiSettings?.tokenSaverMode || 'economy'
+  );
+  const [openrouterConnected, setOpenrouterConnected] = useState<boolean>(false);
+  const [openrouterModels, setOpenrouterModels] = useState<ModelInfo[]>(OPENROUTER_CURATED_MODELS);
+  const [openaiModels, setOpenaiModels] = useState<ModelInfo[]>([]);
   const [useSearch, setUseSearch] = useState<boolean>(false);
   const [includeProjectContext, setIncludeProjectContext] = useState<boolean>(true);
   const [customInstruction, setCustomInstruction] = useState<string>('');
@@ -94,6 +109,50 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
     setMessages(loadStoredThread(project.projectId));
     setError('');
   }, [project.projectId]);
+
+  useEffect(() => {
+    setProvider(normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel));
+    setModelId(project.aiSettings?.defaultModel || 'gemini-4-hydrogen');
+    setTokenSaverMode(project.aiSettings?.tokenSaverMode || 'economy');
+  }, [
+    project.projectId,
+    project.aiSettings?.provider,
+    project.aiSettings?.defaultModel,
+    project.aiSettings?.tokenSaverMode,
+  ]);
+
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return;
+    let cancelled = false;
+
+    const refresh = () => {
+      void fetchModels()
+        .then((res) => {
+          if (cancelled) return;
+          setOpenrouterConnected(Boolean(res?.openrouterConnected));
+          if (Array.isArray(res?.openrouterModels) && res.openrouterModels.length > 0) {
+            setOpenrouterModels(res.openrouterModels);
+          }
+          if (res?.openaiConfigured) {
+            setOpenaiModels(
+              Array.isArray(res.openaiModels) && res.openaiModels.length > 0
+                ? res.openaiModels
+                : (OPENAI_SERVER_MODELS as unknown as ModelInfo[])
+            );
+          } else {
+            setOpenaiModels([]);
+          }
+        })
+        .catch(() => {});
+    };
+
+    refresh();
+    window.addEventListener(AI_CATALOG_UPDATED_EVENT, refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(AI_CATALOG_UPDATED_EVENT, refresh);
+    };
+  }, [open]);
 
   useEffect(() => {
     saveStoredThread(project.projectId, messages);
@@ -120,7 +179,8 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
     [roleId]
   );
 
-  const effectiveModel: GeminiModelId = useSearch ? 'gemini-4-hydrogen' : modelId;
+  const effectiveProvider: ActiveStudioProvider = useSearch ? 'gemini' : provider;
+  const effectiveModel: string = useSearch ? 'gemini-4-hydrogen' : modelId;
 
   const starterPrompts = useMemo(() => {
     const topicTitle =
@@ -174,7 +234,10 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
     const preset = STUDIO_COPILOT_ROLE_OPTIONS.find((r) => r.id === nextRoleId);
     if (preset) {
       setUseSearch(preset.defaultUseSearch);
-      setModelId(preset.recommendedModel);
+      if (preset.defaultUseSearch || provider !== 'openrouter') {
+        setProvider('gemini');
+        setModelId(preset.recommendedModel);
+      }
     }
   };
 
@@ -184,7 +247,8 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
 
     const targetRole = overrideRole ?? roleId;
     const targetSearch = overrideSearch ?? useSearch;
-    const targetModel: GeminiModelId = targetSearch ? 'gemini-4-hydrogen' : modelId;
+    const targetProvider: ActiveStudioProvider = targetSearch ? 'gemini' : provider;
+    const targetModel: string = targetSearch ? 'gemini-4-hydrogen' : modelId;
 
     if (overrideRole) setRoleId(overrideRole);
     if (typeof overrideSearch === 'boolean') setUseSearch(overrideSearch);
@@ -205,7 +269,10 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
 
     try {
       const response = await sendCopilotChat({
+        provider: targetProvider,
         model: targetModel,
+        tokenSaverMode,
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         roleId: targetRole,
         systemInstruction: customInstruction.trim() || undefined,
         messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
@@ -226,9 +293,9 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
       };
 
       setMessages((prev) => [...prev, assistantTurn]);
-      onRecordAiUsage?.(response.usage, response.model);
+      onRecordAiUsage?.(response.usage, response.model, response.provider);
     } catch (err: any) {
-      setError(err?.message || (lang === 'en' ? 'Failed to reach Gemini assistant.' : '無法連線至 Gemini 助理。'));
+      setError(err?.message || (lang === 'en' ? 'Failed to reach AI assistant.' : '無法連線至 AI 助理。'));
     } finally {
       setSending(false);
     }
@@ -264,12 +331,12 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="text-base font-bold text-slate-900 truncate">
-                {lang === 'en' ? 'Gemini Studio Copilot' : 'Gemini 工作室多輪助理'}
+                {lang === 'en' ? 'Studio AI Copilot' : '工作室多輪策略助理'}
               </h2>
               <p className="text-xs text-slate-600 truncate">
                 {lang === 'en'
-                  ? `Stage: ${activeView.replace(/_/g, ' ')} · Model: ${effectiveModel}`
-                  : `目前階段：${activeView} · 模型：${effectiveModel}`}
+                  ? `Stage: ${activeView.replace(/_/g, ' ')} · Model: ${effectiveModel} · ${tokenSaverMode}`
+                  : `目前階段：${activeView} · 模型：${effectiveModel} · ${tokenSaverMode}`}
               </p>
             </div>
           </div>
@@ -308,7 +375,7 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
               type="button"
               onClick={onClose}
               className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 transition-colors"
-              aria-label={lang === 'en' ? 'Close Gemini Copilot' : '關閉 Gemini 助理'}
+              aria-label={lang === 'en' ? 'Close AI Copilot' : '關閉 AI 助理'}
             >
               <X className="w-4.5 h-4.5" />
             </button>
@@ -334,18 +401,45 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
             </label>
 
             <label className="text-xs font-semibold text-slate-700 block">
-              {lang === 'en' ? 'Gemini Task Model' : '任務模型選擇'}
+              {lang === 'en' ? 'AI Task Model' : '任務模型選擇'}
               <select
-                value={effectiveModel}
+                value={`${effectiveProvider}:${effectiveModel}`}
                 disabled={useSearch}
-                onChange={(e) => setModelId(e.target.value as GeminiModelId)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const idx = val.indexOf(':');
+                  const rawProv = idx > 0 ? val.slice(0, idx) : 'gemini';
+                  const nextId = idx > 0 ? val.slice(idx + 1) : val;
+                  setProvider(normalizeStudioProvider(rawProv, nextId));
+                  setModelId(nextId);
+                }}
                 className="mt-1 w-full px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg text-slate-900 disabled:opacity-75"
               >
-                {GEMINI_TASK_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.labelEn} — {lang === 'en' ? m.taskHintEn : m.taskHintZh}
-                  </option>
-                ))}
+                <optgroup label="Google Gemini">
+                  {GEMINI_TASK_MODELS.map((m) => (
+                    <option key={m.id} value={`gemini:${m.id}`}>
+                      {lang === 'en' ? m.labelEn : m.labelZh} — {lang === 'en' ? m.taskHintEn : m.taskHintZh}
+                    </option>
+                  ))}
+                </optgroup>
+                {(openrouterConnected || effectiveProvider === 'openrouter') && (
+                  <optgroup label="OpenRouter (Connected Account / Key)">
+                    {openrouterModels.map((m) => (
+                      <option key={m.id} value={`openrouter:${m.id}`}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {openaiModels.length > 0 && (
+                  <optgroup label="OpenAI (Server Secret)">
+                    {openaiModels.map((m) => (
+                      <option key={m.id} value={`openai:${m.id}`}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </label>
           </div>
@@ -365,6 +459,24 @@ export const StudioGeminiChat: React.FC<StudioGeminiChatProps> = ({
                   : '啟用 Google 搜尋即時引述 (gemini-4-hydrogen)'}
               </span>
             </label>
+
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+              {TOKEN_SAVER_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  aria-pressed={tokenSaverMode === m.id}
+                  onClick={() => setTokenSaverMode(m.id)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-semibold cursor-pointer ${
+                    tokenSaverMode === m.id
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {lang === 'en' ? m.shortLabelEn : m.shortLabelZh}
+                </button>
+              ))}
+            </div>
 
             <label className="inline-flex items-center gap-2 cursor-pointer text-slate-700">
               <input

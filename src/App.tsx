@@ -894,7 +894,20 @@ export default function App() {
     }));
   };
 
-  const handleRecordAiUsage = (usage?: { total_tokens?: number; estimatedCostUsd?: number }, _model?: string) => {
+  const handleUpdateAiSettings = (newAi: any) => {
+    setProject((prev) => ({
+      ...prev,
+      isBlankProject: false,
+      updatedAt: new Date().toISOString(),
+      aiSettings: newAi,
+    }));
+  };
+
+  const handleRecordAiUsage = (
+    usage?: { total_tokens?: number; estimatedCostUsd?: number },
+    modelArg?: string,
+    providerArg?: 'gemini' | 'openrouter' | 'openai'
+  ) => {
     const tokens = Number(usage?.total_tokens || 0);
     const incrementalCost =
       typeof usage?.estimatedCostUsd === 'number'
@@ -906,7 +919,15 @@ export default function App() {
       isBlankProject: false,
       aiSettings: {
         ...prev.aiSettings,
-        provider: 'gemini',
+        provider:
+          providerArg ||
+          (prev.aiSettings?.provider === 'openrouter'
+            ? 'openrouter'
+            : prev.aiSettings?.provider === 'openai'
+            ? 'openai'
+            : modelArg?.includes('/')
+            ? 'openrouter'
+            : 'gemini'),
         usageStats: {
           ...prev.aiSettings.usageStats,
           totalRequests: (prev.aiSettings.usageStats?.totalRequests || 0) + 1,
@@ -1230,6 +1251,7 @@ export default function App() {
             project={project}
             setActiveView={navigateJourney}
             onUpdateIntake={handleUpdateIntake}
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
@@ -1241,6 +1263,7 @@ export default function App() {
             setActiveView={navigateJourney}
             onSelectOption={handleSelectUVZOption}
             onUpdateUvz={handleUpdateUvz}
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
@@ -1252,6 +1275,7 @@ export default function App() {
             setActiveView={navigateJourney}
             onSelectTitle={handleSelectTitleOption}
             onUpdateTransformationMap={handleUpdateTransformationMap}
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
@@ -1311,6 +1335,7 @@ export default function App() {
             checkingReferences={checkingReferences}
             onApproveGateB={handleApproveGateB}
             onUpdateCharter={handleUpdateCharter}
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
@@ -1338,6 +1363,7 @@ export default function App() {
                 };
               })
             }
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
@@ -1375,6 +1401,7 @@ export default function App() {
             setActiveView={navigateJourney}
             onUpdateChapter={handleUpdateChapter}
             onUpdateProductBible={handleUpdateProductBible}
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
@@ -1423,6 +1450,7 @@ export default function App() {
                 };
               })
             }
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             project={project}
             setActiveView={navigateJourney}
@@ -1445,6 +1473,7 @@ export default function App() {
             project={project}
             setActiveView={navigateJourney}
             onUpdateBrand={handleUpdateBrand}
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
@@ -1455,6 +1484,7 @@ export default function App() {
             project={project}
             setActiveView={navigateJourney}
             onUpdatePricingAndSales={handleUpdatePricingAndSales}
+            onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
           />
@@ -1495,14 +1525,7 @@ export default function App() {
         return (
           <AISettingsView
             project={project}
-            onUpdateAiSettings={(newAi) =>
-              setProject((prev) => ({
-                ...prev,
-                isBlankProject: false,
-                updatedAt: new Date().toISOString(),
-                aiSettings: newAi,
-              }))
-            }
+            onUpdateAiSettings={handleUpdateAiSettings}
             lang={lang}
           />
         );

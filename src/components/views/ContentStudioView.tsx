@@ -21,8 +21,16 @@ import {
   CitationReview,
   ProductBible,
 } from '../../types/project.ts';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
 import { extractChapterContinuity } from '../../utils/stageSynthesis.ts';
+import { generationError } from '../../utils/gateAJourney.ts';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface ContentStudioViewProps {
@@ -32,7 +40,8 @@ interface ContentStudioViewProps {
   setActiveView: (view: any) => void;
   onUpdateChapter: (chapterId: string, content: string, wordCount: number) => void;
   onUpdateProductBible?: (bible: ProductBible) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
 }
 
@@ -43,6 +52,7 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   setActiveView,
   onUpdateChapter,
   onUpdateProductBible,
+  onUpdateAiSettings,
   onRecordAiUsage,
   lang = 'en',
 }) => {
@@ -51,9 +61,12 @@ export const ContentStudioView: React.FC<ContentStudioViewProps> = ({
   const chapters = outline || [];
   const [selectedChapterId, setSelectedChapterId] = useState<string>(chapters[0]?.id || 'CH-01');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [lastAiAction, setLastAiAction] = useState<'draft' | 'polish' | 'batch'>('draft');
   const [batchProgress, setBatchProgress] = useState<string>('');
   const [aiError, setAiError] = useState<string>('');
   const [aiSuccess, setAiSuccess] = useState<string>('');
+  const [fallbackNotice, setFallbackNotice] = useState<string>('');
+  const openrouterConnected = useOpenRouterConnected();
   const [showBibleModal, setShowBibleModal] = useState<boolean>(false);
   const [bibleKeywordsText, setBibleKeywordsText] = useState<string>((productBible?.brandVoiceKeywords || []).join(', '));
   const [bibleConceptsText, setBibleConceptsText] = useState<string>((productBible?.introducedConcepts || []).join('\n'));
@@ -142,11 +155,25 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
     return { systemPrompt, userPrompt };
   };
 
-  const handleGenerateCurrentChapter = async (mode: 'draft' | 'polish' = 'draft') => {
-    if (!currentChapter || !canGenerate) return;
+  const handleGenerateCurrentChapter = async (
+    mode: 'draft' | 'polish' = 'draft',
+    overrideModel?: string,
+    overrideProvider?: ActiveStudioProvider
+  ) => {
+    if (!currentChapter || !canGenerate || isGenerating) return;
+    setLastAiAction(mode);
     setIsGenerating(true);
     setAiError('');
     setAiSuccess('');
+    setFallbackNotice('');
+
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(aiSettings?.provider, aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
 
     try {
       const { systemPrompt, userPrompt } = buildChapterPrompts(
@@ -157,15 +184,24 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
       );
 
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: aiSettings.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
         maxTokens: 3200,
         projectId: project.projectId,
       });
 
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      const fallbackTag = res?.fallbackUsed
+        ? lang === 'en'
+          ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+          : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        : '';
+      if (fallbackTag) setFallbackNotice(fallbackTag);
+
       if (res && res.content) {
         setContentDraft(res.content);
         const words = countManuscriptWords(res.content);
@@ -174,13 +210,14 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
           onUpdateProductBible(extractChapterContinuity(currentChapter, res.content, productBible));
         }
         setAiSuccess(
-          lang === 'en'
+          (lang === 'en'
             ? `Chapter ${currentChapter.order} ${mode === 'polish' ? 'polished' : 'drafted'} (${words.toLocaleString()} words) and synced to Product Bible.`
-            : `第 ${currentChapter.order} 章已${mode === 'polish' ? '完成商業潤飾' : '生成完稿'}（約 ${words.toLocaleString()} 字），並同步更新連續記憶辭典。`
+            : `第 ${currentChapter.order} 章已${mode === 'polish' ? '完成商業潤飾' : '生成完稿'}（約 ${words.toLocaleString()} 字），並同步更新連續記憶辭典。`) +
+            (fallbackTag ? ` (${fallbackTag})` : '')
         );
       }
     } catch (err: any) {
-      setAiError(lang === 'en' ? `Generation failed: ${err.message}` : `生成失敗: ${err.message}`);
+      setAiError(generationError(err, lang));
     } finally {
       setIsGenerating(false);
     }
@@ -188,13 +225,26 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
 
   const pendingChapters = chapters.filter((ch) => !ch.isCompleted || !(ch.contentMarkdown || '').trim());
 
-  const handleBatchGeneratePending = async () => {
-    if (!canGenerate || pendingChapters.length === 0) return;
+  const handleBatchGeneratePending = async (
+    overrideModel?: string,
+    overrideProvider?: ActiveStudioProvider
+  ) => {
+    if (!canGenerate || pendingChapters.length === 0 || isGenerating) return;
+    setLastAiAction('batch');
     setIsGenerating(true);
     setAiError('');
     setAiSuccess('');
+    setFallbackNotice('');
     let runningBible = productBible;
     let completedCount = 0;
+
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(aiSettings?.provider, aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
 
     try {
       for (let i = 0; i < pendingChapters.length; i += 1) {
@@ -206,14 +256,23 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
         );
         const { systemPrompt, userPrompt } = buildChapterPrompts(chapter, runningBible, 'draft');
         const res = await generateTextWithAi({
-          provider: 'gemini',
-          model: aiSettings.defaultModel || 'gemini-4-hydrogen',
+          provider: activeProvider,
+          model: activeModel,
+          tokenSaverMode: aiSettings?.tokenSaverMode || 'economy',
+          allowRateLimitFallback: aiSettings?.allowRateLimitFallback ?? true,
           systemPrompt,
           userPrompt,
           maxTokens: 3200,
           projectId: project.projectId,
         });
-        onRecordAiUsage?.(res?.usage, res?.model);
+        onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+        if (res?.fallbackUsed) {
+          setFallbackNotice(
+            lang === 'en'
+              ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+              : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+          );
+        }
         if (res?.content) {
           const words = countManuscriptWords(res.content);
           onUpdateChapter(chapter.id, res.content, words);
@@ -231,15 +290,64 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
           : `已批量生成 ${completedCount} 個章節並更新連續記憶辭典，請於下方審查引用標註後進入 Gate C。`
       );
     } catch (err: any) {
+      const msg = generationError(err, lang);
       setAiError(
-        lang === 'en'
-          ? `Batch stopped after ${completedCount} chapter(s): ${err.message}`
-          : `批量生成已完成 ${completedCount} 章後中斷：${err.message}`
+        completedCount > 0
+          ? lang === 'en'
+            ? `Batch stopped after ${completedCount} chapter(s): ${msg}`
+            : `批量生成已完成 ${completedCount} 章後中斷：${msg}`
+          : msg
       );
     } finally {
       setBatchProgress('');
       setIsGenerating(false);
     }
+  };
+
+  const handleRetryLastAction = (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {
+    if (lastAiAction === 'batch') {
+      void handleBatchGeneratePending(overrideModel, overrideProvider);
+    } else {
+      void handleGenerateCurrentChapter(lastAiAction, overrideModel, overrideProvider);
+    }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    handleRetryLastAction('gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    handleRetryLastAction(nextModel, 'openrouter');
   };
 
   const wordCount = countManuscriptWords(contentDraft);
@@ -263,7 +371,7 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
             <button
               type="button"
               disabled={isGenerating || !canGenerate}
-              onClick={handleBatchGeneratePending}
+              onClick={() => void handleBatchGeneratePending()}
               title={
                 canGenerate
                   ? 'Sequentially synthesize all uncompleted chapters while maintaining Product Bible continuity'
@@ -297,6 +405,15 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
         </div>
       </div>
 
+      <AiEngineQuickControl
+        project={project}
+        onUpdateAiSettings={onUpdateAiSettings}
+        onOpenAiSettings={() => setActiveView('ai_settings')}
+        disabled={isGenerating}
+        fallbackNotice={fallbackNotice}
+        lang={lang}
+      />
+
       {batchProgress && (
         <p role="status" className="px-4 py-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 text-sm font-semibold">
           {batchProgress}
@@ -310,9 +427,17 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
       )}
 
       {aiError && (
-        <p role="alert" className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-sm font-medium">
-          {aiError}
-        </p>
+        <AiRateLimitNotice
+          errorMessage={aiError}
+          currentModel={aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+          busy={isGenerating}
+          openrouterConnected={openrouterConnected}
+          onRetry={() => handleRetryLastAction()}
+          onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+          onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          lang={lang}
+        />
       )}
 
       {showBibleModal && (

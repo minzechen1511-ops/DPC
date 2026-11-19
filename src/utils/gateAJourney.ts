@@ -2,6 +2,8 @@ import type { DigitalProductProject, StageId } from '../types/project.ts';
 import { gateIssues } from './gatePolicy.ts';
 import { propagateTopicToDownstream } from './marketDiscoveryEngine.ts';
 
+import { formatLocalizedRateLimitError, parseGeminiRateLimitDetails } from './synthesisVisualizer.ts';
+
 // Internal market_research data/services remain intact. Both legacy discovery
 // routes resolve to one user-facing setup step at the existing Gate A checkpoint.
 export const GATE_A_STEPS = ['topic_selection', 'project_brief', 'uvz', 'transformation_map'] as const;
@@ -13,10 +15,21 @@ export function setupStage(stage: string) {
 }
 
 export function generationError(error: unknown, lang: 'en' | 'zh') {
-  const message = error instanceof Error ? error.message : '';
-  if (!message || /json|unexpected token|fetch|network|response/i.test(message)) return lang === 'en'
-    ? 'The AI service did not return a usable response. Check AI settings and your connection, then retry.'
-    : 'AI 服務未傳回可用回應。請檢查 AI 設定與連線，再重試。';
+  const message = error instanceof Error ? error.message.trim() : '';
+  if (
+    !message ||
+    /unexpected (end of json|token)|failed to fetch|fetch failed|networkerror|load failed|is not valid json/i.test(
+      message
+    )
+  ) {
+    return lang === 'en'
+      ? 'The AI service did not return a usable response. Check AI settings and your connection, then retry.'
+      : 'AI 服務未傳回可用回應。請檢查 AI 設定與連線，再重試。';
+  }
+  const parsedGemini = parseGeminiRateLimitDetails(message);
+  if (parsedGemini) {
+    return formatLocalizedRateLimitError(parsedGemini, lang);
+  }
   return message;
 }
 

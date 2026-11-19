@@ -5,7 +5,15 @@ import React, { useMemo, useState } from 'react';
 import { Target, CheckCircle2, Plus, Edit3, Save, X, Sparkles, Compass, TrendingUp, Layers } from 'lucide-react';
 import { DigitalProductProject, UVZAnalysis } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
+import { SynthesisProgressVisualizer } from '../SynthesisProgressVisualizer.tsx';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 import {
   buildUvzSynthesisPrompt,
   parseUvzSynthesisResponse,
@@ -18,7 +26,8 @@ interface UVZViewProps {
   setActiveView: (view: any) => void;
   onSelectOption: (optionId: string) => void;
   onUpdateUvz: (uvz: UVZAnalysis) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
 }
 
@@ -58,6 +67,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
   setActiveView,
   onSelectOption,
   onUpdateUvz,
+  onUpdateAiSettings,
   onRecordAiUsage,
   lang = 'en',
 }) => {
@@ -73,6 +83,8 @@ export const UVZView: React.FC<UVZViewProps> = ({
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiSuccess, setAiSuccess] = useState('');
+  const [fallbackNotice, setFallbackNotice] = useState('');
+  const openrouterConnected = useOpenRouterConnected();
 
   const [showAddOption, setShowAddOption] = useState(false);
   const [newOpt, setNewOpt] = useState({ name: '', angle: '', targetPersona: '', promise: '', pros: '', risks: '' });
@@ -83,38 +95,93 @@ export const UVZView: React.FC<UVZViewProps> = ({
   const [expertiseFitText, setExpertiseFitText] = useState(uvz?.creatorExpertiseFit || '');
   const [feasibilityText, setFeasibilityText] = useState(uvz?.commercialFeasibility || '');
 
-  const handleSynthesizeUvzWithAi = async () => {
+  const handleSynthesizeUvzWithAi = async (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {
     if (aiBusy || !gateAApproved(project)) return;
     setAiBusy(true);
     setAiError('');
     setAiSuccess('');
+    setFallbackNotice('');
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      project.aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
     try {
       const { systemPrompt, userPrompt } = buildUvzSynthesisPrompt(project, lang, {
         lens,
         focusNote,
       });
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: project.aiSettings?.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: project.aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
         maxTokens: 2000,
         projectId: project.projectId,
       });
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      const fallbackTag = res?.fallbackUsed
+        ? lang === 'en'
+          ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+          : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        : '';
+      if (fallbackTag) setFallbackNotice(fallbackTag);
       const nextUvz = parseUvzSynthesisResponse(res?.content || '', uvz);
       onUpdateUvz({...nextUvz, selectedOptionId: '', creatorExpertiseFit: !project.intake.expertise.trim() && !project.intake.relevantExperience.trim() ? (lang === 'en' ? 'Creator expertise is unknown. Topic evidence is not proof of creator-market fit; arrange qualified expert review for specialist claims.' : '創作者專業背景未知。題材證據不代表已證實創作者適配；專業主張需安排合格專家覆核。') : nextUvz.creatorExpertiseFit});
       setEditingProblems(false);
       setAiSuccess(
-        lang === 'en'
+        (lang === 'en'
           ? `Synthesized ${nextUvz.positioningOptions.length} UVZ positioning angles, pain matrix, and feasibility analysis.`
-          : `已自動分析題材並生成 ${nextUvz.positioningOptions.length} 個 UVZ 定位方案、痛點矩陣與商業可行性評估。`
+          : `已自動分析題材並生成 ${nextUvz.positioningOptions.length} 個 UVZ 定位方案、痛點矩陣與商業可行性評估。`) +
+          (fallbackTag ? ` (${fallbackTag})` : '')
       );
     } catch (err: any) {
       setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    void handleSynthesizeUvzWithAi('gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = project.aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    void handleSynthesizeUvzWithAi(nextModel, 'openrouter');
   };
 
   const handleCreateOption = (e: React.FormEvent) => {
@@ -198,7 +265,39 @@ export const UVZView: React.FC<UVZViewProps> = ({
 
       {options.length > 0 && project.workflow.stageStatuses.uvz === 'NEEDS_REVIEW' && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{lang === 'en' ? 'The approved topic or brief changed. These positioning options are older drafts. Generate again or review/edit an option before explicitly choosing to use it.' : '核准題材或簡報已變更，下方定位為舊草稿。請重新生成，或審查／編輯方案後再明確選擇採用。'}</p>}
       <p className="text-sm text-slate-700">{lang === 'en' ? 'Uses your approved niche and available brief. Compare the recommendation, audience, promise, advantages and risks. Choose any option or add your own; no expertise or sales result is assumed.' : '承接已核准題材與現有簡報。請比較推薦理由、受眾、主張、優勢及風險；可任選方案或自訂，不預設專業能力或銷售成果。'}</p>
-      <div aria-live="polite">{aiBusy && <p role="status" className="text-sm text-teal-900">{lang === 'en' ? 'Generating a draft… Existing work is retained until this request succeeds.' : '正在生成草稿… 請求成功前會保留現有內容。'}</p>}{aiError && <p role="alert" className="p-3 text-sm rounded-lg bg-rose-50 text-rose-900">{aiError} {lang === 'en' ? 'Your previous draft is retained. Retry the generation action.' : '已保留原草稿，請重試生成。'}</p>}</div>
+      <AiEngineQuickControl
+        project={project}
+        onUpdateAiSettings={onUpdateAiSettings}
+        onOpenAiSettings={() => setActiveView('ai_settings')}
+        disabled={aiBusy}
+        fallbackNotice={fallbackNotice}
+        lang={lang}
+      />
+
+      <div aria-live="polite">
+        {aiBusy && (
+          <SynthesisProgressVisualizer
+            stage="uvz"
+            model={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+            contextTitle={contextSummary.topicTitle}
+            lang={lang}
+          />
+        )}
+        {aiError && (
+          <AiRateLimitNotice
+            errorMessage={aiError}
+            currentModel={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+            draftRetained={true}
+            busy={aiBusy}
+            openrouterConnected={openrouterConnected}
+            onRetry={() => void handleSynthesizeUvzWithAi()}
+            onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+            onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+            onOpenAiSettings={() => setActiveView('ai_settings')}
+            lang={lang}
+          />
+        )}
+      </div>
       <details><summary className="cursor-pointer font-semibold text-teal-800 p-3 focus-visible:outline-2">{lang === 'en' ? 'Optional AI settings and regeneration' : '選用 AI 設定與重新生成'}</summary>
       {/* Guided Automated Synthesis Bar (Digital Product Studio Style) */}
       <div className="lab-panel p-6 lg:p-7 space-y-5 bg-gradient-to-br from-white via-teal-50/20 to-sky-50/30">
@@ -299,7 +398,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
           <button
             type="button"
             disabled={aiBusy}
-            onClick={handleSynthesizeUvzWithAi}
+            onClick={() => void handleSynthesizeUvzWithAi()}
             className="px-6 py-3 text-sm font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors flex items-center justify-center gap-2 shrink-0 shadow-sm disabled:opacity-60"
           >
             <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
@@ -314,11 +413,6 @@ export const UVZView: React.FC<UVZViewProps> = ({
         {aiSuccess && (
           <p role="status" className="px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium">
             {aiSuccess}
-          </p>
-        )}
-        {aiError && (
-          <p role="alert" className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-sm font-medium">
-            {aiError}
           </p>
         )}
       </div>

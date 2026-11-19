@@ -46,17 +46,38 @@ export function sanitizeProjectForExport(
   delete cloned.desktopSubscription;
 
   const rawModel = String(cloned.aiSettings?.defaultModel || '').trim();
+  const rawProvider = String(cloned.aiSettings?.provider || '').trim().toLowerCase();
   const validGeminiModels = new Set([
     'gemini-4-hydrogen',
     'gemini-3.1-flash-lite',
+    'gemini-4-neon',
     'gemini-4-argon',
     'gemini-4-carbon',
   ]);
-  const normalizedModel = validGeminiModels.has(rawModel) ? rawModel : 'gemini-4-hydrogen';
+  const validOpenAiModels = new Set([
+    'gpt-4.1-mini',
+    'gpt-4o-mini',
+    'gpt-4.1',
+  ]);
+  const isOpenRouterModel = /^[a-z0-9][a-z0-9._-]{0,60}\/[a-z0-9][a-z0-9._:-]{0,120}$/i.test(rawModel);
+  const useOpenRouter = rawProvider === 'openrouter' && isOpenRouterModel;
+  const useOpenAi = rawProvider === 'openai' && validOpenAiModels.has(rawModel);
+  const normalizedProvider = useOpenRouter ? 'openrouter' : useOpenAi ? 'openai' : 'gemini';
+  const normalizedModel = useOpenRouter || useOpenAi
+    ? rawModel
+    : validGeminiModels.has(rawModel)
+    ? rawModel
+    : 'gemini-4-hydrogen';
+
+  const rawSaver = cloned.aiSettings?.tokenSaverMode;
+  const normalizedSaver =
+    rawSaver === 'balanced' || rawSaver === 'deep' || rawSaver === 'economy'
+      ? rawSaver
+      : 'economy';
 
   cloned.aiSettings = {
     ...(cloned.aiSettings || {}),
-    provider: 'gemini',
+    provider: normalizedProvider,
     apiKey: '',
     apiKeys: {
       openrouter: '',
@@ -65,9 +86,11 @@ export function sanitizeProjectForExport(
       claude: '',
     },
     defaultModel: normalizedModel,
+    tokenSaverMode: normalizedSaver,
+    allowRateLimitFallback: Boolean(cloned.aiSettings?.allowRateLimitFallback ?? true),
     providerModels: {
       ...(cloned.aiSettings?.providerModels || {}),
-      gemini: normalizedModel,
+      [normalizedProvider]: normalizedModel,
     },
     freeOnly: false,
     allowPaidFallback: Boolean(cloned.aiSettings?.allowPaidFallback ?? true),

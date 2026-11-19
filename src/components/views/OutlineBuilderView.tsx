@@ -2,16 +2,25 @@ import React, { useState } from 'react';
 import { ListTree, CheckCircle2, Plus, Trash2, Sparkles, BarChart3, Lock, ArrowRight } from 'lucide-react';
 import { DigitalProductProject, ChapterOutlineItem } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
 import { countManuscriptWords } from '../../utils/textMetrics.ts';
 import { checkStagePrerequisites } from '../../utils/workflowEngine.ts';
 import { buildOutlineSynthesisPrompt, parseOutlineSynthesisResponse } from '../../utils/stageSynthesis.ts';
+import { generationError } from '../../utils/gateAJourney.ts';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 
 interface OutlineBuilderViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onUpdateOutline: (outline: ChapterOutlineItem[]) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
 }
 
@@ -19,6 +28,7 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
   project,
   setActiveView,
   onUpdateOutline,
+  onUpdateAiSettings,
   onRecordAiUsage,
   lang = 'en',
 }) => {
@@ -28,7 +38,9 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
   const prereq = checkStagePrerequisites('outline_builder', project);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [fallbackNotice, setFallbackNotice] = useState('');
   const [focusNote, setFocusNote] = useState('');
+  const openrouterConnected = useOpenRouterConnected();
 
   const totalWords = chapters.reduce((sum, ch) => sum + (ch.actualWordCount || ch.targetWordCount || 0), 0);
   const maxTargetWords = Math.max(1, ...chapters.map((ch) => Math.max(ch.targetWordCount || 0, countManuscriptWords(ch.contentMarkdown || ''))));
@@ -67,34 +79,85 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
     onUpdateOutline(filtered);
   };
 
-  const handleDraftOutlineWithAi = async () => {
+  const handleDraftOutlineWithAi = async (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {
+    if (aiBusy) return;
     setAiBusy(true);
     setAiError('');
+    setFallbackNotice('');
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      project.aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
     try {
       const { systemPrompt, userPrompt } = buildOutlineSynthesisPrompt(project, lang, focusNote);
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: project.aiSettings.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: project.aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
         maxTokens: 2400,
         projectId: project.projectId,
       });
 
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      if (res?.fallbackUsed) {
+        setFallbackNotice(
+          lang === 'en'
+            ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+            : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        );
+      }
       const availableRefs = project.referenceLibrary.cards.map((c) => c.id);
       const built = parseOutlineSynthesisResponse(res?.content || '', availableRefs);
       onUpdateOutline(built);
     } catch (err: any) {
-      setAiError(
-        err?.message ||
-          (lang === 'en'
-            ? 'Could not reach server Gemini engine. Check Gemini AI Settings or sign in again.'
-            : '無法連接伺服器端 Gemini 引擎，請檢查「Gemini AI 與用量設定」或重新登入。')
-      );
+      setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    void handleDraftOutlineWithAi('gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = project.aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    void handleDraftOutlineWithAi(nextModel, 'openrouter');
   };
 
   return (
@@ -118,7 +181,7 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
           <button
             type="button"
             disabled={aiBusy || !prereq.canRun}
-            onClick={handleDraftOutlineWithAi}
+            onClick={() => void handleDraftOutlineWithAi()}
             className="px-4 py-2.5 text-sm font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
@@ -178,27 +241,45 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
       )}
 
       {/* Synthesise.ai Curriculum Guidance Bar */}
-      <div className="lab-panel p-4 sm:p-5 bg-gradient-to-r from-teal-50/60 via-white to-sky-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
-        <span className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 whitespace-nowrap">
-          {lang === 'en' ? 'Outline Architect Prompt:' : '大綱結構引導提示：'}
-        </span>
-        <input
-          type="text"
-          value={focusNote}
-          onChange={(e) => setFocusNote(e.target.value)}
-          placeholder={
-            lang === 'en'
-              ? 'Optional structure request (e.g., 6 chapters, include a troubleshooting chapter and a 30-day sprint roadmap...)'
-              : '選填大綱結構偏好（例如：規劃 6 章、加入常見盲點排解章節與 30 天執行路線圖...）'
-          }
-          className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800"
+      <div className="lab-panel p-4 sm:p-5 bg-gradient-to-r from-teal-50/60 via-white to-sky-50/50 space-y-3">
+        <AiEngineQuickControl
+          project={project}
+          onUpdateAiSettings={onUpdateAiSettings}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          disabled={aiBusy}
+          fallbackNotice={fallbackNotice}
+          lang={lang}
         />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <span className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 whitespace-nowrap">
+            {lang === 'en' ? 'Outline Architect Prompt:' : '大綱結構引導提示：'}
+          </span>
+          <input
+            type="text"
+            value={focusNote}
+            onChange={(e) => setFocusNote(e.target.value)}
+            placeholder={
+              lang === 'en'
+                ? 'Optional structure request (e.g., 6 chapters, include a troubleshooting chapter and a 30-day sprint roadmap...)'
+                : '選填大綱結構偏好（例如：規劃 6 章、加入常見盲點排解章節與 30 天執行路線圖...）'
+            }
+            className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800"
+          />
+        </div>
       </div>
 
       {aiError && (
-        <p role="alert" className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-sm font-medium">
-          {aiError}
-        </p>
+        <AiRateLimitNotice
+          errorMessage={aiError}
+          currentModel={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+          busy={aiBusy}
+          openrouterConnected={openrouterConnected}
+          onRetry={() => void handleDraftOutlineWithAi()}
+          onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+          onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          lang={lang}
+        />
       )}
 
       {/* Scientific Word Allocation Spectrum */}

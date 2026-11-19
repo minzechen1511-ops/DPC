@@ -5,14 +5,23 @@ import React, { useState, useEffect } from 'react';
 import { FileText, CheckCircle2, Lock, Unlock, Save, Sparkles } from 'lucide-react';
 import { DigitalProductProject, ProjectIntake } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
+import { SynthesisProgressVisualizer } from '../SynthesisProgressVisualizer.tsx';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 import { buildBriefSynthesisPrompt, parseBriefSynthesisResponse } from '../../utils/stageSynthesis.ts';
 
 interface ProjectBriefViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onUpdateIntake: (intake: ProjectIntake) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
 }
 
@@ -20,6 +29,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
   project,
   setActiveView,
   onUpdateIntake,
+  onUpdateAiSettings,
   onRecordAiUsage,
   lang = 'en',
 }) => {
@@ -32,6 +42,8 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiSuccess, setAiSuccess] = useState('');
+  const [fallbackNotice, setFallbackNotice] = useState('');
+  const openrouterConnected = useOpenRouterConnected();
 
   useEffect(() => {
     setIntake(project.intake);
@@ -55,11 +67,19 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
     setActiveView('uvz');
   };
 
-  const handleSynthesizeBrief = async () => {
-    if (!gateAApproved(project)) return;
+  const handleSynthesizeBrief = async (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {
+    if (!gateAApproved(project) || aiBusy) return;
     setAiBusy(true);
     setAiError('');
     setAiSuccess('');
+    setFallbackNotice('');
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      project.aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
     try {
       const workingProject: DigitalProductProject = {
         ...project,
@@ -67,14 +87,22 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
       };
       const { systemPrompt, userPrompt } = buildBriefSynthesisPrompt(workingProject, lang, focusNote);
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: project.aiSettings?.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: project.aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
         maxTokens: 2000,
         projectId: project.projectId,
       });
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      const fallbackTag = res?.fallbackUsed
+        ? lang === 'en'
+          ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+          : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        : '';
+      if (fallbackTag) setFallbackNotice(fallbackTag);
       const synthesized = parseBriefSynthesisResponse(res?.content || '', intake);
       const merged: ProjectIntake = {
         ...synthesized,
@@ -84,15 +112,53 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
       setIntake(merged);
       onUpdateIntake(merged);
       setAiSuccess(
-        lang === 'en'
+        (lang === 'en'
           ? 'Brief draft updated. Creator facts were preserved; audience and product claims still require validation.'
-          : '簡報草稿已更新；已保留創作者事實，受眾與產品主張仍待驗證。'
+          : '簡報草稿已更新；已保留創作者事實，受眾與產品主張仍待驗證。') + (fallbackTag ? ` (${fallbackTag})` : '')
       );
     } catch (err: any) {
       setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    void handleSynthesizeBrief('gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = project.aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    void handleSynthesizeBrief(nextModel, 'openrouter');
   };
 
   return (
@@ -168,7 +234,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
           <button
             type="button"
             disabled={aiBusy}
-            onClick={handleSynthesizeBrief}
+            onClick={() => void handleSynthesizeBrief()}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap shrink-0"
           >
             <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
@@ -179,6 +245,18 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
             </span>
           </button>
         </div>
+
+        <AiEngineQuickControl
+          project={project}
+          onUpdateAiSettings={onUpdateAiSettings}
+          onOpenAiSettings={() => {
+            onUpdateIntake(intake);
+            setActiveView('ai_settings');
+          }}
+          disabled={aiBusy}
+          fallbackNotice={fallbackNotice}
+          lang={lang}
+        />
 
         <input
           type="text"
@@ -195,11 +273,32 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
       </div>
 
       </details>
-      {aiError && (
-        <p role="alert" className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-sm font-medium">
-          {aiError}
-        </p>
-      )}
+      <div aria-live="polite">
+        {aiBusy && (
+          <SynthesisProgressVisualizer
+            stage="project_brief"
+            model={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+            contextTitle={intake.projectName || project.name}
+            lang={lang}
+          />
+        )}
+        {aiError && (
+          <AiRateLimitNotice
+            errorMessage={aiError}
+            currentModel={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+            busy={aiBusy}
+            openrouterConnected={openrouterConnected}
+            onRetry={() => void handleSynthesizeBrief()}
+            onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+            onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+            onOpenAiSettings={() => {
+              onUpdateIntake(intake);
+              setActiveView('ai_settings');
+            }}
+            lang={lang}
+          />
+        )}
+      </div>
 
       {(savedNotice || aiSuccess) && (
         <p role="status" className="px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium">

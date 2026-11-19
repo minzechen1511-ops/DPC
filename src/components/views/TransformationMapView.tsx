@@ -5,7 +5,15 @@ import React, { useMemo, useState } from 'react';
 import { GitFork, Plus, Edit3, Save, X, Sparkles, RefreshCw, Compass } from 'lucide-react';
 import { DigitalProductProject, TransformationMap } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
+import { SynthesisProgressVisualizer } from '../SynthesisProgressVisualizer.tsx';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 import {
   buildTransformationSynthesisPrompt,
   parseTitleOptionsResponse,
@@ -19,7 +27,8 @@ interface TransformationMapViewProps {
   setActiveView: (view: any) => void;
   onSelectTitle: (titleId: string) => void;
   onUpdateTransformationMap: (map: TransformationMap) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
 }
 
@@ -35,6 +44,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
   setActiveView,
   onSelectTitle,
   onUpdateTransformationMap,
+  onUpdateAiSettings,
   onRecordAiUsage,
   lang = 'en',
 }) => {
@@ -51,8 +61,11 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
   const [lens, setLens] = useState<StrategyFocusLens>('balanced');
   const [focusNote, setFocusNote] = useState('');
   const [aiBusy, setAiBusy] = useState<'full' | 'titles' | null>(null);
+  const [lastTitlesOnly, setLastTitlesOnly] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiSuccess, setAiSuccess] = useState('');
+  const [fallbackNotice, setFallbackNotice] = useState('');
+  const openrouterConnected = useOpenRouterConnected();
 
   const [showAddTitle, setShowAddTitle] = useState(false);
   const [newTitle, setNewTitle] = useState({ title: '', subtitle: '', rationale: '' });
@@ -74,13 +87,26 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
   const [deliverablesText, setDeliverablesText] = useState((afterState?.completedDeliverables || []).join('\n'));
   const [metricsText, setMetricsText] = useState((afterState?.measurableMetrics || []).join('\n'));
 
-  const handleSynthesizeMap = async (titlesOnly = false) => {
+  const handleSynthesizeMap = async (
+    titlesOnly = false,
+    overrideModel?: string,
+    overrideProvider?: ActiveStudioProvider
+  ) => {
     if (aiBusy) return;
     if (!gateAApproved(project) || !selectedPositioning(project) || aiBusy) return;
     if (titlesOnly && (!mapDraftReady(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW')) return;
+    setLastTitlesOnly(titlesOnly);
     setAiBusy(titlesOnly ? 'titles' : 'full');
     setAiError('');
     setAiSuccess('');
+    setFallbackNotice('');
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      project.aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
     try {
       const { systemPrompt, userPrompt } = buildTransformationSynthesisPrompt(project, lang, {
         lens,
@@ -88,33 +114,80 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
         titlesOnly,
       });
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: project.aiSettings?.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: project.aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
         maxTokens: titlesOnly ? 1200 : 2200,
         projectId: project.projectId,
       });
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      const fallbackTag = res?.fallbackUsed
+        ? lang === 'en'
+          ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+          : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        : '';
+      if (fallbackTag) setFallbackNotice(fallbackTag);
       const updatedMap = titlesOnly
         ? parseTitleOptionsResponse(res?.content || '', transformationMap)
         : parseTransformationSynthesisResponse(res?.content || '', transformationMap);
       onUpdateTransformationMap({...updatedMap, selectedTitleId: ''});
       setEditingMap(false);
       setAiSuccess(
-        titlesOnly
+        (titlesOnly
           ? lang === 'en'
             ? `Generated ${updatedMap.titleOptions.length} commercial title & subtitle options aligned with your transformation map.`
             : `已重新生成 ${updatedMap.titleOptions.length} 組商業書名與副標題切入建議。`
           : lang === 'en'
           ? `Synthesized full Before → Bridge → After transformation architecture and ${updatedMap.titleOptions.length} title options.`
-          : `已自動生成完整 Before → Bridge → After 客戶轉變地圖與 ${updatedMap.titleOptions.length} 組書名建議。`
+          : `已自動生成完整 Before → Bridge → After 客戶轉變地圖與 ${updatedMap.titleOptions.length} 組書名建議。`) +
+          (fallbackTag ? ` (${fallbackTag})` : '')
       );
     } catch (err: any) {
       setAiError(generationError(err, lang));
     } finally {
       setAiBusy(null);
     }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    void handleSynthesizeMap(lastTitlesOnly, 'gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = project.aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    void handleSynthesizeMap(lastTitlesOnly, nextModel, 'openrouter');
   };
 
   const handleAddTitle = (e: React.FormEvent) => {
@@ -235,7 +308,39 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
       </div>
 
       <p className="text-sm text-slate-700">{lang === 'en' ? `Carried forward: ${selectedPositioning(project)?.name || 'select a UVZ option first'}. The map turns that positioning into Before → Bridge → After and editable title/subtitle options. Reference Library will collect and review sources for these intended outcomes.` : `已承接：${selectedPositioning(project)?.name || '請先選擇 UVZ 方案'}。此步將定位轉為 Before → Bridge → After 與可編輯書名／副標題；接著前往來源研究庫，蒐集並審查支持這些目標的證據。`}</p>
-      <div aria-live="polite">{aiBusy && <p role="status" className="text-sm text-teal-900">{lang === 'en' ? 'Generating a draft… Existing work is retained until this request succeeds.' : '正在生成草稿… 請求成功前會保留現有內容。'}</p>}{aiError && <p role="alert" className="p-3 text-sm rounded-lg bg-rose-50 text-rose-900">{aiError} {lang === 'en' ? 'Your previous draft is retained. Retry the generation action.' : '已保留原草稿，請重試生成。'}</p>}</div>
+      <AiEngineQuickControl
+        project={project}
+        onUpdateAiSettings={onUpdateAiSettings}
+        onOpenAiSettings={() => setActiveView('ai_settings')}
+        disabled={Boolean(aiBusy)}
+        fallbackNotice={fallbackNotice}
+        lang={lang}
+      />
+
+      <div aria-live="polite">
+        {aiBusy && (
+          <SynthesisProgressVisualizer
+            stage={aiBusy === 'titles' ? 'transformation_titles' : 'transformation_full'}
+            model={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+            contextTitle={contextSummary.selectedUvzName || contextSummary.topicTitle}
+            lang={lang}
+          />
+        )}
+        {aiError && (
+          <AiRateLimitNotice
+            errorMessage={aiError}
+            currentModel={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+            draftRetained={true}
+            busy={Boolean(aiBusy)}
+            openrouterConnected={openrouterConnected}
+            onRetry={() => void handleSynthesizeMap(lastTitlesOnly)}
+            onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+            onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+            onOpenAiSettings={() => setActiveView('ai_settings')}
+            lang={lang}
+          />
+        )}
+      </div>
       {titleOptions.length > 0 && project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW' && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{lang === 'en' ? 'Positioning or brief changed. The map below is an older draft. Regenerate it, or edit and save the matrix for the current context before using a title and continuing.' : '定位或簡報已變更，下方地圖為舊草稿。請重新生成，或依目前脈絡編輯並儲存矩陣，再採用書名並繼續。'}</p>}
       <details><summary className="cursor-pointer font-semibold text-teal-800 p-3 focus-visible:outline-2">{lang === 'en' ? 'Optional AI settings and regeneration' : '選用 AI 設定與重新生成'}</summary>
       {/* Guided Automated Synthesis Panel */}
@@ -342,11 +447,6 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
         {aiSuccess && (
           <p role="status" className="px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium">
             {aiSuccess}
-          </p>
-        )}
-        {aiError && (
-          <p role="alert" className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-sm font-medium">
-            {aiError}
           </p>
         )}
       </div>

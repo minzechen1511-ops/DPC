@@ -50,11 +50,43 @@ function cleanStringArray(value: unknown, fallback: string[] = []): string[] {
 function extractJsonObject(rawContent: string): Record<string, any> {
   const raw = String(rawContent || '').trim();
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const startIdx = stripped.indexOf('{');
+  if (startIdx < 0) {
     throw new Error('AI response did not contain a structured JSON object.');
   }
-  const parsed = JSON.parse(jsonMatch[0]);
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let endIdx = -1;
+
+  for (let i = startIdx; i < stripped.length; i++) {
+    const ch = stripped[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        endIdx = i;
+        break;
+      }
+    }
+  }
+
+  const candidate = endIdx >= startIdx ? stripped.slice(startIdx, endIdx + 1) : stripped.slice(startIdx);
+  const parsed = JSON.parse(candidate);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('AI response returned an unexpected JSON shape.');
   }

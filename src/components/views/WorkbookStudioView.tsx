@@ -4,13 +4,22 @@ import React, { useState } from 'react';
 import { Layers, Copy, Sparkles } from 'lucide-react';
 import { DigitalProductProject, ResourceAsset } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
 import { buildWorkbookSuitePrompt, parseWorkbookSuiteResponse } from '../../utils/stageSynthesis.ts';
+import { generationError } from '../../utils/gateAJourney.ts';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 
 interface WorkbookStudioViewProps {
   onSaveResource: (resource: ResourceAsset) => void;
   onSaveResources?: (resources: ResourceAsset[]) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   lang?: Language;
@@ -19,6 +28,7 @@ interface WorkbookStudioViewProps {
 export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
   onSaveResource,
   onSaveResources,
+  onUpdateAiSettings,
   onRecordAiUsage,
   project,
   setActiveView,
@@ -32,9 +42,12 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
   const [selectedResourceId, setSelectedResourceId] = useState<string>(items[0]?.id || 'RES-01');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [lastMode, setLastMode] = useState<'suite' | 'single'>('suite');
   const [aiError, setAiError] = useState('');
+  const [fallbackNotice, setFallbackNotice] = useState('');
   const [aiFocusNote, setAiFocusNote] = useState('');
   const [aiChapterId, setAiChapterId] = useState('');
+  const openrouterConnected = useOpenRouterConnected();
 
   const currentResource = items.find((r) => r.id === selectedResourceId) || items[0];
 
@@ -44,10 +57,24 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleGenerateToolkit = async (mode: 'suite' | 'single') => {
+  const handleGenerateToolkit = async (
+    mode: 'suite' | 'single',
+    overrideModel?: string,
+    overrideProvider?: ActiveStudioProvider
+  ) => {
+    if (aiBusy) return;
+    setLastMode(mode);
     setAiBusy(true);
     setAiError('');
     setSaveMessage('');
+    setFallbackNotice('');
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      project.aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
     try {
       const { systemPrompt, userPrompt } = buildWorkbookSuitePrompt(project, lang, {
         mode,
@@ -55,14 +82,22 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
         focusNote: aiFocusNote,
       });
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: project.aiSettings?.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: project.aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
         maxTokens: mode === 'suite' ? 3200 : 1800,
         projectId: project.projectId,
       });
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      const fallbackTag = res?.fallbackUsed
+        ? lang === 'en'
+          ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+          : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        : '';
+      if (fallbackTag) setFallbackNotice(fallbackTag);
       const generated = parseWorkbookSuiteResponse(
         res?.content || '',
         mode === 'single' ? aiChapterId || undefined : undefined
@@ -77,20 +112,54 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
       }
       setSelectedResourceId(generated[0].id);
       setSaveMessage(
-        lang === 'en'
+        (lang === 'en'
           ? `Added ${generated.length} commercial companion asset(s) to your bundle. Review citations below before Gate C.`
-          : `已自動生成並加入 ${generated.length} 項商業級伴隨實作資源。請於下方審查引用後進入 Gate C。`
+          : `已自動生成並加入 ${generated.length} 項商業級伴隨實作資源。請於下方審查引用後進入 Gate C。`) +
+          (fallbackTag ? ` (${fallbackTag})` : '')
       );
     } catch (err: any) {
-      setAiError(
-        err?.message ||
-          (lang === 'en'
-            ? 'Could not reach server Gemini engine to build companion resources.'
-            : '無法連接伺服器端 Gemini 引擎以生成伴隨實作資源。')
-      );
+      setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    void handleGenerateToolkit(lastMode, 'gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = project.aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    void handleGenerateToolkit(lastMode, nextModel, 'openrouter');
   };
 
   return (
@@ -137,7 +206,7 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
             <button
               type="button"
               disabled={aiBusy}
-              onClick={() => handleGenerateToolkit('suite')}
+              onClick={() => void handleGenerateToolkit('suite')}
               className="px-5 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
             >
               <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
@@ -151,7 +220,7 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
             <button
               type="button"
               disabled={aiBusy}
-              onClick={() => handleGenerateToolkit('single')}
+              onClick={() => void handleGenerateToolkit('single')}
               className="px-4 py-2.5 text-sm font-semibold text-teal-900 bg-white hover:bg-slate-50 border border-teal-300 rounded-xl transition-colors flex items-center gap-2 whitespace-nowrap"
             >
               <Sparkles className="w-4 h-4 text-teal-700" />
@@ -159,6 +228,15 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
             </button>
           </div>
         </div>
+
+        <AiEngineQuickControl
+          project={project}
+          onUpdateAiSettings={onUpdateAiSettings}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          disabled={aiBusy}
+          fallbackNotice={fallbackNotice}
+          lang={lang}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <select
@@ -190,9 +268,17 @@ export const WorkbookStudioView: React.FC<WorkbookStudioViewProps> = ({
       </div>
 
       {aiError && (
-        <p role="alert" className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-sm font-medium">
-          {aiError}
-        </p>
+        <AiRateLimitNotice
+          errorMessage={aiError}
+          currentModel={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+          busy={aiBusy}
+          openrouterConnected={openrouterConnected}
+          onRetry={() => void handleGenerateToolkit(lastMode)}
+          onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+          onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          lang={lang}
+        />
       )}
 
       {saveMessage && (

@@ -14,8 +14,16 @@ import {
 import { DigitalProductProject, SalesAssets } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 import { calculateProfitability, PLATFORM_FEE_PRESETS } from '../../utils/commercialMath.ts';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
 import { UnitEconomicsChart } from '../ScientificVisuals.tsx';
+import { generationError } from '../../utils/gateAJourney.ts';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 
 interface PricingLaunchViewProps {
   project: DigitalProductProject;
@@ -24,7 +32,8 @@ interface PricingLaunchViewProps {
     pricingReport: DigitalProductProject['pricingReport'],
     salesAssets: SalesAssets
   ) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
 }
 
@@ -32,6 +41,7 @@ export const PricingLaunchView: React.FC<PricingLaunchViewProps> = ({
   project,
   setActiveView,
   onUpdatePricingAndSales,
+  onUpdateAiSettings,
   onRecordAiUsage,
   lang = 'en',
 }) => {
@@ -43,6 +53,8 @@ export const PricingLaunchView: React.FC<PricingLaunchViewProps> = ({
   const [savedNotice, setSavedNotice] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [fallbackNotice, setFallbackNotice] = useState('');
+  const openrouterConnected = useOpenRouterConnected();
 
   // Profitability Simulator state
   const [selectedPresetId, setSelectedPresetId] = useState<string>('lemonsqueezy');
@@ -103,9 +115,18 @@ export const PricingLaunchView: React.FC<PricingLaunchViewProps> = ({
     setTimeout(() => setCopiedEmailDay(null), 2000);
   };
 
-  const handleGenerateAiLaunchCopy = async () => {
+  const handleGenerateAiLaunchCopy = async (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {
+    if (aiBusy) return;
     setAiBusy(true);
     setAiError('');
+    setFallbackNotice('');
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      project.aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
     try {
       const outputLang = lang === 'en' ? 'English' : 'Traditional Chinese';
       const userPrompt = `Generate high-converting, truthful commercial launch assets in ${outputLang} for this digital product as valid JSON ONLY (no markdown fences):
@@ -138,8 +159,10 @@ Return JSON with exact keys:
 }`;
 
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: project.aiSettings.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: project.aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt:
           'You are a senior digital product launch strategist. Output concise, non-hyped, accurate JSON strictly matching the requested schema.',
         userPrompt,
@@ -147,7 +170,14 @@ Return JSON with exact keys:
         projectId: project.projectId,
       });
 
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      if (res?.fallbackUsed) {
+        setFallbackNotice(
+          lang === 'en'
+            ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+            : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        );
+      }
       const raw = String(res?.content || '').trim();
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('AI response did not return structured JSON.');
@@ -174,15 +204,48 @@ Return JSON with exact keys:
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3000);
     } catch (err: any) {
-      setAiError(
-        err?.message ||
-          (lang === 'en'
-            ? 'Could not reach server Gemini engine. Check Gemini AI Settings or sign in again.'
-            : '無法連接伺服器端 Gemini 引擎，請檢查「Gemini AI 與用量設定」或重新登入。')
-      );
+      setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    void handleGenerateAiLaunchCopy('gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = project.aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    void handleGenerateAiLaunchCopy(nextModel, 'openrouter');
   };
 
   return (
@@ -202,7 +265,7 @@ Return JSON with exact keys:
           <button
             type="button"
             disabled={aiBusy}
-            onClick={handleGenerateAiLaunchCopy}
+            onClick={() => void handleGenerateAiLaunchCopy()}
             className="px-4 py-2.5 text-sm font-semibold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-2"
           >
             <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
@@ -232,6 +295,15 @@ Return JSON with exact keys:
         </div>
       </div>
 
+      <AiEngineQuickControl
+        project={project}
+        onUpdateAiSettings={onUpdateAiSettings}
+        onOpenAiSettings={() => setActiveView('ai_settings')}
+        disabled={aiBusy}
+        fallbackNotice={fallbackNotice}
+        lang={lang}
+      />
+
       {savedNotice && (
         <p role="status" className="px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -240,9 +312,17 @@ Return JSON with exact keys:
       )}
 
       {aiError && (
-        <p role="alert" className="px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-sm font-medium">
-          {aiError}
-        </p>
+        <AiRateLimitNotice
+          errorMessage={aiError}
+          currentModel={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+          busy={aiBusy}
+          openrouterConnected={openrouterConnected}
+          onRetry={() => void handleGenerateAiLaunchCopy()}
+          onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+          onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          lang={lang}
+        />
       )}
 
       {/* Editable 3-Tier Value-Based Pricing Ladder */}

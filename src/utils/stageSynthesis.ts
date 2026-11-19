@@ -9,14 +9,48 @@ import type {
 import type { Language } from './i18n.ts';
 import { summarizeStrategyContext } from './strategySynthesis.ts';
 
-function extractJsonObject(rawContent: string): Record<string, any> {
+function extractBalancedSegment(rawContent: string, openCh: '{' | '[', closeCh: '}' | ']'): string {
   const raw = String(rawContent || '').trim();
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const startIdx = stripped.indexOf(openCh);
+  if (startIdx < 0) return '';
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = startIdx; i < stripped.length; i++) {
+    const ch = stripped[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === openCh) {
+      depth++;
+    } else if (ch === closeCh) {
+      depth--;
+      if (depth === 0) {
+        return stripped.slice(startIdx, i + 1);
+      }
+    }
+  }
+  return stripped.slice(startIdx);
+}
+
+function extractJsonObject(rawContent: string): Record<string, any> {
+  const candidate = extractBalancedSegment(rawContent, '{', '}');
+  if (!candidate) {
     throw new Error('AI response did not contain a structured JSON object.');
   }
-  const parsed = JSON.parse(jsonMatch[0]);
+  const parsed = JSON.parse(candidate);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('AI response returned an unexpected JSON shape.');
   }
@@ -24,13 +58,11 @@ function extractJsonObject(rawContent: string): Record<string, any> {
 }
 
 function extractJsonArray(rawContent: string): any[] {
-  const raw = String(rawContent || '').trim();
-  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  const arrMatch = stripped.match(/\[[\s\S]*\]/);
-  if (!arrMatch) {
+  const candidate = extractBalancedSegment(rawContent, '[', ']');
+  if (!candidate) {
     throw new Error('AI response did not contain a structured JSON array.');
   }
-  const parsed = JSON.parse(arrMatch[0]);
+  const parsed = JSON.parse(candidate);
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error('AI response returned an empty JSON array.');
   }

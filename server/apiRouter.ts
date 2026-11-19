@@ -3,18 +3,33 @@ import { AppConfig, loadConfig } from './config.ts';
 import { DataStore } from './db/store.ts';
 import { LocalStore } from './db/localStore.ts';
 import { createProjectRouter } from './projects/projectRoutes.ts';
-import { createAiRouter, DEFAULT_GEMINI_MODEL } from './ai/aiRoutes.ts';
+import { callOpenRouterChat, createAiRouter, DEFAULT_GEMINI_MODEL } from './ai/aiRoutes.ts';
+import {
+  fetchOpenRouterKeyInfo,
+  fetchOpenRouterModelCatalog,
+  PendingOpenRouterFlow,
+  resolveServerOpenRouterKey,
+  startOpenRouterPkceFlow,
+} from './ai/openrouterAuth.ts';
 import { createJobRouter } from './jobs/jobRoutes.ts';
 import { createRateLimiter } from './middleware/rateLimit.ts';
 import { searchReferences, retrieveReference, verifyReferenceRecords } from './referenceResearch.ts';
 import { collectMarketResearch, checkResourceDirectory, checkUrlAccessibility } from './marketResearch.ts';
-import { FirebaseTokenVerifier } from './security/firebaseToken.ts';
+import {
+  AuthenticatedRequest,
+  createRequireFirebaseAuth,
+  FirebaseTokenVerifier,
+} from './security/firebaseToken.ts';
 import { isPrivateOrInvalidPublicUrl } from '../src/utils/manualEvidenceReview.ts';
 
 export interface ApiRouterDeps {
   store?: DataStore;
   config?: AppConfig;
   verifyToken?: FirebaseTokenVerifier;
+  openrouterFlowStore?: Map<string, PendingOpenRouterFlow>;
+  openrouterKeyInfoFn?: typeof fetchOpenRouterKeyInfo;
+  openrouterModelsFn?: typeof fetchOpenRouterModelCatalog;
+  openrouterChatFn?: typeof callOpenRouterChat;
 }
 
 export function createApiRouter(deps: ApiRouterDeps = {}): Router {
@@ -22,6 +37,8 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
   const config = deps.config || loadConfig();
   const store = deps.store || new LocalStore(':memory:');
   const ownerId = config.ownerUserId;
+  const openrouterFlowStore = deps.openrouterFlowStore || new Map<string, PendingOpenRouterFlow>();
+  const requireAuth = createRequireFirebaseAuth(deps.verifyToken);
 
   const researchRateLimit = createRateLimiter({ windowMs: 60_000, maxRequests: 40 });
 
@@ -41,6 +58,15 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
   }
 
   router.get('/health', (_req: Request, res: Response) => {
+    const geminiConfigured = Boolean(
+      process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim()
+    );
+    const openrouterConfigured = Boolean(resolveServerOpenRouterKey());
+    const openaiConfigured = Boolean(process.env.OPENAI_API_KEY?.trim());
+    const supportedProviders: string[] = ['gemini'];
+    if (openrouterConfigured) supportedProviders.push('openrouter');
+    if (openaiConfigured) supportedProviders.push('openai');
+
     res.json({
       status: 'ok',
       version: '4.1.0',
@@ -48,18 +74,44 @@ export function createApiRouter(deps: ApiRouterDeps = {}): Router {
       dbMode: 'firestore',
       app: 'Digital Product Studio',
       authRequired: true,
-      geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
-      supportedProviders: ['gemini'],
+      geminiConfigured,
+      openrouterConfigured,
+      openaiConfigured,
+      supportedProviders,
       defaultModel: DEFAULT_GEMINI_MODEL,
       time: new Date().toISOString(),
+    });
+  });
+
+  // Start OpenRouter OAuth PKCE authorization session (encrypted per-user key stored server-side)
+  router.post('/auth/openrouter/start', requireAuth, (req: Request, res: Response) => {
+    const uid = (req as AuthenticatedRequest).authUser!.uid;
+    const flow = startOpenRouterPkceFlow({
+      uid,
+      config,
+      flowStore: openrouterFlowStore,
+    });
+    return res.json({
+      success: true,
+      ...flow,
     });
   });
 
   // Authenticated multi-user project backup/bundle export & server routes
   router.use('/projects', createProjectRouter({ store, config, verifyToken: deps.verifyToken }));
 
-  // Authenticated server-side Gemini AI engine proxy
-  router.use('/ai', createAiRouter({ store, config, verifyToken: deps.verifyToken }));
+  // Authenticated server-side Gemini & OpenRouter AI engine proxy
+  router.use(
+    '/ai',
+    createAiRouter({
+      store,
+      config,
+      verifyToken: deps.verifyToken,
+      openrouterKeyInfoFn: deps.openrouterKeyInfoFn,
+      openrouterModelsFn: deps.openrouterModelsFn,
+      openrouterChatFn: deps.openrouterChatFn,
+    })
+  );
 
   // Authenticated guided workflow jobs
   router.use('/jobs', createJobRouter({ store, config, verifyToken: deps.verifyToken }));

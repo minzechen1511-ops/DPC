@@ -3,15 +3,24 @@ import React, { useState, useEffect } from 'react';
 import { Compass, CheckCircle2, AlertTriangle, Edit3, Save, X, Sparkles } from 'lucide-react';
 import { DigitalProductProject, ProductCharter, ProductFormat } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
 import { buildCharterSynthesisPrompt, parseCharterSynthesisResponse } from '../../utils/stageSynthesis.ts';
+import { generationError } from '../../utils/gateAJourney.ts';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 
 interface ProductCharterViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onApproveGateB: () => Promise<boolean>;
   onUpdateCharter: (charter: ProductCharter) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   checkingReferences?: boolean;
   lang?: Language;
 }
@@ -21,6 +30,7 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
   setActiveView,
   onApproveGateB,
   onUpdateCharter,
+  onUpdateAiSettings,
   onRecordAiUsage,
   checkingReferences = false,
   lang = 'en',
@@ -38,6 +48,8 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiSuccess, setAiSuccess] = useState('');
+  const [fallbackNotice, setFallbackNotice] = useState('');
+  const openrouterConnected = useOpenRouterConnected();
 
   useEffect(() => {
     setDraft(project.charter);
@@ -62,21 +74,38 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
     setTimeout(() => setSavedNotice(false), 3000);
   };
 
-  const handleSynthesizeCharter = async () => {
+  const handleSynthesizeCharter = async (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {
+    if (aiBusy) return;
     setAiBusy(true);
     setAiError('');
     setAiSuccess('');
+    setFallbackNotice('');
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      project.aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
     try {
       const { systemPrompt, userPrompt } = buildCharterSynthesisPrompt(project, lang, focusNote);
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: project.aiSettings?.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: project.aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
         maxTokens: 2000,
         projectId: project.projectId,
       });
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      const fallbackTag = res?.fallbackUsed
+        ? lang === 'en'
+          ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+          : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        : '';
+      if (fallbackTag) setFallbackNotice(fallbackTag);
       const updated = parseCharterSynthesisResponse(res?.content || '', charter);
       setDraft(updated);
       setDisclaimersText((updated.explicitDisclaimers || []).join('\n'));
@@ -84,20 +113,54 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
       setObjectivesText((updated.learningObjectives || []).join('\n'));
       onUpdateCharter(updated);
       setAiSuccess(
-        lang === 'en'
+        (lang === 'en'
           ? 'Product Charter aligned with your UVZ, Transformation Map & Title Selection. Review Gate B requirements and approve when ready.'
-          : '已結合 UVZ 定位與顧客轉變藍圖自動合成產品憲章。請確認 Gate B 項目後核准進入大綱階段。'
+          : '已結合 UVZ 定位與顧客轉變藍圖自動合成產品憲章。請確認 Gate B 項目後核准進入大綱階段。') +
+          (fallbackTag ? ` (${fallbackTag})` : '')
       );
     } catch (err: any) {
-      setAiError(
-        err?.message ||
-          (lang === 'en'
-            ? 'Could not reach server Gemini engine to synthesize the charter.'
-            : '無法連接伺服器端 Gemini 引擎以合成產品憲章。')
-      );
+      setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    void handleSynthesizeCharter('gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = project.aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    void handleSynthesizeCharter(nextModel, 'openrouter');
   };
 
   return (
@@ -178,7 +241,7 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
           <button
             type="button"
             disabled={aiBusy}
-            onClick={handleSynthesizeCharter}
+            onClick={() => void handleSynthesizeCharter()}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap shrink-0"
           >
             <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
@@ -189,6 +252,15 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
             </span>
           </button>
         </div>
+
+        <AiEngineQuickControl
+          project={project}
+          onUpdateAiSettings={onUpdateAiSettings}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          disabled={aiBusy}
+          fallbackNotice={fallbackNotice}
+          lang={lang}
+        />
 
         <input
           type="text"
@@ -204,9 +276,17 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
       </div>
 
       {aiError && (
-        <p role="alert" className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-sm font-medium">
-          {aiError}
-        </p>
+        <AiRateLimitNotice
+          errorMessage={aiError}
+          currentModel={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+          busy={aiBusy}
+          openrouterConnected={openrouterConnected}
+          onRetry={() => void handleSynthesizeCharter()}
+          onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+          onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          lang={lang}
+        />
       )}
 
       {(savedNotice || aiSuccess) && (

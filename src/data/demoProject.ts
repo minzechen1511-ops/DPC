@@ -2208,6 +2208,8 @@ export const BLANK_PROJECT: DigitalProductProject = {
     apiKey: '',
     baseUrl: '',
     defaultModel: 'gemini-4-hydrogen',
+    tokenSaverMode: 'economy',
+    allowRateLimitFallback: true,
     apiKeys: {
       openrouter: '',
       gemini: '',

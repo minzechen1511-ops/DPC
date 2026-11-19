@@ -88,13 +88,20 @@ export const Header: React.FC<HeaderProps> = ({
         </span>
       </div>
 
-      {/* Zone 2: Stage Context & Gemini Engine Readout */}
+      {/* Zone 2: Stage Context & AI Engine Readout */}
       <div className="hidden 2xl:flex items-center gap-3 text-xs text-slate-600 truncate">
         <span className="font-semibold text-sm text-slate-900">{currentStageMeta.title}</span>
         <span aria-hidden="true" className="text-slate-300">·</span>
-        <span className="font-mono text-sky-800 bg-sky-50 border border-sky-200 px-2.5 py-1 rounded-md text-xs font-semibold">
-          GEMINI: {project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
-        </span>
+        <button
+          type="button"
+          onClick={() => setActiveView('ai_settings')}
+          title={lang === 'en' ? 'Click to switch AI model or Token-Saver mode' : '點擊切換 AI 模型或省 Token 模式'}
+          className="font-mono text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+        >
+          {(project.aiSettings?.provider || 'gemini').toUpperCase()}:{' '}
+          {project.aiSettings?.defaultModel || 'gemini-4-hydrogen'} ·{' '}
+          {(project.aiSettings?.tokenSaverMode || 'economy').toUpperCase()}
+        </button>
       </div>
 
       {/* Zone 3: Cloud Sync, Language Switcher, Settings, Export & Account */}

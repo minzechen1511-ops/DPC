@@ -7,8 +7,12 @@ export interface CostCalculationResult {
 const KNOWN_RATES_PER_MILLION: Record<string, { prompt: number; completion: number }> = {
   'gemini-4-hydrogen': { prompt: 0.15, completion: 0.6 },
   'gemini-3.1-flash-lite': { prompt: 0.08, completion: 0.3 },
+  'gemini-4-neon': { prompt: 0.6, completion: 2.5 },
   'gemini-4-argon': { prompt: 1.25, completion: 5.0 },
   'gemini-4-carbon': { prompt: 2.5, completion: 10.0 },
+  'gpt-4.1-mini': { prompt: 0.4, completion: 1.6 },
+  'gpt-4o-mini': { prompt: 0.15, completion: 0.6 },
+  'gpt-4.1': { prompt: 2.0, completion: 8.0 },
 };
 
 export function calculateAiUsageCost(input: {

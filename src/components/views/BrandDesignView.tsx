@@ -3,14 +3,23 @@ import { Palette, Type, Save, CheckCircle2, Sparkles, BookOpen } from 'lucide-re
 import { DigitalProductProject } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 import { StudioLogo } from '../StudioLogo.tsx';
-import { generateTextWithAi } from '../../services/aiService.ts';
+import {
+  ActiveStudioProvider,
+  DEFAULT_OPENROUTER_MODEL,
+  generateTextWithAi,
+  normalizeStudioProvider,
+} from '../../services/aiService.ts';
 import { buildBrandDirectionPrompt, parseBrandDirectionResponse } from '../../utils/stageSynthesis.ts';
+import { generationError } from '../../utils/gateAJourney.ts';
+import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
+import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 
 interface BrandDesignViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onUpdateBrand: (brand: DigitalProductProject['brand']) => void;
-  onRecordAiUsage?: (usage?: { total_tokens?: number }, model?: string) => void;
+  onUpdateAiSettings?: (settings: any) => void;
+  onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
 }
 
@@ -73,6 +82,7 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
   project,
   setActiveView,
   onUpdateBrand,
+  onUpdateAiSettings,
   onRecordAiUsage,
   lang = 'en',
 }) => {
@@ -82,6 +92,8 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
   const [focusNote, setFocusNote] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [fallbackNotice, setFallbackNotice] = useState('');
+  const openrouterConnected = useOpenRouterConnected();
 
   useEffect(() => {
     setDraft(project.brand);
@@ -129,35 +141,86 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
       ? 'Commercial digital publication & implementation toolkit'
       : '高價值商業數位出版品與實作工具套件');
 
-  const handleRecommendBrandWithAi = async () => {
+  const handleRecommendBrandWithAi = async (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {
+    if (aiBusy) return;
     setAiBusy(true);
     setAiError('');
+    setFallbackNotice('');
+    const activeProvider =
+      overrideProvider ||
+      normalizeStudioProvider(project.aiSettings?.provider, project.aiSettings?.defaultModel);
+    const activeModel =
+      overrideModel ||
+      project.aiSettings?.defaultModel ||
+      (activeProvider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : 'gemini-4-hydrogen');
     try {
       const { systemPrompt, userPrompt } = buildBrandDirectionPrompt(project, lang, focusNote);
       const res = await generateTextWithAi({
-        provider: 'gemini',
-        model: project.aiSettings?.defaultModel || 'gemini-4-hydrogen',
+        provider: activeProvider,
+        model: activeModel,
+        tokenSaverMode: project.aiSettings?.tokenSaverMode || 'economy',
+        allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
         maxTokens: 1200,
         projectId: project.projectId,
       });
-      onRecordAiUsage?.(res?.usage, res?.model);
+      onRecordAiUsage?.(res?.usage, res?.model, res?.provider);
+      if (res?.fallbackUsed) {
+        setFallbackNotice(
+          lang === 'en'
+            ? `Auto-switched from ${res.primaryModel} to ${res.model} to avoid 429 quota block.`
+            : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
+        );
+      }
       const recommended = parseBrandDirectionResponse(res?.content || '', draft);
       setDraft(recommended);
       onUpdateBrand(recommended);
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3000);
     } catch (err: any) {
-      setAiError(
-        err?.message ||
-          (lang === 'en'
-            ? 'Could not reach server Gemini engine for brand direction synthesis.'
-            : '無法連接伺服器端 Gemini 引擎以建議品牌視覺方向。')
-      );
+      setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const handleSwitchToFlashLiteAndRetry = () => {
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'gemini',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: 'gemini-3.1-flash-lite',
+        tokenSaverMode: 'economy',
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          gemini: 'gemini-3.1-flash-lite',
+        },
+      });
+    }
+    void handleRecommendBrandWithAi('gemini-3.1-flash-lite', 'gemini');
+  };
+
+  const handleSwitchToOpenRouterAndRetry = () => {
+    const nextModel = project.aiSettings?.providerModels?.openrouter || DEFAULT_OPENROUTER_MODEL;
+    if (onUpdateAiSettings) {
+      onUpdateAiSettings({
+        ...project.aiSettings,
+        provider: 'openrouter',
+        apiKey: '',
+        baseUrl: '',
+        apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
+        defaultModel: nextModel,
+        providerModels: {
+          ...project.aiSettings?.providerModels,
+          openrouter: nextModel,
+        },
+      });
+    }
+    void handleRecommendBrandWithAi(nextModel, 'openrouter');
   };
 
   return (
@@ -181,7 +244,7 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
           <button
             type="button"
             disabled={aiBusy}
-            onClick={handleRecommendBrandWithAi}
+            onClick={() => void handleRecommendBrandWithAi()}
             className="px-4 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
             <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
@@ -212,27 +275,45 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
       </div>
 
       {/* Synthesise.ai Art Direction Guidance */}
-      <div className="lab-panel p-4 sm:p-5 bg-gradient-to-r from-teal-50/60 via-white to-sky-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
-        <span className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 whitespace-nowrap">
-          {lang === 'en' ? 'Art Direction Style Hint:' : '品牌美學偏好提示：'}
-        </span>
-        <input
-          type="text"
-          value={focusNote}
-          onChange={(e) => setFocusNote(e.target.value)}
-          placeholder={
-            lang === 'en'
-              ? 'Optional aesthetic note (e.g., Warm luxury editorial serif, calm botanical sage, bold Swiss SaaS look...)'
-              : '選填美學風格方向（例如：溫暖奢華書刊風、沉穩自然草本系、俐落瑞士商業雜誌感...）'
-          }
-          className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800"
+      <div className="lab-panel p-4 sm:p-5 bg-gradient-to-r from-teal-50/60 via-white to-sky-50/50 space-y-3">
+        <AiEngineQuickControl
+          project={project}
+          onUpdateAiSettings={onUpdateAiSettings}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          disabled={aiBusy}
+          fallbackNotice={fallbackNotice}
+          lang={lang}
         />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <span className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 whitespace-nowrap">
+            {lang === 'en' ? 'Art Direction Style Hint:' : '品牌美學偏好提示：'}
+          </span>
+          <input
+            type="text"
+            value={focusNote}
+            onChange={(e) => setFocusNote(e.target.value)}
+            placeholder={
+              lang === 'en'
+                ? 'Optional aesthetic note (e.g., Warm luxury editorial serif, calm botanical sage, bold Swiss SaaS look...)'
+                : '選填美學風格方向（例如：溫暖奢華書刊風、沉穩自然草本系、俐落瑞士商業雜誌感...）'
+            }
+            className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800"
+          />
+        </div>
       </div>
 
       {aiError && (
-        <p role="alert" className="px-4 py-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-sm font-medium">
-          {aiError}
-        </p>
+        <AiRateLimitNotice
+          errorMessage={aiError}
+          currentModel={project.aiSettings?.defaultModel || 'gemini-4-hydrogen'}
+          busy={aiBusy}
+          openrouterConnected={openrouterConnected}
+          onRetry={() => void handleRecommendBrandWithAi()}
+          onSwitchToFlashLiteAndRetry={handleSwitchToFlashLiteAndRetry}
+          onSwitchToOpenRouterAndRetry={handleSwitchToOpenRouterAndRetry}
+          onOpenAiSettings={() => setActiveView('ai_settings')}
+          lang={lang}
+        />
       )}
 
       {savedNotice && (
