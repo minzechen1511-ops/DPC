@@ -1,0 +1,9 @@
+# Digital Product Studio delivery
+
+- Preserve dirty worktrees, existing project data, and newer AI Studio editor changes. Inspect current main and editor GitHub sync state before applying changes.
+- The user's testing target is the existing **real Google AI Studio app**, not a synthetic component harness or localhost substitute: `https://aistudio.google.com/u/1/apps/f17253e8-dc49-4bad-be9a-d94db77c75d8?pli=1&showPreview=true&showAssistant=true`.
+- For authorized completed DPC updates: run relevant tests, TypeScript check, production build and diff checks; commit and push through the normal non-force workflow; preserve any newer Studio edits before pulling main into that app. Verify the hosted preview after synchronization and reload. Do not call a branch push alone a deployed update. Do not create a PR unless requested.
+- GitHub synchronization requires a real Studio pull/check; there is no implemented unattended webhook that guarantees automatic preview refresh. If sync or verification is unavailable, report the exact pending step rather than claiming the latest version is visible.
+- Google/Firebase sign-in authorizes workspace requests. Gemini uses the server's `GEMINI_API_KEY`/`GOOGLE_API_KEY`; a consumer Google login is not an API billing credential. OpenRouter uses the user's verified encrypted server key or the configured server secret. Never expose, log, commit, or export keys in project data; never ask for keys in chat.
+- Keep provider/model selections coherent and persistent. Usage from in-flight requests must not replace a newly selected engine. Discover current free OpenRouter models using actual zero-price catalog data; retain truthful unavailable, stale, invalid-key and quota states. Never silently substitute paid OpenRouter models for free selections.
+- Preserve explicit Gate A/B/C and evidence reviews. Generation may save suggestions but must not approve them or invent creator facts, market evidence, or commercial outcomes.

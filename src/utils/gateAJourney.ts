@@ -16,6 +16,12 @@ export function setupStage(stage: string) {
 
 export function generationError(error: unknown, lang: 'en' | 'zh') {
   const message = error instanceof Error ? error.message.trim() : '';
+  const detail = error as {code?:string;statusCode?:number};
+  if (detail?.code === 'OPENROUTER_NOT_CONNECTED') return lang === 'en' ? 'OpenRouter needs a verified key. Open AI Settings and save your key, then retry.' : 'OpenRouter 需要有效金鑰，請至 AI 設定儲存並驗證後重試。';
+  if (detail?.statusCode === 401) return lang === 'en' ? 'Your Studio session or provider key was rejected. Sign in again or verify the key in AI Settings, then retry.' : '工作區登入或供應商金鑰遭拒，請重新登入或在 AI 設定驗證金鑰後重試。';
+  if (detail?.code === 'MISSING_SERVER_GEMINI_KEY') return lang === 'en' ? 'Google sign-in succeeded, but this Studio server has no Gemini API credential. Configure GEMINI_API_KEY in AI Studio Secrets; Google sign-in alone does not supply API quota.' : 'Google 已登入，但此伺服器未設定 Gemini 金鑰。請在 AI Studio Secrets 設定 GEMINI_API_KEY；登入本身不提供 API 額度。';
+  if (/unexpected (end of json|token)|is not valid json/i.test(message)) return lang === 'en' ? 'The generated draft was incomplete or did not match the required format. Your saved work is retained; retry generation.' : '生成草稿不完整或格式不符，已保留儲存內容，請重試生成。';
+
   if (
     !message ||
     /unexpected (end of json|token)|failed to fetch|fetch failed|networkerror|load failed|is not valid json/i.test(

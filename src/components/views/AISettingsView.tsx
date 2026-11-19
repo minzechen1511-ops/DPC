@@ -24,10 +24,9 @@ import {
   fetchOpenRouterStatus,
   GEMINI_TASK_MODELS,
   normalizeStudioProvider,
-  OPENROUTER_CURATED_MODELS,
   OpenRouterStatusResponse,
   OPENAI_SERVER_MODELS,
-  startOpenRouterOAuth,
+  saveOpenRouterKey,
   testAiConnection,
   TOKEN_SAVER_MODES,
 } from '../../services/aiService.ts';
@@ -59,17 +58,6 @@ const FALLBACK_GEMINI_MODELS: ModelInfo[] = GEMINI_TASK_MODELS.map((m) => ({
   provider: 'gemini',
 }));
 
-function isAllowedOAuthOrigin(origin: string): boolean {
-  if (!origin) return false;
-  if (typeof window !== 'undefined' && origin === window.location.origin) return true;
-  try {
-    const host = new URL(origin).hostname.toLowerCase();
-    return host.endsWith('.run.app') || host === 'localhost' || host === '127.0.0.1';
-  } catch {
-    return false;
-  }
-}
-
 export const AISettingsView: React.FC<AISettingsViewProps> = ({
   project,
   onUpdateAiSettings,
@@ -79,14 +67,17 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
 
   const [testing, setTesting] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
-  const [connectingOpenRouter, setConnectingOpenRouter] = useState<boolean>(false);
   const [disconnectingOpenRouter, setDisconnectingOpenRouter] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const [models, setModels] = useState<ModelInfo[]>(FALLBACK_GEMINI_MODELS);
-  const [openrouterModels, setOpenrouterModels] = useState<ModelInfo[]>(OPENROUTER_CURATED_MODELS);
+  const [openRouterKey, setOpenRouterKey] = useState('');
+  const [savingKey, setSavingKey] = useState(false);
+  const [freeModelsOnly, setFreeModelsOnly] = useState(true);
+  const [catalogNote, setCatalogNote] = useState('');
+  const [openrouterModels, setOpenrouterModels] = useState<ModelInfo[]>([]);
   const [openaiModels, setOpenaiModels] = useState<ModelInfo[]>([]);
-  const [geminiConfigured, setGeminiConfigured] = useState<boolean>(true);
+  const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [openaiConfigured, setOpenaiConfigured] = useState<boolean>(false);
   const [openrouterStatus, setOpenrouterStatus] = useState<OpenRouterStatusResponse>({
     connected: false,
@@ -156,8 +147,9 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
         if (Array.isArray(res.models) && res.models.length > 0) {
           setModels(res.models);
         }
-        if (Array.isArray(res.openrouterModels) && res.openrouterModels.length > 0) {
+        if (Array.isArray(res.openrouterModels)) {
           setOpenrouterModels(res.openrouterModels);
+          setCatalogNote(res.openrouterCatalog?.error || (res.openrouterCatalog?.checkedAt ? `Catalog checked ${res.openrouterCatalog.checkedAt}` : 'Catalog availability not verified'));
         }
         if (typeof res.geminiConfigured === 'boolean') {
           setGeminiConfigured(res.geminiConfigured);
@@ -183,7 +175,8 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
         }));
       }
     } catch {
-      // Keep fallback catalogs cleanly
+      setCatalogNote('Could not load the model catalog. Refresh to retry.');
+      // Preserve the previous catalog while showing its failure state
     } finally {
       setLoadingModels(false);
     }
@@ -193,97 +186,16 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
     void loadModelList();
   }, [loadModelList]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const onMessage = (event: MessageEvent) => {
-      if (!isAllowedOAuthOrigin(event.origin)) return;
-      const data = event.data;
-      if (!data || typeof data !== 'object') return;
-
-      if (data.type === 'OPENROUTER_OAUTH_SUCCESS') {
-        setConnectingOpenRouter(false);
-        dispatchAiCatalogUpdated();
-        void loadModelList();
-        const defaultOrModel =
-          selectedProvider === 'openrouter' ? selectedModel : DEFAULT_OPENROUTER_MODEL;
-        setSelectedProvider('openrouter');
-        setSelectedModel(defaultOrModel);
-        onUpdateAiSettings({
-          ...project.aiSettings,
-          provider: 'openrouter',
-          apiKey: '',
-          baseUrl: '',
-          apiKeys: { openrouter: '', gemini: '', openai: '', claude: '' },
-          defaultModel: defaultOrModel,
-          providerModels: {
-            ...project.aiSettings?.providerModels,
-            openrouter: defaultOrModel,
-          },
-        });
-        setTestResult({
-          success: true,
-          message:
-            lang === 'en'
-              ? `OpenRouter account connected (${data.hint || 'key linked'}) & switched active engine to ${defaultOrModel}. Prompts will spend credits from your OpenRouter account.`
-              : `已成功連結您的 OpenRouter 帳號（${data.hint || '已加密儲存'}），並切換至 ${defaultOrModel}。後續生成將直接消耗您的 OpenRouter 帳號額度。`,
-        });
-      } else if (data.type === 'OPENROUTER_OAUTH_ERROR') {
-        setConnectingOpenRouter(false);
-        setTestResult({
-          success: false,
-          message:
-            data.error ||
-            (lang === 'en'
-              ? 'OpenRouter authorization was cancelled or failed.'
-              : 'OpenRouter 授權已取消或發生錯誤。'),
-        });
-      }
-    };
-
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [lang, loadModelList, onUpdateAiSettings, project.aiSettings, selectedModel, selectedProvider]);
-
-  const handleConnectOpenRouter = async () => {
-    setConnectingOpenRouter(true);
-    setTestResult(null);
+  const handleSaveOpenRouterKey = async () => {
+    setSavingKey(true); setTestResult(null);
     try {
-      const flow = await startOpenRouterOAuth();
-      const popup = window.open(
-        flow.url,
-        'openrouter_oauth_popup',
-        'width=620,height=740,scrollbars=yes,resizable=yes'
-      );
-      if (!popup) {
-        setConnectingOpenRouter(false);
-        setTestResult({
-          success: false,
-          message:
-            lang === 'en'
-              ? 'Popup window was blocked by your browser. Allow popups for this studio window and click Connect OpenRouter Account again.'
-              : '瀏覽器封鎖了彈出式登入視窗，請允許彈窗後再點擊「連結 OpenRouter 帳號」。',
-        });
-        return;
-      }
-      const watchTimer = window.setInterval(() => {
-        if (popup.closed) {
-          window.clearInterval(watchTimer);
-          setConnectingOpenRouter(false);
-          dispatchAiCatalogUpdated();
-          void loadModelList();
-        }
-      }, 650);
-    } catch (err: any) {
-      setConnectingOpenRouter(false);
-      setTestResult({
-        success: false,
-        message:
-          err?.message ||
-          (lang === 'en'
-            ? 'Could not initiate OpenRouter OAuth flow.'
-            : '無法啟動 OpenRouter OAuth 授權流程。'),
-      });
-    }
+      await saveOpenRouterKey(openRouterKey);
+      setOpenRouterKey('');
+      dispatchAiCatalogUpdated();
+      await loadModelList();
+      setTestResult({success:true,message:lang === 'en' ? 'OpenRouter key verified and stored encrypted. Select a free model below to use it.' : '已驗證並加密儲存 OpenRouter 金鑰，請從下方選擇免費模型。'});
+    } catch(err:any) {setTestResult({success:false,message:err?.message || 'Key verification failed.'});}
+    finally {setSavingKey(false);}
   };
 
   const handleDisconnectOpenRouter = async () => {
@@ -306,10 +218,10 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
         success: true,
         message: res.stillConfiguredViaSecret
           ? lang === 'en'
-            ? 'Disconnected your personal OpenRouter OAuth session. Server OPENROUTER_API_KEY secret remains active.'
-            : '已中斷個人 OpenRouter OAuth 連線；伺服器端 OPENROUTER_API_KEY Secret 仍可使用。'
+            ? 'Removed your stored personal OpenRouter key. Server OPENROUTER_API_KEY secret remains active.'
+            : '已中斷個人 OpenRouter personal key 連線；伺服器端 OPENROUTER_API_KEY Secret 仍可使用。'
           : lang === 'en'
-          ? 'Disconnected OpenRouter OAuth account and deleted its encrypted server key.'
+          ? 'Disconnected OpenRouter personal key and deleted its encrypted server key.'
           : '已中斷 OpenRouter 帳號連線並清除伺服器加密金鑰。',
       });
     } catch (err: any) {
@@ -325,6 +237,7 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
   const handleSelectModel = (provider: ActiveStudioProvider, modelId: string) => {
     setSelectedProvider(provider);
     setSelectedModel(modelId);
+    onUpdateAiSettings({...project.aiSettings,provider,defaultModel:modelId,providerModels:{...project.aiSettings.providerModels,[provider]:modelId}});
   };
 
   const handleTestConnection = async () => {
@@ -338,7 +251,7 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
           message:
             res?.message ||
             (lang === 'en'
-              ? `Connected & verified token spend on ${selectedProvider.toUpperCase()} (${res.model || selectedModel}).`
+              ? `Connection verified on ${selectedProvider.toUpperCase()} (${res.model || selectedModel}).`
               : `已成功驗證 ${selectedProvider.toUpperCase()} 實時消耗連線（${res.model || selectedModel}）。`),
         });
         if (selectedProvider === 'openrouter') {
@@ -409,7 +322,7 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
     (m.description && m.description.toLowerCase().includes(q));
 
   const filteredGeminiModels = models.filter(filterBySearch);
-  const filteredOpenRouterModels = openrouterModels.filter(filterBySearch);
+  const filteredOpenRouterModels = openrouterModels.filter(m=>(!freeModelsOnly || m.isFree) && filterBySearch(m));
 
   const shownOpenAiModels =
     openaiModels.length > 0
@@ -438,7 +351,7 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
           </h1>
           <p className="text-sm text-slate-600 mt-1 max-w-4xl">
             {lang === 'en'
-              ? 'Run workflows on Google Gemini (via GEMINI_API_KEY in Secrets) or connect your OpenRouter account with one click to spend OpenRouter credits across GPT, Claude, Gemini & Llama models.'
+              ? 'Run workflows on Google Gemini (via GEMINI_API_KEY in Secrets) or verify an OpenRouter API key and select a current free or paid text model.'
               : '可使用伺服器端 GEMINI_API_KEY 執行 Google Gemini，或一鍵登入連結您的 OpenRouter 帳號（亦支援 Secrets 的 OPENROUTER_API_KEY），直接消耗帳號額度使用 GPT、Claude、Gemini 與 DeepSeek 等模型。'}
           </p>
         </div>
@@ -488,10 +401,10 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
                       geminiConfigured ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
                     }`}
                   >
-                    {geminiConfigured
+                    {geminiConfigured === null ? (lang === 'en' ? 'Checking server credential…' : '正在檢查伺服器金鑰…') : geminiConfigured
                       ? lang === 'en'
-                        ? 'GEMINI_API_KEY Active'
-                        : '金鑰已就緒'
+                        ? 'Server credential configured · test connection'
+                        : '已設定伺服器金鑰 · 請測試連線'
                       : lang === 'en'
                       ? 'Key Missing'
                       : '尚未設定金鑰'}
@@ -567,11 +480,11 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
                     {openrouterStatus.connected
                       ? openrouterStatus.source === 'oauth_account'
                         ? lang === 'en'
-                          ? 'OAuth Account Linked'
-                          : '帳號 OAuth 已連結'
+                          ? 'Personal key verified'
+                          : '個人金鑰已驗證'
                         : lang === 'en'
                         ? 'Server Secret Active'
-                        : 'Secrets 金鑰已就緒'
+                        : 'Secrets 已設定伺服器金鑰 · 請測試連線'
                       : lang === 'en'
                       ? 'Not Connected'
                       : '尚未連結'}
@@ -579,8 +492,8 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   {lang === 'en'
-                    ? 'Sign in directly with your OpenRouter account (OAuth PKCE) or configure OPENROUTER_API_KEY in Settings > Secrets. Prompts spend tokens directly from your linked OpenRouter credits across GPT, Claude, Gemini & Llama.'
-                    : '點擊下方按鈕直接登入連結 OpenRouter 帳號（OAuth PKCE 安全加密保存於伺服器），或於 Settings > Secrets 設定 OPENROUTER_API_KEY。所有請求將實質消耗您 OpenRouter 帳號內的點數與額度。'}
+                    ? 'Verify and save your OpenRouter API key below, or use OPENROUTER_API_KEY in AI Studio Secrets. Prompts spend tokens directly from your linked OpenRouter credits across GPT, Claude, Gemini & Llama.'
+                    : '點擊下方按鈕直接登入連結 OpenRouter 帳號（API key 安全加密保存於伺服器），或於 Settings > Secrets 設定 OPENROUTER_API_KEY。所有請求將實質消耗您 OpenRouter 帳號內的點數與額度。'}
                 </p>
               </div>
             </div>
@@ -595,8 +508,8 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
                 <strong className="text-slate-900 truncate block">
                   {openrouterStatus.source === 'oauth_account'
                     ? lang === 'en'
-                      ? 'OpenRouter OAuth'
-                      : 'OpenRouter OAuth 帳號'
+                      ? 'OpenRouter personal key'
+                      : 'OpenRouter 個人金鑰'
                     : 'OPENROUTER_API_KEY'}
                   {openrouterStatus.hint ? ` (${openrouterStatus.hint})` : ''}
                 </strong>
@@ -628,30 +541,14 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
             </div>
           )}
 
+          <form className="space-y-2 border-t border-slate-200 pt-3" onSubmit={e=>{e.preventDefault();void handleSaveOpenRouterKey();}}>
+            <label className="block space-y-1"><span className="font-semibold text-sm">{lang === 'en' ? 'OpenRouter API key' : 'OpenRouter API 金鑰'}</span><input type="password" autoComplete="off" spellCheck={false} value={openRouterKey} onChange={e=>setOpenRouterKey(e.target.value)} className="block w-full rounded-lg border border-slate-300 p-2" /></label>
+            <button type="submit" disabled={!openRouterKey.trim()||savingKey} className="rounded-lg bg-indigo-700 text-white px-4 py-2 disabled:opacity-60">{savingKey ? (lang === 'en' ? 'Verifying…' : '驗證中…') : (lang === 'en' ? 'Save and verify key' : '儲存並驗證金鑰')}</button>
+            <p className="text-xs text-slate-600">{lang === 'en' ? 'Stored encrypted on this server, outside projects and backups. Recreating the server storage may require re-entry. An existing OPENROUTER_API_KEY in AI Studio Secrets also works.' : '金鑰加密儲存於伺服器，專案與備份不含金鑰；重建伺服器儲存空間後可能需重新輸入。亦支援 AI Studio Secrets 既有的 OPENROUTER_API_KEY。'}</p>
+          </form>
           <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleConnectOpenRouter}
-                disabled={connectingOpenRouter}
-                data-testid="connect-openrouter-btn"
-                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer disabled:opacity-60"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>
-                  {connectingOpenRouter
-                    ? lang === 'en'
-                      ? 'Waiting for OpenRouter...'
-                      : '等待 OpenRouter 授權...'
-                    : openrouterStatus.source === 'oauth_account'
-                    ? lang === 'en'
-                      ? 'Reconnect OpenRouter Account'
-                      : '重新連結 OpenRouter 帳號'
-                    : lang === 'en'
-                    ? 'Connect OpenRouter Account'
-                    : '登入並連結 OpenRouter 帳號'}
-                </span>
-              </button>
+              <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer" className="underline text-indigo-800">{lang === 'en' ? 'Manage OpenRouter API keys' : '管理 OpenRouter API 金鑰'}</a>
 
               {openrouterStatus.connected && (
                 <button
@@ -846,13 +743,15 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
                   ? 'Ready to spend OpenRouter credits'
                   : '已就緒，可即時消耗點數'
                 : lang === 'en'
-                ? 'Connect OpenRouter above to enable'
-                : '請先於上方連結 OpenRouter 帳號'}
+                ? 'Verify a key above to generate'
+                : '請先於上方驗證 OpenRouter 金鑰'}
             </span>
           </div>
 
+          <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={freeModelsOnly} onChange={e=>setFreeModelsOnly(e.target.checked)} />{lang === 'en' ? 'Show free OpenRouter models only' : '僅顯示 OpenRouter 免費模型'}</label>
+          <p className="text-xs text-slate-600" role="status">{catalogNote} · {lang === 'en' ? 'Free models remain rate limited. OpenRouter requests never automatically switch to paid models.' : '免費模型仍受限流，OpenRouter 請求不會自動改用付費模型。'}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {filteredOpenRouterModels.slice(0, 16).map((m) => {
+            {filteredOpenRouterModels.map((m) => {
               const isSelected = selectedProvider === 'openrouter' && selectedModel === m.id;
               return (
                 <button
@@ -905,7 +804,7 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({
                 : 'Google Gemini 官方模型（透過 Settings > Secrets 中的 GEMINI_API_KEY）'}
             </h3>
             <span className="text-xs font-mono text-slate-500">
-              {geminiConfigured ? 'GEMINI_API_KEY Active' : 'GEMINI_API_KEY Missing'}
+              {geminiConfigured ? 'Server credential configured · test connection' : 'GEMINI_API_KEY Missing'}
             </span>
           </div>
 

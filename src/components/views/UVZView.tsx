@@ -120,7 +120,9 @@ export const UVZView: React.FC<UVZViewProps> = ({
         allowRateLimitFallback: project.aiSettings?.allowRateLimitFallback ?? true,
         systemPrompt,
         userPrompt,
-        maxTokens: 2000,
+        maxTokens: 8192,
+        responseFormat: 'json',
+        responseSchema: 'uvz',
         projectId: project.projectId,
       });
       onRecordAiUsage?.(res?.usage, res?.model, res?.provider);

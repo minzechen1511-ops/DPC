@@ -5,7 +5,9 @@ import { DataStore } from '../db/store.ts';
 import { createRateLimiter } from '../middleware/rateLimit.ts';
 import { redactSecretStrings } from '../../src/utils/projectSanitizer.ts';
 import { calculateAiUsageCost } from './pricing.ts';
+import { UVZ_RESPONSE_SCHEMA, requireGeneratedText } from './structuredGeneration.ts';
 import { validateAiBaseUrl } from './urlGuard.ts';
+import { encryptSecret, maskSecretHint } from '../security/crypto.ts';
 import {
   buildStudioSystemInstruction,
   extractGroundingResult,
@@ -22,6 +24,7 @@ import {
   CURATED_OPENROUTER_MODELS,
   fetchOpenRouterKeyInfo,
   fetchOpenRouterModelCatalog,
+  getOpenRouterCatalogStatus,
   isValidOpenRouterModelId,
   normalizeOpenRouterModel,
   resolveContainerCallbackBaseUrl,
@@ -389,10 +392,8 @@ export function createAiRouter(deps: AiRouterDeps): Router {
     }
 
     const openrouterCred = await resolveOpenRouterCredentialForUser(store, deps.config, uid);
-    const openrouterConnected = Boolean(openrouterCred);
-    const openrouterModels = openrouterCred
-      ? await modelsCatalogFn(openrouterCred.apiKey).catch(() => CURATED_OPENROUTER_MODELS)
-      : CURATED_OPENROUTER_MODELS;
+    const openrouterConnected = openrouterCred ? await keyInfoFn(openrouterCred.apiKey).then(info=>info.valid).catch(()=>false) : false;
+    const openrouterModels = await modelsCatalogFn().catch(() => []);
 
     return res.json({
       success: true,
@@ -405,6 +406,7 @@ export function createAiRouter(deps: AiRouterDeps): Router {
       openrouterHint: openrouterCred?.hint || null,
       models: ACTIVE_GEMINI_MODELS,
       openrouterModels,
+      openrouterCatalog: getOpenRouterCatalogStatus(),
       openaiModels: openaiConfigured ? OPENAI_SERVER_MODELS : [],
       roles: Object.values(STUDIO_COPILOT_ROLES),
     });
@@ -430,7 +432,9 @@ export function createAiRouter(deps: AiRouterDeps): Router {
       });
     }
 
-    const keyInfo = await keyInfoFn(cred.apiKey);
+    let keyInfo;
+    try { keyInfo = await keyInfoFn(cred.apiKey); }
+    catch {return res.status(503).json({code:'OPENROUTER_KEY_CHECK_UNAVAILABLE',error:'OpenRouter key verification is unavailable. Retry; your saved key has not changed.'});}
     return res.json({
       connected: keyInfo.valid !== false,
       source: cred.source,
@@ -438,6 +442,20 @@ export function createAiRouter(deps: AiRouterDeps): Router {
       updatedAt: cred.updatedAt || null,
       keyInfo,
     });
+  });
+
+  router.post('/openrouter/key', requireAuth, aiRateLimit, async (req: Request, res: Response) => {
+    const uid = (req as AuthenticatedRequest).authUser!.uid;
+    const key = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+    if (key.length < 20 || key.length > 512 || /\s/.test(key)) return res.status(400).json({code:'INVALID_OPENROUTER_KEY',error:'Enter a valid OpenRouter API key.'});
+    try {
+      const info = await keyInfoFn(key);
+      if (!info.valid) return res.status(401).json({code:'INVALID_OPENROUTER_KEY',error:'OpenRouter rejected this key. Your previous stored key has not changed.'});
+      const encrypted=encryptSecret(key,deps.config.credentialEncryptionKey,deps.config.credentialKeyVersion);
+      const hint=maskSecretHint(key);
+      await store.upsertCredential({userId:uid,provider:'openrouter',keyVersion:encrypted.keyVersion,ciphertext:encrypted.ciphertext,iv:encrypted.iv,authTag:encrypted.authTag,hint,baseUrl:'https://openrouter.ai/api/v1'});
+      return res.json({success:true,hint});
+    } catch {return res.status(503).json({code:'OPENROUTER_KEY_CHECK_UNAVAILABLE',error:'OpenRouter verification or secure storage is unavailable. Retry; no new key was saved.'});}
   });
 
   router.delete('/openrouter/connection', requireAuth, async (req: Request, res: Response) => {
@@ -652,6 +670,7 @@ export function createAiRouter(deps: AiRouterDeps): Router {
           model: openRouterModel,
           messages: openRouterMessages,
           wantsJson,
+          maxTokens: typeof req.body?.maxTokens === 'number' ? Math.min(32768, Math.max(256, Math.floor(req.body.maxTokens))) : undefined,
         });
         const content = String(payload?.choices?.[0]?.message?.content || '').trim();
         if (!content) {
@@ -771,6 +790,7 @@ export function createAiRouter(deps: AiRouterDeps): Router {
         const levelName = resolveGeminiThinkingLevel(targetModel, tokenSaverMode);
         const chatConfig: Record<string, unknown> = {
           thinkingConfig: { thinkingLevel: THINKING_LEVEL_ENUM_MAP[levelName] },
+          ...(typeof req.body?.maxTokens === 'number' ? {maxOutputTokens: Math.min(32768, Math.max(256, Math.floor(req.body.maxTokens)))} : {}),
         };
         if (systemInstruction) {
           chatConfig.systemInstruction = systemInstruction;
@@ -779,6 +799,7 @@ export function createAiRouter(deps: AiRouterDeps): Router {
           chatConfig.tools = [{ googleSearch: {} }];
         } else if (wantsJson) {
           chatConfig.responseMimeType = 'application/json';
+          if (req.body?.responseSchema === 'uvz') chatConfig.responseJsonSchema = UVZ_RESPONSE_SCHEMA;
         }
 
         return withGeminiRetry(async () => {
@@ -828,7 +849,7 @@ export function createAiRouter(deps: AiRouterDeps): Router {
         throw lastErr;
       }
 
-      const content = (response?.text || '').trim();
+      const content = requireGeneratedText(response, wantsJson);
       if (!content) {
         return res.status(502).json({
           code: 'EMPTY_GEMINI_RESPONSE',
@@ -916,7 +937,7 @@ export function createAiRouter(deps: AiRouterDeps): Router {
         })
       );
 
-      const content = response.text || '';
+      const content = requireGeneratedText(response);
       const grounding = extractGroundingResult(response);
       const { promptTokens, completionTokens, totalTokens, cost, responseUsage } = buildUsagePayload(
         response,

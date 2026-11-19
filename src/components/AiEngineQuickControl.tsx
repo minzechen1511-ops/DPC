@@ -8,7 +8,6 @@ import {
   fetchModels,
   GEMINI_TASK_MODELS,
   normalizeStudioProvider,
-  OPENROUTER_CURATED_MODELS,
   OPENAI_SERVER_MODELS,
   TOKEN_SAVER_MODES,
 } from '../services/aiService.ts';
@@ -22,7 +21,7 @@ let cachedServerModelCatalog: {
 } = {
   loaded: false,
   openrouterConnected: false,
-  openrouterModels: OPENROUTER_CURATED_MODELS,
+  openrouterModels: [],
   openaiConfigured: false,
   openaiModels: [],
 };
@@ -34,10 +33,6 @@ export function useOpenRouterConnected(): boolean {
     if (typeof window === 'undefined') return;
     let cancelled = false;
     const sync = (force = false) => {
-      if (!force && cachedServerModelCatalog.loaded) {
-        setConnected(cachedServerModelCatalog.openrouterConnected);
-        return;
-      }
       void fetchModels()
         .then((res) => {
           if (cancelled) return;
@@ -47,9 +42,9 @@ export function useOpenRouterConnected(): boolean {
             loaded: true,
             openrouterConnected: nextOrConnected,
             openrouterModels:
-              Array.isArray(res?.openrouterModels) && res.openrouterModels.length > 0
+              Array.isArray(res?.openrouterModels)
                 ? res.openrouterModels
-                : OPENROUTER_CURATED_MODELS,
+                : [],
             openaiConfigured: Boolean(res?.openaiConfigured),
             openaiModels:
               Array.isArray(res?.openaiModels) && res.openaiModels.length > 0
@@ -113,9 +108,9 @@ export const AiEngineQuickControl: React.FC<AiEngineQuickControlProps> = ({
           if (cancelled) return;
           const nextOrConnected = Boolean(res?.openrouterConnected);
           const nextOrModels =
-            Array.isArray(res?.openrouterModels) && res.openrouterModels.length > 0
+            Array.isArray(res?.openrouterModels)
               ? res.openrouterModels
-              : OPENROUTER_CURATED_MODELS;
+              : [];
           const nextOpenAiConfigured = Boolean(res?.openaiConfigured);
           const nextOpenAiModels =
             Array.isArray(res?.openaiModels) && res.openaiModels.length > 0
@@ -197,7 +192,9 @@ export const AiEngineQuickControl: React.FC<AiEngineQuickControlProps> = ({
   };
 
   const visibleOpenRouterModels =
-    openrouterConnected || isOpenRouterSelected ? openrouterModels : [];
+    isOpenRouterSelected && !openrouterModels.some(model => model.id === currentModel)
+      ? [{id:currentModel,isFree:false,name:`${currentModel} (saved selection · availability unverified)`},...openrouterModels]
+      : openrouterModels;
 
   const visibleOpenAiModels =
     openaiModels.length > 0
@@ -237,13 +234,13 @@ export const AiEngineQuickControl: React.FC<AiEngineQuickControlProps> = ({
               <optgroup
                 label={
                   lang === 'en'
-                    ? 'OpenRouter (Connected Account / Key)'
+                    ? (openrouterConnected ? 'OpenRouter · free models first' : 'OpenRouter · key required to generate')
                     : 'OpenRouter（已連結帳號 / 額度）'
                 }
               >
                 {visibleOpenRouterModels.map((m) => (
                   <option key={m.id} value={`openrouter:${m.id}`}>
-                    {m.name}
+                    {m.isFree ? 'FREE · ' : ''}{m.name}
                   </option>
                 ))}
               </optgroup>
@@ -252,7 +249,7 @@ export const AiEngineQuickControl: React.FC<AiEngineQuickControlProps> = ({
               <optgroup label={lang === 'en' ? 'OpenAI GPT (Server Secret)' : 'OpenAI GPT（伺服器 Secret）'}>
                 {visibleOpenAiModels.map((m) => (
                   <option key={m.id} value={`openai:${m.id}`}>
-                    {m.name}
+                    {m.isFree ? 'FREE · ' : ''}{m.name}
                   </option>
                 ))}
               </optgroup>

@@ -242,7 +242,7 @@ export async function fetchOpenRouterKeyInfo(apiKey: string): Promise<OpenRouter
       isFreeTier: typeof data.is_free_tier === 'boolean' ? data.is_free_tier : undefined,
     };
   } catch {
-    return { valid: true };
+    throw new Error('OpenRouter key verification is unavailable. Retry; the saved key was not changed.');
   } finally {
     clearTimeout(timer);
   }
@@ -253,72 +253,44 @@ let cachedCatalog: { expiresAt: number; models: OpenRouterCatalogModel[] } = {
   models: [],
 };
 
-function formatPerMillion(perTokenRaw: unknown): string {
-  const num = Number(perTokenRaw || 0);
-  if (!Number.isFinite(num) || num <= 0) return '0.00';
-  return (num * 1_000_000).toFixed(2);
+let catalogStatus: {source: 'live' | 'saved' | 'unavailable'; checkedAt: string | null; error?: string} = {source:'unavailable',checkedAt:null};
+export function getOpenRouterCatalogStatus() {return {...catalogStatus};}
+
+export function parseOpenRouterModelCatalog(list: any[]): OpenRouterCatalogModel[] {
+  const rate = (value: unknown) => typeof value === 'string' && value.trim() && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : NaN;
+  return list.filter(item => isValidOpenRouterModelId(item?.id) && (!item?.architecture?.output_modalities || item.architecture.output_modalities.includes('text'))).map(item => {
+    const prompt = rate(item?.pricing?.prompt);
+    const completion = rate(item?.pricing?.completion);
+    const isFree = prompt === 0 && completion === 0 && (!item?.pricing?.request || rate(item.pricing.request) === 0);
+    return {
+      id:item.id, name:item.name || item.id, description:String(item.description || '').slice(0,180),
+      context_length:Number(item.context_length || 0),
+      pricing:{prompt:Number.isFinite(prompt)?String(prompt*1_000_000):'unknown',completion:Number.isFinite(completion)?String(completion*1_000_000):'unknown'},
+      isFree, tier:isFree?'standard' as const:'paid' as const, provider:'openrouter' as const,
+    };
+  }).sort((a,b)=>Number(b.isFree)-Number(a.isFree)||a.name.localeCompare(b.name));
 }
 
-export async function fetchOpenRouterModelCatalog(apiKey?: string): Promise<OpenRouterCatalogModel[]> {
-  const now = Date.now();
-  if (cachedCatalog.expiresAt > now && cachedCatalog.models.length > 0) {
-    return cachedCatalog.models;
-  }
-
-  const byId = new Map<string, OpenRouterCatalogModel>();
-  for (const model of CURATED_OPENROUTER_MODELS) {
-    byId.set(model.id, model);
-  }
-
+export async function fetchOpenRouterModelCatalog(_apiKey?: string): Promise<OpenRouterCatalogModel[]> {
+  if (cachedCatalog.expiresAt > Date.now() && cachedCatalog.models.length) return cachedCatalog.models;
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(),10000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    try {
-      const headers: Record<string, string> = {};
-      if (apiKey?.trim()) {
-        headers.Authorization = `Bearer ${apiKey.trim()}`;
-      }
-      const res = await fetch('https://openrouter.ai/api/v1/models', {
-        headers,
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        const json = (await res.json().catch(() => ({}))) as any;
-        const list = Array.isArray(json?.data) ? json.data : [];
-        for (const item of list) {
-          const id = typeof item?.id === 'string' ? item.id.trim() : '';
-          if (!id || byId.has(id) || byId.size >= 45) continue;
-          const promptRate = formatPerMillion(item?.pricing?.prompt);
-          const completionRate = formatPerMillion(item?.pricing?.completion);
-          const isFree = promptRate === '0.00' && completionRate === '0.00';
-          byId.set(id, {
-            id,
-            name: typeof item?.name === 'string' && item.name.trim() ? item.name.trim() : id,
-            description:
-              typeof item?.description === 'string' && item.description.trim()
-                ? item.description.trim().slice(0, 180)
-                : 'Live OpenRouter catalog model.',
-            context_length: Number(item?.context_length || 32768),
-            pricing: { prompt: promptRate, completion: completionRate },
-            isFree,
-            tier: isFree ? 'standard' : 'paid',
-            provider: 'openrouter',
-          });
-        }
-      }
-    } finally {
-      clearTimeout(timer);
-    }
-  } catch {
-    // Keep curated list cleanly when offline or catalog request times out
-  }
-
-  const merged = Array.from(byId.values());
-  cachedCatalog = {
-    expiresAt: Date.now() + 10 * 60 * 1000,
-    models: merged,
-  };
-  return merged;
+    // The public catalog needs no account key. Keep keys off this request.
+    const res=await fetch('https://openrouter.ai/api/v1/models',{signal:controller.signal});
+    if (!res.ok) throw new Error(`Catalog request returned HTTP ${res.status}.`);
+    const payload=await res.json() as any;
+    if (!Array.isArray(payload.data)) throw new Error('OpenRouter catalog did not contain model records.');
+    const models=parseOpenRouterModelCatalog(payload.data);
+    if (!models.length) throw new Error('OpenRouter catalog returned no supported text models.');
+    // Preserve every free model, including those near the end of the upstream list.
+    cachedCatalog={expiresAt:Date.now()+60_000,models};
+    catalogStatus={source:'live',checkedAt:new Date().toISOString()};
+    return models;
+  } catch (err:any) {
+    catalogStatus={source:cachedCatalog.models.length?'saved':'unavailable',checkedAt:catalogStatus.checkedAt,error:err?.message || 'Model catalog unavailable.'};
+    return cachedCatalog.models;
+  } finally {clearTimeout(timer);}
 }
 
 export interface ResolvedOpenRouterCredential {

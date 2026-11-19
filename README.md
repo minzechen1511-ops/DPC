@@ -2,6 +2,8 @@
 
 Digital Product Studio is a manual-gate-controlled commercial workspace for researching, structuring, drafting, auditing, and packaging educational digital products into verifiable buyer bundles.
 
+For the current AI provider behavior and the real AI Studio delivery target, see [AI provider repair](docs/AI-PROVIDER-REPAIR.md) and [delivery instructions](AGENTS.md). GitHub pushes must be pulled into the connected AI Studio project and its hosted preview verified; they do not by themselves prove a preview update.
+
 ## Environment & Prerequisites
 
 - **Runtime Verified Locally**: Node.js `v22.23.2` and Bun `1.4.4` (also tested against Node 24+ environments; use Bun with `--frozen-lockfile` to install exact locked dependencies without modifying `bun.lock`).

@@ -1,3 +1,4 @@
+import { addAiUsage } from './utils/aiSettings.ts';
 import { GateAJourneyNav } from './components/GateAJourneyNav.tsx';
 import { GATE_A_STEPS, gateAJourney, selectJourneyTopic, setupStage, usableMap } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
@@ -908,37 +909,7 @@ export default function App() {
     modelArg?: string,
     providerArg?: 'gemini' | 'openrouter' | 'openai'
   ) => {
-    const tokens = Number(usage?.total_tokens || 0);
-    const incrementalCost =
-      typeof usage?.estimatedCostUsd === 'number'
-        ? usage.estimatedCostUsd
-        : Number(((tokens / 1_000_000) * 0.35).toFixed(4));
-
-    setProject((prev) => ({
-      ...prev,
-      isBlankProject: false,
-      aiSettings: {
-        ...prev.aiSettings,
-        provider:
-          providerArg ||
-          (prev.aiSettings?.provider === 'openrouter'
-            ? 'openrouter'
-            : prev.aiSettings?.provider === 'openai'
-            ? 'openai'
-            : modelArg?.includes('/')
-            ? 'openrouter'
-            : 'gemini'),
-        usageStats: {
-          ...prev.aiSettings.usageStats,
-          totalRequests: (prev.aiSettings.usageStats?.totalRequests || 0) + 1,
-          totalTokens: (prev.aiSettings.usageStats?.totalTokens || 0) + tokens,
-          estimatedCostUsd: Number(
-            ((prev.aiSettings.usageStats?.estimatedCostUsd || 0) + incrementalCost).toFixed(4)
-          ),
-          lastRequestAt: new Date().toISOString(),
-        },
-      },
-    }));
+    setProject(prev => prev.projectId !== project.projectId ? prev : ({...prev,isBlankProject:false,aiSettings:addAiUsage(prev.aiSettings,usage)}));
   };
 
   const handleSwitchProject = (target: DigitalProductProject) => {

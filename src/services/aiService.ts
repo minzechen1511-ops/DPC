@@ -1,4 +1,5 @@
 import type { DigitalProductProject, ModelInfo, TokenSaverMode } from '../types/project.ts';
+import { readAiResponse } from '../utils/aiResponse.ts';
 import { apiFetch } from './apiClient.ts';
 import { scrubLegacyApiKeyStorage } from '../utils/projectStorage.ts';
 
@@ -404,24 +405,7 @@ export function summarizeProjectForAiContext(project: DigitalProductProject): Re
 }
 
 async function parseApiJsonResponse<T = any>(res: Response): Promise<T> {
-  const raw = await res.text();
-  if (!raw.trim()) {
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} (${res.statusText || 'Empty server response'})`);
-    }
-    return {} as T;
-  }
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    if (/starting server/i.test(raw) || raw.trim().startsWith('<')) {
-      throw new Error(
-        'Studio server is still starting up or restarting. Wait a few seconds and retry.'
-      );
-    }
-    const preview = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
-    throw new Error(`HTTP ${res.status}: ${preview || 'Server returned a non-JSON response.'}`);
-  }
+  return readAiResponse(res);
 }
 
 function buildStructuredAiError(json: any, status: number): Error {
@@ -463,6 +447,7 @@ export interface FetchModelsResponse {
   openrouterHint?: string | null;
   models: ModelInfo[];
   openrouterModels?: ModelInfo[];
+  openrouterCatalog?: {source:'live'|'saved'|'unavailable';checkedAt:string|null;error?:string};
   openaiModels?: ModelInfo[];
   error?: string;
 }
@@ -498,6 +483,10 @@ export async function fetchOpenRouterStatus(): Promise<OpenRouterStatusResponse>
   return json;
 }
 
+export async function saveOpenRouterKey(apiKey: string) {
+  return readAiResponse(await apiFetch('/api/ai/openrouter/key',{method:'POST',body:JSON.stringify({apiKey})}));
+}
+
 export async function disconnectOpenRouter(): Promise<{
   success: boolean;
   disconnectedUserAccount?: boolean;
@@ -523,6 +512,7 @@ export interface ChatGenerateOptions {
   maxTokens?: number;
   projectId?: string;
   responseFormat?: 'json' | 'text';
+  responseSchema?: 'uvz';
 }
 
 export async function generateTextWithAi(options: ChatGenerateOptions) {
@@ -553,6 +543,7 @@ export async function generateTextWithAi(options: ChatGenerateOptions) {
       maxTokens: options.maxTokens || 2500,
       projectId: options.projectId,
       responseFormat: inferredFormat,
+      responseSchema: options.responseSchema,
     }),
   });
 
@@ -560,6 +551,7 @@ export async function generateTextWithAi(options: ChatGenerateOptions) {
   if (!res.ok) {
     throw buildStructuredAiError(json, res.status);
   }
+  if (typeof json?.content !== 'string' || !json.content.trim()) throw buildStructuredAiError({code:'EMPTY_AI_RESPONSE',error:'The AI provider returned no usable text. Retry; your saved draft is unchanged.'},502);
   return json;
 }
 
