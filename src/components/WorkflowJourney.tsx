@@ -10,22 +10,25 @@ export function WorkflowJourney({project,current,lang,onNavigate}:Props) {
   const phase=JOURNEY_PHASES.findIndex(group=>group.includes(stage));
   const labels=lang==='en'?['Discover & define','Research & plan','Create & review','Package & launch']:['探索與定義','研究與規劃','創作與覆核','組裝與上市'];
   const copy=lang==='en'?{title:'Your product journey',done:'Complete',current:'Current',blocked:'Decision required',upcoming:'Upcoming',edit:'Revisit any finished stage from the sidebar.'}:{title:'您的產品開發流程',done:'已完成',current:'目前階段',blocked:'待完成前置決策',upcoming:'尚未開始',edit:'可隨時從側欄返回已完成階段修改。'};
+  const stepItems=JOURNEY_PHASES[phase].map(id=>{const done=stageFinished(project,id);const blocked=JOURNEY_STAGES.slice(0,JOURNEY_STAGES.indexOf(id)).some(s=>!stageFinished(project,s));return <li key={id}>
+        <button type="button" aria-current={id===stage?'step':undefined} disabled={blocked&&!done&&id!==stage} onClick={()=>onNavigate(id)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:text-slate-500 ${id===stage?'bg-teal-800 text-white':'text-slate-700 hover:bg-slate-100'}`}>
+          {done?<Check size={16} aria-hidden="true"/>:blocked?<LockKeyhole size={14} aria-hidden="true"/>:null}{stageName(id,lang)}<span className="sr-only"> · {done?copy.done:id===stage?copy.current:blocked?copy.blocked:copy.upcoming}</span>
+        </button>
+      </li>;});
   return <nav aria-label={copy.title} className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
     <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4"><h2 className="font-semibold text-slate-900">{copy.title}</h2><p className="text-xs text-slate-600">{copy.edit}</p></div>
-    <ol className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
+    <ol className="journey-phase-grid grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
       {JOURNEY_PHASES.map((group,index)=>{const done=group.every(id=>stageFinished(project,id));return <li key={index} className={index===phase?'text-teal-900':'text-slate-600'}>
         <div className={`h-1 mb-2 rounded-full ${done?'bg-teal-700':index===phase?'bg-teal-300':'bg-slate-200'}`} />
         <span className="flex items-center gap-2 text-sm font-semibold">{done&&<Check size={15} aria-hidden="true"/>}{labels[index]}<span className="sr-only"> · {done?copy.done:index===phase?copy.current:copy.upcoming}</span></span>
         <span className="block text-xs mt-1 tabular-nums">{group.filter(id=>stageFinished(project,id)).length}/{group.length} {lang==='en'?'finished':'已完成'}</span>
       </li>;})}
     </ol>
-    <ol className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mt-4 border-t border-slate-100 pt-3">
-      {JOURNEY_PHASES[phase].map(id=>{const done=stageFinished(project,id);const blocked=JOURNEY_STAGES.slice(0,JOURNEY_STAGES.indexOf(id)).some(s=>!stageFinished(project,s));return <li key={id}>
-        <button type="button" aria-current={id===stage?'step':undefined} disabled={blocked&&!done&&id!==stage} onClick={()=>onNavigate(id)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:text-slate-500 ${id===stage?'bg-teal-800 text-white':'text-slate-700 hover:bg-slate-100'}`}>
-          {done?<Check size={16} aria-hidden="true"/>:blocked?<LockKeyhole size={14} aria-hidden="true"/>:null}{stageName(id,lang)}<span className="sr-only"> · {done?copy.done:id===stage?copy.current:blocked?copy.blocked:copy.upcoming}</span>
-        </button>
-      </li>;})}
-    </ol>
+    <ol className="journey-stage-list hidden sm:flex sm:flex-wrap gap-2 mt-4 border-t border-slate-100 pt-3">{stepItems}</ol>
+    <details className="journey-mobile-steps mt-3 border-t border-slate-100 pt-3">
+      <summary className="cursor-pointer text-sm font-semibold text-teal-900 rounded-lg py-2 focus-visible:outline-2 focus-visible:outline-teal-800">{stageName(stage,lang)}<span className="sr-only"> · {lang==='en'?'Show steps in this phase':'顯示本階段步驟'}</span></summary>
+      <ol className="flex flex-col gap-1 mt-2">{stepItems}</ol>
+    </details>
   </nav>;
 }
 

@@ -25,7 +25,7 @@ The new visible route is Topic Discovery → Recommended Project Brief → UVZ �
 
 Existing forward controls and the shared finish/continue footer use the same handoff. The footer directs users to the stage-owned save/select control when there are local form drafts, so it cannot discard unsaved styling or copy. Earlier work remains editable from the sidebar and previous-stage controls.
 
-The journey visualization shows four phases with actual completed counts and current/blocked steps. Handoffs announce what was saved, provide a return link, scroll the new view to its beginning and focus main content. Layout stacks for narrow previews; controls expose labels, current step, disabled states and visible focus.
+The journey visualization shows four phases with actual completed counts and current/blocked steps. Handoffs announce what was saved, provide a return link, scroll the new view to its beginning and focus main content. Narrow previews use a compact two-column phase summary with expandable steps; controls expose labels, current step, disabled states and visible focus.
 
 ## Save and approval boundaries
 
@@ -37,9 +37,10 @@ AI generation uses existing per-stage services. The job API only stores metadata
 
 ## Validation
 
-- 127 tests passed, zero failed, including seven new focused journey tests: ordered links, approval boundaries, preserved selections/context, unsupported source records, delayed/failed save and retry, superseded handoffs, bilingual accessible markup.
+- 128 tests passed, zero failed, including eight new focused journey tests: ordered links, approval boundaries, preserved selections/context, unsupported source records, delayed/failed save and retry, superseded handoffs, readable quota errors without account metadata, bilingual accessible markup.
 - TypeScript (`npm run lint`), production build and `git diff --check` passed. Existing Vite configuration and large-chunk warnings remain.
 - The first sandbox test run could not reach loopback integration servers (EACCES); the same suite passed with approved loopback access. This was an environment restriction, not a product regression.
 - No browser/E2E test runner is configured. Hosted desktop/mobile observations and actual save/handoff results must be reported separately in the delivery handoff; unit tests do not establish a live cloud save.
+- Hosted testing of the accepted Transformation Map's forward action exposed Firestore's exhausted free daily write quota. The UI stayed on the current stage and exposed retry, as required; successful live advancement is blocked by that external quota. Raw wrapped database errors were replaced with readable recovery guidance and a sanitized JSON recovery-backup action. No gates or selections were changed for this test.
 
 Delivery requires a normal non-force main push, Studio pull, reload and hosted verification. Firebase/provider quotas and network errors can still block saving or generation; the UI must retain their true status.

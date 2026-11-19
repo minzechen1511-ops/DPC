@@ -6,7 +6,7 @@ import {journeyFixture} from '../../tests/gateAJourneyFixture.ts';
 import {approveGate,revokeApprovals} from './gatePolicy.ts';
 import {selectJourneyTopic} from './gateAJourney.ts';
 import {sanitizeProjectForStorage} from './projectStorage.ts';
-import {JOURNEY_STAGES, handoffContextCurrent, journeyStage,nextJourneyStage,prepareStageHandoff,recommendedJourneyStage,saveStageHandoff,stageRequirements} from './stageJourney.ts';
+import {JOURNEY_STAGES, handoffContextCurrent, journeyStage,nextJourneyStage,prepareStageHandoff,recommendedJourneyStage,saveStageHandoff,stageRequirements,workflowSaveError} from './stageJourney.ts';
 import {WorkflowJourney,WorkflowHandoff} from '../components/WorkflowJourney.tsx';
 
 function approvedTopic() {
@@ -53,6 +53,15 @@ test('source search metadata and an unreviewed note cannot complete Reference Li
   p.referenceLibrary.cards=[{id:'TEST-ONLY-ref',status:'SEARCH_RESULT_ONLY'} as any];
   assert.ok(stageRequirements(p,'reference_library').length);
   assert.equal(prepareStageHandoff(p,'reference_library'),null);
+});
+test('cloud quota errors expose recovery guidance without embedded account metadata',()=>{
+  const error=new Error(JSON.stringify({error:'Quota limit exceeded',authInfo:{email:'TEST-ONLY@example.invalid'},path:'private/test-only'}));
+  for(const lang of ['en','zh'] as const) {
+    const text=workflowSaveError(error,lang);
+    assert.doesNotMatch(text,/authInfo|email|private|TEST-ONLY/);
+    assert.match(text,lang==='en'?/daily write limit.*recovery backup/:/每日寫入上限/);
+  }
+  assert.equal(workflowSaveError(new Error(JSON.stringify({error:'Permission denied',authInfo:{token:'TEST'}})),'en'),'Permission denied');
 });
 test('a handoff waits for the real save, retains the stage on failure and permits retry',async()=>{
   const p=prepareStageHandoff(approvedTopic(),'topic_selection')!;

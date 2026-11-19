@@ -60,6 +60,15 @@ export function prepareStageHandoff(p: DigitalProductProject, stage: StageId) {
 export async function saveStageHandoff(snapshot: DigitalProductProject, persist: (p:DigitalProductProject)=>Promise<boolean>, isCurrent:()=>boolean) {
   return await persist(snapshot) && isCurrent();
 }
+export function workflowSaveError(error:unknown, lang:'en'|'zh') {
+  let message=error instanceof Error?error.message:String(error || '');
+  // Firestore's wrapper can include account metadata. Show the cause, not that payload.
+  try {const detail=JSON.parse(message);if(typeof detail.error==='string') message=detail.error;} catch { /* ordinary message */ }
+  if (/quota|resource.exhausted/i.test(message)) return lang==='en'
+    ? 'Cloud storage has reached its daily write limit. Your draft remains open. Keep this tab open or download a recovery backup, then retry after the quota resets.'
+    : '雲端儲存已達每日寫入上限，已保留目前草稿。請保持此分頁開啟或下載復原備份，額度重設後再重試。';
+  return message || (lang==='en'?'Cloud saving failed. Keep your draft open and retry.':'雲端儲存失敗，請保留草稿並重試。');
+}
 
 export const stageHandoffCopy: Record<'en'|'zh', Record<string,string>> = {
   en:{topic_selection:'Your approved topic and evidence links prefill the brief.',project_brief:'Your audience, problem, outcome and constraints guide three UVZ suggestions.',uvz:'Your chosen positioning guides Before → Bridge → After and title options.',transformation_map:'Your selected title, positioning and intended outcomes guide source research.',reference_library:'Reviewed source records carry into your charter. Gate B remains your decision.',product_charter:'Your approved strategy and reviewed sources guide the chapter outline.',outline_builder:'Chapter goals, word budgets and source mappings carry into writing.',content_studio:'Your manuscript guides the companion tools. Passage reviews remain required.',workbook_studio:'Your manuscript and resources carry into explicit quality review at Gate C.',quality_assurance:'Your approved content continues to Brand Design, then Pricing and Export.',brand_design:'Your saved palette, typography and cover direction carry into packaging.',pricing_launch:'Proposed pricing and launch copy join the bundle. Export still checks current approvals.'},

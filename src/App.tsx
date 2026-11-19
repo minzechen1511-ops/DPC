@@ -1,6 +1,6 @@
 import { addAiUsage } from './utils/aiSettings.ts';
 import { WorkflowJourney, WorkflowHandoff } from './components/WorkflowJourney.tsx';
-import {handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, saveStageHandoff, stageName, stageRequirements} from './utils/stageJourney.ts';
+import {handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, saveStageHandoff, stageName, stageRequirements, workflowSaveError} from './utils/stageJourney.ts';
 import { GATE_A_STEPS, gateAJourney, selectJourneyTopic, setupStage, usableMap } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { isRetrievedSource } from './utils/sourceEvidence.ts';
@@ -334,7 +334,7 @@ export default function App() {
           return false;
         }
         setSaveStatus('error');
-        setWorkspaceError(err?.message || 'Could not save project to Cloud Firestore.');
+        setWorkspaceError(workflowSaveError(err,langRef.current));
         return false;
       }
     },
@@ -466,6 +466,13 @@ export default function App() {
     if (journeyStage(activeViewRef.current)!==stage || currentProjectRef.current.projectId!==project.projectId) return;
     setHandoffError('');
     setPendingHandoff({projectId:project.projectId,stage,navigation:navigationRevision.current});
+  };
+  const downloadRecoveryBackup = () => {
+    const current=currentProjectRef.current;
+    const url=URL.createObjectURL(new Blob([JSON.stringify(sanitizeProjectForStorage(current),null,2)],{type:'application/json;charset=utf-8'}));
+    const link=document.createElement('a');
+    link.href=url;link.download=`DPC-recovery-${current.projectId}.json`;
+    document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
   };
   const navigateFromStage = (view:NavigationItem) => {
     const from=journeyStage(activeView);
@@ -1649,7 +1656,13 @@ export default function App() {
             <span>{lang==='en'?`Saved ${stageName(handoffNotice.from,lang)}. Now: ${stageName(handoffNotice.to,lang)}.`:`已儲存${stageName(handoffNotice.from,lang)}。目前：${stageName(handoffNotice.to,lang)}。`}</span>
             <button type="button" onClick={()=>navigateJourney(handoffNotice.from)} className="underline underline-offset-4 font-semibold focus-visible:outline-2">{lang==='en'?'Revisit previous stage':'返回上一階段修改'}</button>
           </div>}
-          {handoffError && <p role="alert" className="mb-3 rounded-lg bg-amber-50 text-amber-950 p-4 text-sm">{handoffError}</p>}
+          {handoffError && <div role="alert" className="mb-3 rounded-lg bg-amber-50 text-amber-950 p-4 text-sm">
+            <p>{handoffError}</p>
+            <div className="flex flex-wrap gap-3 mt-3">
+              <button type="button" disabled={handoffBusy} onClick={()=>{const stage=journeyStage(activeView);if(stage) requestHandoff(stage);}} className="rounded-lg px-3 py-2 bg-amber-900 text-white font-semibold focus-visible:outline-2 focus-visible:outline-offset-2">{lang==='en'?'Retry save & continue':'重試儲存並繼續'}</button>
+              <button type="button" onClick={downloadRecoveryBackup} className="rounded-lg px-3 py-2 underline underline-offset-4 font-semibold focus-visible:outline-2">{lang==='en'?'Download recovery backup':'下載復原備份'}</button>
+            </div>
+          </div>}
           {handoffBusy && <p role="status" className="mb-3 text-sm text-teal-900">{lang==='en'?'Saving your finished stage before opening the next…':'正在儲存已完成階段，接著開啟下一階段…'}</p>}
           {checkingReferences && (
             <p role="status" className="mb-3 p-3.5 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-lg text-sm font-medium">
