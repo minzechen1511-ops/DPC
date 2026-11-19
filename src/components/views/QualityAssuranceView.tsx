@@ -57,7 +57,7 @@ export const QualityAssuranceView: React.FC<Props> = ({
             disabled={blockers.length > 0 || checkingReferences}
             onClick={async () => {
               if (blockers.length) return;
-              if (await onApproveGateC()) setActiveView('export_center');
+              if (await onApproveGateC()) setActiveView('brand_design');
             }}
             className="px-5 py-3 bg-indigo-700 hover:bg-indigo-800 text-white font-semibold text-sm rounded-xl flex gap-2 items-center whitespace-nowrap"
           >

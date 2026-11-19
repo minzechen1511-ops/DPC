@@ -86,3 +86,6 @@ The following 14 **internal stage IDs** remain for persisted-project compatibili
 14. `export_center` — Commercial Buyer Learning Bundle `.zip` & author backups
 
 Changes to upstream market evidence or strategy automatically revoke downstream gate approvals.
+# Linked stage navigation
+
+See [the linked stage journey](docs/LINKED-STAGE-JOURNEY.md) for automatic save-before-continue behavior, approval boundaries, and validation.

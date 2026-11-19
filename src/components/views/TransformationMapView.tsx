@@ -298,7 +298,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
               const title = transformationMap.titleOptions.find(item => item.id === transformationMap.selectedTitleId) || transformationMap.titleOptions.find(item => item.isRecommended) || transformationMap.titleOptions[0];
               if (!title) return;
               onSelectTitle(title.id);
-              setActiveView('reference_library');
+
             }}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >

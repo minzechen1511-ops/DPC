@@ -1,3 +1,4 @@
+import {recommendedJourneyStage, stageName, stageHandoffCopy} from '../../utils/stageJourney.ts';
 import { GATE_A_STEPS, gateAJourney } from '../../utils/gateAJourney.ts';
 import { gateAJourneyText } from '../../utils/i18n.ts';
 import { isRetrievedSource } from '../../utils/sourceEvidence.ts';
@@ -41,109 +42,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const verifiedRefs = (referenceLibrary?.cards || []).filter(isRetrievedSource).length;
   const targetRefs = referenceLibrary?.targetCount || 20;
 
-  const getNextRecommendedStage = (): {
-    stageId: StageId;
-    title: string;
-    detail: string;
-    cta: string;
-  } => {
-    const journeyNext = gateAJourney(project).next;
-    const journeyIndex = GATE_A_STEPS.indexOf(journeyNext as any);
-    if (journeyIndex >= 0) {
-      return {stageId: journeyNext, title: gateAJourneyText[lang].steps[journeyIndex], detail: gateAJourneyText[lang].control, cta: lang === 'en' ? 'Continue recommended path' : '繼續推薦流程'};
-    }
-    if (!workflow?.gates?.gateB?.isApproved || gateIssues(project, 'gateB').length > 0) {
-      return {
-        stageId: 'product_charter',
-        title: lang === 'en' ? 'Stage 7: Align & Approve Product Charter (Gate B)' : '階段 7：對齊產品憲章並核准 (Gate B)',
-        detail:
-          lang === 'en'
-            ? 'Finalize charter pillars & learning objectives, review requirements, and unlock chapter generation.'
-            : '對齊產品支柱與學習目標，核准 Gate B 以解鎖章節撰寫。',
-        cta: lang === 'en' ? 'Open Product Charter' : '前往產品憲章',
-      };
-    }
-    if (totalChapters === 0) {
-      return {
-        stageId: 'outline_builder',
-        title: lang === 'en' ? 'Stage 8: Architect Chapter Outline' : '階段 8：規劃章節大綱架構',
-        detail:
-          lang === 'en'
-            ? 'Structure outcome-driven chapters mapped directly to your retrieved research sources.'
-            : '建立具明確交付物與來源對應的章節大綱結構。',
-        cta: lang === 'en' ? 'Open Outline Builder' : '前往章節大綱',
-      };
-    }
-    if (chaptersDone < totalChapters) {
-      return {
-        stageId: 'content_studio',
-        title:
-          lang === 'en'
-            ? `Stage 9: Draft Remaining Chapters (${chaptersDone}/${totalChapters} Done)`
-            : `階段 9：撰寫電子書章節正文（已完成 ${chaptersDone}/${totalChapters}）`,
-        detail:
-          lang === 'en'
-            ? 'Draft chapter-by-chapter with inline source citations and passage-level review.'
-            : '完成逐章正文撰寫、連續記憶同步與引用查核。',
-        cta: lang === 'en' ? 'Open Content Studio' : '前往長篇內容工廠',
-      };
-    }
-    if ((project.resources || []).length === 0) {
-      return {
-        stageId: 'workbook_studio',
-        title: lang === 'en' ? 'Stage 10: Build Companion Toolkit Suite' : '階段 10：製作伴隨實作工具套件',
-        detail:
-          lang === 'en'
-            ? 'Create practical workbooks, checklists, and decision worksheets included with the product.'
-            : '製作實作工作表、檢核清單與速查範本提升交付實用度。',
-        cta: lang === 'en' ? 'Open Companion Toolkit' : '前往伴隨工具套件',
-      };
-    }
-    if (!workflow?.gates?.gateC?.isApproved || gateIssues(project, 'gateC').length > 0) {
-      return {
-        stageId: 'quality_assurance',
-        title: lang === 'en' ? 'Stage 11: Complete Quality & Citation Audit (Gate C)' : '階段 11：完成出版品質與引用稽核 (Gate C)',
-        detail:
-          lang === 'en'
-            ? 'Verify passage-level source support and approve Gate C to unlock buyer bundle export.'
-            : '完成逐段引用核對與 Gate C 核准，解鎖買家正式套件匯出。',
-        cta: lang === 'en' ? 'Open Quality Audit' : '前往品質審查',
-      };
-    }
-    if (workflow?.stageStatuses?.brand_design !== 'COMPLETED') {
-      return {
-        stageId: 'brand_design',
-        title: lang === 'en' ? 'Stage 12: Apply Commercial Imprint & Cover Styling' : '階段 12：設定出版視覺品牌與封面排版',
-        detail:
-          lang === 'en'
-            ? 'Configure typography and 60-30-10 palette for your exported HTML e-book.'
-            : '套用配色與出版字體，規範專書、封面與工作表排版視覺。',
-        cta: lang === 'en' ? 'Open Brand Design' : '前往品牌視覺設計',
-      };
-    }
-    if (workflow?.stageStatuses?.pricing_launch !== 'COMPLETED') {
-      return {
-        stageId: 'pricing_launch',
-        title: lang === 'en' ? 'Stage 13: Finalize Pricing & Storefront Copy' : '階段 13：制定定價與上市銷售文案',
-        detail:
-          lang === 'en'
-            ? 'Model channel margins and prepare honest sales copy, FAQ, and launch emails.'
-            : '試算平台淨利並準備誠實透明的上架銷售文案。',
-        cta: lang === 'en' ? 'Open Pricing & Launch' : '前往定價與行銷',
-      };
-    }
-    return {
-      stageId: 'export_center',
-      title: lang === 'en' ? 'Stage 14: Export Buyer Learning Bundle ZIP' : '階段 14：預覽並匯出完整商業套件 ZIP',
-      detail:
-        lang === 'en'
-          ? 'Download your Buyer Learning Bundle (.zip) with START-HERE.html, Styled E-Book, Workbooks, Provenance Records & Storefront Listing Kit.'
-          : '立即匯出含 START-HERE 入口、精裝電子書、伴隨工作表與來源稽核檔之完整 ZIP。',
-      cta: lang === 'en' ? 'Open Export Center' : '前往匯出下載中心',
-    };
-  };
-
-  const nextStage = getNextRecommendedStage();
+  const nextId = recommendedJourneyStage(project);
+  const nextStage = {stageId:nextId, title:stageName(nextId,lang), detail:stageHandoffCopy[lang][nextId] || (lang==='en'?'Review and download your current product bundle.':'覆核並下載目前產品套件。'), cta:lang==='en'?'Continue product journey':'繼續產品開發流程'};
 
   return (
     <div className="w-full space-y-5 pb-3">

@@ -19,7 +19,7 @@ import { buildBriefSynthesisPrompt, parseBriefSynthesisResponse } from '../../ut
 interface ProjectBriefViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
-  onUpdateIntake: (intake: ProjectIntake) => void;
+  onUpdateIntake: (intake: ProjectIntake, accept?: boolean) => void;
   onUpdateAiSettings?: (settings: any) => void;
   onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
@@ -63,8 +63,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
   };
 
   const handleAcceptAll = () => {
-    onUpdateIntake(intake);
-    setActiveView('uvz');
+    onUpdateIntake(intake, true);
   };
 
   const handleSynthesizeBrief = async (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {

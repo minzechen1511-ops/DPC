@@ -214,7 +214,7 @@ export const translations = {
     qaTitle: 'Quality Assurance & Publication Audit (Gate C)',
     qaSubtitle: 'Strict evaluation against hallucination risks, completeness, depth, and actionable utility',
     qaScoreLabel: 'Overall Publication Readiness Score',
-    approveGateCCta: 'Approve Gate C & Proceed to Launch & Export →',
+    approveGateCCta: 'Approve Gate C & Continue to Brand Design →',
     gateCApprovedBadge: 'Gate C Approved',
 
     // Brand Design
@@ -415,7 +415,7 @@ export const translations = {
     qaTitle: '品質審查與出版驗收 (Gate C)',
     qaSubtitle: '針對事實幻覺、結構完整性、內容深度與實用度之嚴格稽核',
     qaScoreLabel: '出版就緒品質評分',
-    approveGateCCta: '核准 Gate C 並進入定價與匯出中心 →',
+    approveGateCCta: '核准 Gate C 並進入品牌設計 →',
     gateCApprovedBadge: 'Gate C 品質稽核已通過',
 
     // Brand Design

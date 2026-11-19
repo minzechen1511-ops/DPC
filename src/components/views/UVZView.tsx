@@ -256,7 +256,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
               if (!options.length || project.workflow.stageStatuses.uvz === 'NEEDS_REVIEW') { void handleSynthesizeUvzWithAi(); return; }
               const selected = options.find(option => option.id === uvz.selectedOptionId) || options.find(option => option.isRecommended) || options[0];
               onSelectOption(selected.id);
-              setActiveView('transformation_map');
+
             }}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >

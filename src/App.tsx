@@ -1,5 +1,6 @@
 import { addAiUsage } from './utils/aiSettings.ts';
-import { GateAJourneyNav } from './components/GateAJourneyNav.tsx';
+import { WorkflowJourney, WorkflowHandoff } from './components/WorkflowJourney.tsx';
+import {handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, saveStageHandoff, stageName, stageRequirements} from './utils/stageJourney.ts';
 import { GATE_A_STEPS, gateAJourney, selectJourneyTopic, setupStage, usableMap } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { isRetrievedSource } from './utils/sourceEvidence.ts';
@@ -14,6 +15,7 @@ import {
   TransformationMap,
   ProductBible,
   SalesAssets,
+  StageId,
 } from './types/project.ts';
 import { BLANK_PROJECT } from './data/demoProject.ts';
 import { approveGate, revokeApprovals, gateIssues } from './utils/gatePolicy.ts';
@@ -89,7 +91,15 @@ export default function App() {
   const [savedProjects, setSavedProjects] = useState<DigitalProductProject[]>([]);
   const [lang, setLang] = useState<Language>(() => loadStoredLang());
   const [activeView, setActiveView] = useState<NavigationItem>('dashboard');
-  useEffect(() => {document.getElementById('main-content')?.focus();}, [activeView]);
+  const activeViewRef=useRef(activeView);
+  activeViewRef.current=activeView;
+  useEffect(() => {const main=document.getElementById('main-content'); main?.scrollTo({top:0}); main?.focus();}, [activeView]);
+  const [pendingHandoff,setPendingHandoff] = useState<{projectId:string;stage:StageId;navigation:number}|null>(null);
+  const [handoffBusy,setHandoffBusy] = useState(false);
+  const [handoffError,setHandoffError] = useState('');
+  const [handoffNotice,setHandoffNotice] = useState<{from:StageId;to:StageId}|null>(null);
+  const handoffRunning = useRef(false);
+  const navigationRevision = useRef(0);
 
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const revisionsRef = useRef<Record<string, number>>({});
@@ -231,7 +241,7 @@ export default function App() {
 
             if (cloudList.length > 0) {
               const match = cloudList.find((p) => p.projectId === currentId) || cloudList[0];
-              if (!cloudHydratedRef.current && ([...GATE_A_STEPS, 'reference_library'] as readonly string[]).includes(setupStage(match.workflow.activeStage))) setActiveView(setupStage(match.workflow.activeStage) as NavigationItem);
+              if (!cloudHydratedRef.current && journeyStage(match.workflow.activeStage)) setActiveView(setupStage(match.workflow.activeStage) as NavigationItem);
               if (!hasUnsavedCurrent || match.projectId !== currentId) {
                 skipAutosaveProjectIdRef.current = match.projectId;
                 dirtyProjectIdRef.current = null;
@@ -442,11 +452,55 @@ export default function App() {
   };
   const navigateJourney = (view: NavigationItem) => {
     const destination = setupStage(view) as NavigationItem;
+    navigationRevision.current += 1;
+    setPendingHandoff(null);
+    setHandoffNotice(null);
+    setHandoffError('');
     setActiveView(destination);
-    if ((GATE_A_STEPS as readonly string[]).includes(destination) || destination === 'reference_library') {
+    if (journeyStage(destination)) {
       setProject(current => ({...current, workflow: {...current.workflow, activeStage: destination as any}}));
     }
   };
+  const requestHandoff = (stage:StageId) => {
+    if (handoffRunning.current) return;
+    if (journeyStage(activeViewRef.current)!==stage || currentProjectRef.current.projectId!==project.projectId) return;
+    setHandoffError('');
+    setPendingHandoff({projectId:project.projectId,stage,navigation:navigationRevision.current});
+  };
+  const navigateFromStage = (view:NavigationItem) => {
+    const from=journeyStage(activeView);
+    if (from && nextJourneyStage(from) === view) requestHandoff(from);
+    else navigateJourney(view);
+  };
+  useEffect(() => {
+    if (!pendingHandoff || handoffRunning.current) return;
+    const current=currentProjectRef.current;
+    const contextCurrent=()=>handoffContextCurrent(pendingHandoff,{projectId:currentProjectRef.current.projectId,view:activeViewRef.current,navigation:navigationRevision.current});
+    if (!contextCurrent()) {setPendingHandoff(null);return;}
+    const snapshot=prepareStageHandoff(current,pendingHandoff.stage);
+    if (!snapshot) {
+      setHandoffError(stageRequirements(current,pendingHandoff.stage,langRef.current)[0] || (langRef.current==='en'?'Complete the earlier stages on the recommended path first.':'請先依推薦流程完成前置階段。'));
+      setPendingHandoff(null); return;
+    }
+    handoffRunning.current=true; setHandoffBusy(true);
+    skipAutosaveProjectIdRef.current=snapshot.projectId;
+    dirtyProjectIdRef.current=snapshot.projectId;
+    currentProjectRef.current=snapshot;
+    setProject(snapshot);
+    const isCurrent=()=>contextCurrent() && JSON.stringify(currentProjectRef.current)===JSON.stringify(snapshot);
+    void saveStageHandoff(snapshot,persistProjectNow,isCurrent).then(moved=>{
+      if (moved) {
+        setActiveView(snapshot.workflow.activeStage);
+        setHandoffNotice({from:pendingHandoff.stage,to:snapshot.workflow.activeStage});
+      } else if (isCurrent()) {
+        skipAutosaveProjectIdRef.current=snapshot.projectId;
+        setProject(prev=>({...prev,workflow:{...prev.workflow,activeStage:pendingHandoff.stage}}));
+        setHandoffError(langRef.current==='en'?'Your work remains open. Cloud save did not complete; retry save & continue.':'已保留目前工作。雲端儲存未完成，請重試儲存並繼續。');
+      }
+    }).catch(()=>setHandoffError(langRef.current==='en'?'The handoff failed. Your current work remains open; retry.':'階段交接失敗，已保留目前工作，請重試。')).finally(()=>{
+      handoffRunning.current=false;setHandoffBusy(false);setPendingHandoff(null);
+    });
+  },[pendingHandoff,persistProjectNow]);
 
   const handleRunMarketDiscovery = async (options?: MarketSyncOptions) => {
     if (researchBusy) return;
@@ -595,7 +649,7 @@ export default function App() {
     setProject(prev => prev.projectId === project.projectId
       ? {...approveGate({...prev, isBlankProject: false}, 'gateA'), workflow: {
         ...approveGate({...prev, isBlankProject: false}, 'gateA').workflow, activeStage: 'project_brief'}} : prev);
-    setActiveView('project_brief');
+    requestHandoff('topic_selection');
   };
 
   const [checkingReferences, setCheckingReferences] = useState(false);
@@ -624,7 +678,7 @@ export default function App() {
   const handleApproveGateB = () => approveWithSourceCheck('gateB');
   const handleApproveGateC = () => approveWithSourceCheck('gateC');
 
-  const handleUpdateIntake = (updatedIntake: any) => {
+  const handleUpdateIntake = (updatedIntake: any, accept=false) => {
     setGateAProject((prev) => JSON.stringify(prev.intake) === JSON.stringify(updatedIntake) && prev.workflow.stageStatuses.project_brief === 'COMPLETED' ? prev : ({
       ...prev,
       isBlankProject: false,
@@ -635,12 +689,13 @@ export default function App() {
         ...revokeApprovals(prev, 'gateB').workflow,
         stageStatuses: {
           ...revokeApprovals(prev, 'gateB').workflow.stageStatuses,
-          project_brief: 'COMPLETED',
+          project_brief: accept ? 'COMPLETED' : 'NEEDS_REVIEW',
           uvz: JSON.stringify(prev.intake) === JSON.stringify(updatedIntake) ? prev.workflow.stageStatuses.uvz : 'NEEDS_REVIEW',
           transformation_map: JSON.stringify(prev.intake) === JSON.stringify(updatedIntake) ? prev.workflow.stageStatuses.transformation_map : 'NEEDS_REVIEW',
         },
       },
     }));
+    if (accept) requestHandoff('project_brief');
   };
 
   const handleSelectUVZOption = (optionId: string) => {
@@ -672,6 +727,7 @@ export default function App() {
         },
       };
     });
+    requestHandoff('uvz');
   };
 
   const handleUpdateUvz = (updatedUvz: UVZAnalysis) => {
@@ -735,6 +791,7 @@ export default function App() {
           : prev.charter,
       };
     });
+    requestHandoff('transformation_map');
   };
 
   const handleUpdateTransformationMap = (updatedMap: TransformationMap) => {
@@ -823,6 +880,7 @@ export default function App() {
         ),
       },
     }));
+    if (project.outline.length && project.outline.every(ch=>ch.id===chapterId || ch.isCompleted) && wordCount >= 100) requestHandoff('content_studio');
   };
 
   const handleUpdateProductBible = (updatedBible: ProductBible) => {
@@ -838,7 +896,7 @@ export default function App() {
     });
   };
 
-  const handleUpdateBrand = (updatedBrand: DigitalProductProject['brand']) => {
+  const handleUpdateBrand = (updatedBrand: DigitalProductProject['brand'], finish=false) => {
     setProject((prev) => ({
       ...prev,
       isBlankProject: false,
@@ -858,15 +916,17 @@ export default function App() {
         ...prev.workflow,
         stageStatuses: {
           ...prev.workflow.stageStatuses,
-          brand_design: 'COMPLETED',
+          brand_design: finish ? 'COMPLETED' : 'NEEDS_REVIEW',
         },
       },
     }));
+    if (finish) requestHandoff('brand_design');
   };
 
   const handleUpdatePricingAndSales = (
     pricingReport: DigitalProductProject['pricingReport'],
-    salesAssets: SalesAssets
+    salesAssets: SalesAssets,
+    finish=false
   ) => {
     setProject((prev) => ({
       ...prev,
@@ -889,10 +949,11 @@ export default function App() {
         ...prev.workflow,
         stageStatuses: {
           ...prev.workflow.stageStatuses,
-          pricing_launch: 'COMPLETED',
+          pricing_launch: finish ? 'COMPLETED' : 'NEEDS_REVIEW',
         },
       },
     }));
+    if (finish) requestHandoff('pricing_launch');
   };
 
   const handleUpdateAiSettings = (newAi: any) => {
@@ -1157,7 +1218,7 @@ export default function App() {
         return (
           <DashboardView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             progressPercent={progressPercent}
             lang={lang}
           />
@@ -1166,7 +1227,7 @@ export default function App() {
         return (
           <NewProjectWizard
             onStartProject={handleStartNewProject}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             lang={lang}
           />
         );
@@ -1174,7 +1235,7 @@ export default function App() {
         return (
           <MarketIntelligenceView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             researchBusy={researchBusy}
             directoryBusy={directoryBusy}
             researchError={researchError}
@@ -1197,7 +1258,7 @@ export default function App() {
         return (
           <MarketIntelligenceView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             researchBusy={researchBusy}
             directoryBusy={directoryBusy}
             researchError={researchError}
@@ -1220,7 +1281,7 @@ export default function App() {
         return (
           <ProjectBriefView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             onUpdateIntake={handleUpdateIntake}
             onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
@@ -1231,7 +1292,7 @@ export default function App() {
         return (
           <UVZView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             onSelectOption={handleSelectUVZOption}
             onUpdateUvz={handleUpdateUvz}
             onUpdateAiSettings={handleUpdateAiSettings}
@@ -1243,7 +1304,7 @@ export default function App() {
         return (
           <TransformationMapView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             onSelectTitle={handleSelectTitleOption}
             onUpdateTransformationMap={handleUpdateTransformationMap}
             onUpdateAiSettings={handleUpdateAiSettings}
@@ -1294,7 +1355,7 @@ export default function App() {
               })
             }
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             lang={lang}
           />
         );
@@ -1302,7 +1363,7 @@ export default function App() {
         return (
           <ProductCharterView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             checkingReferences={checkingReferences}
             onApproveGateB={handleApproveGateB}
             onUpdateCharter={handleUpdateCharter}
@@ -1315,8 +1376,8 @@ export default function App() {
         return (
           <OutlineBuilderView
             project={project}
-            setActiveView={navigateJourney}
-            onUpdateOutline={(out) =>
+            setActiveView={navigateFromStage}
+            onUpdateOutline={(out) => {
               setProject((prev) => {
                 const revoked = revokeApprovals(
                   { ...prev, isBlankProject: false, updatedAt: new Date().toISOString(), outline: out },
@@ -1332,8 +1393,9 @@ export default function App() {
                     },
                   },
                 };
-              })
-            }
+              });
+              if (computeOutlineStageStatus(out,project.referenceLibrary.cards) === 'COMPLETED') requestHandoff('outline_builder');
+            }}
             onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
@@ -1369,7 +1431,7 @@ export default function App() {
               )
             }
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             onUpdateChapter={handleUpdateChapter}
             onUpdateProductBible={handleUpdateProductBible}
             onUpdateAiSettings={handleUpdateAiSettings}
@@ -1380,7 +1442,7 @@ export default function App() {
       case 'workbook_studio':
         return (
           <WorkbookStudioView
-            onSaveResource={(resource) =>
+            onSaveResource={(resource) => {
               setProject((prev) => {
                 const revoked = revokeApprovals(prev, 'gateC');
                 return {
@@ -1396,9 +1458,10 @@ export default function App() {
                     },
                   },
                 };
-              })
-            }
-            onSaveResources={(incomingResources) =>
+              });
+              if(resource.contentMarkdown.trim().length > 150 && resource.instructions.trim()) requestHandoff('workbook_studio');
+            }}
+            onSaveResources={(incomingResources) => {
               setProject((prev) => {
                 const revoked = revokeApprovals(prev, 'gateC');
                 const incomingIds = new Set(incomingResources.map((r) => r.id));
@@ -1419,12 +1482,13 @@ export default function App() {
                     },
                   },
                 };
-              })
-            }
+              });
+              if(incomingResources.some(resource=>resource.contentMarkdown.trim().length > 150 && resource.instructions.trim())) requestHandoff('workbook_studio');
+            }}
             onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             lang={lang}
           />
         );
@@ -1432,7 +1496,7 @@ export default function App() {
         return (
           <QualityAssuranceView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             checkingReferences={checkingReferences}
             onApproveGateC={handleApproveGateC}
             lang={lang}
@@ -1442,7 +1506,7 @@ export default function App() {
         return (
           <BrandDesignView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             onUpdateBrand={handleUpdateBrand}
             onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
@@ -1453,7 +1517,7 @@ export default function App() {
         return (
           <PricingLaunchView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             onUpdatePricingAndSales={handleUpdatePricingAndSales}
             onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}
@@ -1468,7 +1532,7 @@ export default function App() {
               setProject((prev) => revokeApprovals(prev, 'gateC'));
             }}
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             lang={lang}
           />
         );
@@ -1481,7 +1545,7 @@ export default function App() {
             onDuplicateProject={handleDuplicateProject}
             onDeleteProject={handleDeleteProject}
             onLoadProject={handleLoadProjectIntoStore}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             revisions={revisions}
             onRefreshProjects={handleReloadFromCloud}
             localBusy={cloudBusy}
@@ -1503,7 +1567,7 @@ export default function App() {
       case 'automation_settings':
         return (
           <AutomationSettingsView
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             project={project}
             onSavePreferences={(prefs) =>
               setProject((prev) => ({
@@ -1527,7 +1591,7 @@ export default function App() {
         return (
           <DashboardView
             project={project}
-            setActiveView={navigateJourney}
+            setActiveView={navigateFromStage}
             progressPercent={progressPercent}
             lang={lang}
           />
@@ -1580,7 +1644,13 @@ export default function App() {
         />
 
         <main id="main-content" tabIndex={-1} className="workspace-main flex-1 min-w-0 overflow-y-auto p-3 sm:p-4 lg:p-5 flex flex-col">
-          <GateAJourneyNav project={project} current={activeView} onNavigate={navigateJourney} lang={lang} />
+          <WorkflowJourney project={project} current={activeView} onNavigate={navigateJourney} lang={lang} />
+          {handoffNotice && <div role="status" className="mb-4 rounded-lg bg-teal-50 text-teal-950 p-4 text-sm flex flex-wrap items-center justify-between gap-3">
+            <span>{lang==='en'?`Saved ${stageName(handoffNotice.from,lang)}. Now: ${stageName(handoffNotice.to,lang)}.`:`已儲存${stageName(handoffNotice.from,lang)}。目前：${stageName(handoffNotice.to,lang)}。`}</span>
+            <button type="button" onClick={()=>navigateJourney(handoffNotice.from)} className="underline underline-offset-4 font-semibold focus-visible:outline-2">{lang==='en'?'Revisit previous stage':'返回上一階段修改'}</button>
+          </div>}
+          {handoffError && <p role="alert" className="mb-3 rounded-lg bg-amber-50 text-amber-950 p-4 text-sm">{handoffError}</p>}
+          {handoffBusy && <p role="status" className="mb-3 text-sm text-teal-900">{lang==='en'?'Saving your finished stage before opening the next…':'正在儲存已完成階段，接著開啟下一階段…'}</p>}
           {checkingReferences && (
             <p role="status" className="mb-3 p-3.5 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-lg text-sm font-medium">
               Checking original source records and retained excerpts. Approval remains pending.
@@ -1605,9 +1675,10 @@ export default function App() {
               )}
             </div>
           )}
-          <div key={project.projectId} className="flex-1 w-full">
+          <div key={project.projectId} inert={handoffBusy} className="flex-1 w-full">
             {renderActiveView()}
           </div>
+          <WorkflowHandoff project={project} current={activeView} lang={lang} onNavigate={navigateJourney} onFinish={()=>{const stage=journeyStage(activeView);if(stage) requestHandoff(stage);}} busy={handoffBusy} error={handoffError} onRetry={()=>{const stage=journeyStage(activeView);if(stage) requestHandoff(stage);}} />
         </main>
       </div>
 

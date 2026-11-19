@@ -19,13 +19,13 @@ export const AutomationSettingsView: React.FC<Props> = ({project, onSavePreferen
   return <div className="w-full space-y-5 pb-3">
     <section className="lab-panel p-5 sm:p-6 space-y-3">
       <h1 className="text-2xl font-bold text-slate-900">{lang === 'en' ? 'AI assistance & review settings' : 'AI 輔助與覆核設定'}</h1>
-      <p className="text-sm text-slate-700">{copy.noRunner}</p>
+      <p className="text-sm text-slate-700">{lang==='en'?'Finish a stage and the Studio saves your work, opens the next stage and carries your decisions forward. Revisit finished work from the sidebar.':'完成階段後，工作室會儲存內容、自動開啟下一階段並帶入您的決策；已完成工作可從側欄返回修改。'}</p>
       <p className="text-sm text-slate-700"><ShieldCheck className="inline w-4 h-4 mr-2" />{copy.control}</p>
       <p className="text-sm font-semibold text-slate-800">{lang === 'en' ? `Background executor: ${GUIDED_GENERATION_AVAILABLE ? 'available' : 'unavailable'}. Existing job records describe preparation steps; they do not execute AI generation.` : '背景執行器：尚未提供。既有任務紀錄僅描述準備步驟，不會執行 AI 生成。'}</p>
       <ol className="list-decimal pl-5 space-y-2 text-sm">
         {GATE_A_STEPS.map((stage,index) => <li key={stage}><button type="button" onClick={() => setActiveView?.(stage)} className="underline text-teal-800 underline-offset-4 focus-visible:outline-2">{copy.steps[index]}</button></li>)}
       </ol>
-      <p className="text-sm text-slate-600">{lang === 'en' ? 'Start in Topic Discovery: scan or review evidence and explicitly approve a chosen topic on the same page. Then accept the brief, choose UVZ positioning and draft the map. Saved outputs remain editable. Failed requests leave the previous draft intact. Automatic sequence, pause and resume controls are intentionally unavailable.' : '從題材探索開始：在同一頁掃描或審查證據並明確核准題材，再接受簡報、選擇 UVZ 定位並生成轉變地圖。已儲存內容皆可編輯，請求失敗保留原草稿。目前不提供自動串接、暫停或續跑控制。'}</p>
+      <p className="text-sm text-slate-600">{lang === 'en' ? 'Start in Topic Discovery: scan or review evidence and explicitly approve a chosen topic on the same page. Then accept the brief, choose UVZ positioning and draft the map. Saved outputs remain editable. Failed requests leave the previous draft intact. Automatic navigation after completion is available. AI generation remains per stage; the metadata-only job service does not run a background generation sequence.' : '從題材探索開始：在同一頁掃描或審查證據並明確核准題材，再接受簡報、選擇 UVZ 定位並生成轉變地圖。已儲存內容皆可編輯，請求失敗保留原草稿。已支援完成後自動導覽；AI 仍按階段生成，僅儲存紀錄的任務服務不會執行背景生成序列。'}</p>
     </section>
     <form className="lab-panel p-5 sm:p-6 space-y-5" onSubmit={event => {
       event.preventDefault();

@@ -1,3 +1,4 @@
+import {recommendedJourneyStage, stageName} from '../utils/stageJourney.ts';
 import { GATE_A_STEPS, gateAJourney } from '../utils/gateAJourney.ts';
 import { gateAJourneyText } from '../utils/i18n.ts';
 import { isRetrievedSource } from '../utils/sourceEvidence.ts';
@@ -91,32 +92,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return <span className="w-2 h-2 rounded-full bg-slate-600 shrink-0" />;
   };
 
-  const getNextRecommendedStep = (): { id: NavigationItem; label: string } => {
-    const gates = project.workflow.gates;
-    const journeyNext = gateAJourney(project).next;
-    const journeyIndex = GATE_A_STEPS.indexOf(journeyNext as any);
-    if (journeyIndex >= 0) {
-      return {id: journeyNext as NavigationItem, label: `${journeyIndex + 1}. ${gateAJourneyText[lang].steps[journeyIndex]}`};
-    }
-    if (!gates.gateB.isApproved) {
-      const hasRefs = (project.referenceLibrary.cards || []).some(isRetrievedSource);
-      return hasRefs
-        ? { id: 'product_charter', label: lang === 'en' ? '7. Approve Charter (Gate B)' : '7. 核准產品憲章 (Gate B)' }
-        : { id: 'reference_library', label: lang === 'en' ? '6. Add Verified Sources' : '6. 補充真實研究文獻' };
-    }
-    if (project.outline.some((ch) => !ch.isCompleted)) {
-      return { id: 'content_studio', label: lang === 'en' ? '9. Write Chapters' : '9. 撰寫電子書章節' };
-    }
-    if (!(project.resources || []).some((r) => r.contentMarkdown.trim().length > 150)) {
-      return { id: 'workbook_studio', label: lang === 'en' ? '10. Build Worksheets' : '10. 建立實作工具表' };
-    }
-    if (!gates.gateC.isApproved) {
-      return { id: 'quality_assurance', label: lang === 'en' ? '11. Pass QA Audit (Gate C)' : '11. 通過品質稽核 (Gate C)' };
-    }
-    return { id: 'export_center', label: lang === 'en' ? '14. Export Product Bundle' : '14. 匯出完整商品包' };
-  };
-
-  const nextStep = getNextRecommendedStep();
+  const nextId = recommendedJourneyStage(project);
+  const nextStep = {id:nextId,label:stageName(nextId,lang)};
 
   const navGroups: NavGroup[] = [
     {

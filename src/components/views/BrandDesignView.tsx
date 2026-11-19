@@ -17,7 +17,7 @@ import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 interface BrandDesignViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
-  onUpdateBrand: (brand: DigitalProductProject['brand']) => void;
+  onUpdateBrand: (brand: DigitalProductProject['brand'], finish?:boolean) => void;
   onUpdateAiSettings?: (settings: any) => void;
   onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
@@ -100,7 +100,7 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
   }, [project.projectId, project.brand]);
 
   const handleSave = () => {
-    onUpdateBrand(draft);
+    onUpdateBrand(draft, true);
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 3000);
   };
@@ -255,21 +255,14 @@ export const BrandDesignView: React.FC<BrandDesignViewProps> = ({
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-4 py-2.5 text-sm font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            <span>{lang === 'en' ? 'Save Brand Styling' : '儲存品牌視覺設定'}</span>
-          </button>
+
 
           <button
             type="button"
-            onClick={() => setActiveView('pricing_launch')}
+            onClick={handleSave}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
-            <span>{lang === 'en' ? 'Pricing & Launch Suite →' : '前往定價與上市行銷套件 →'}</span>
+            <span>{lang === 'en' ? 'Save styling & continue' : '儲存視覺設定並繼續'}</span>
           </button>
         </div>
       </div>

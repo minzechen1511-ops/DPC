@@ -30,7 +30,8 @@ interface PricingLaunchViewProps {
   setActiveView: (view: any) => void;
   onUpdatePricingAndSales: (
     pricingReport: DigitalProductProject['pricingReport'],
-    salesAssets: SalesAssets
+    salesAssets: SalesAssets,
+    finish?: boolean
   ) => void;
   onUpdateAiSettings?: (settings: any) => void;
   onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
@@ -104,7 +105,7 @@ export const PricingLaunchView: React.FC<PricingLaunchViewProps> = ({
       productDescriptionBullets: cleanBullets,
     };
     setSales(mergedSales);
-    onUpdatePricingAndSales(nextPricing, mergedSales);
+    onUpdatePricingAndSales(nextPricing, mergedSales, true);
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 3000);
   };
@@ -276,21 +277,14 @@ Return JSON with exact keys:
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => commitChanges()}
-            className="px-4 py-2.5 text-sm font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            <span>{lang === 'en' ? 'Save Pricing & Copy' : '儲存定價與文案'}</span>
-          </button>
+
 
           <button
             type="button"
-            onClick={() => setActiveView('export_center')}
+            onClick={() => commitChanges()}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
-            <span>{lang === 'en' ? 'Export Center →' : '前往匯出中心 →'}</span>
+            <span>{lang === 'en' ? 'Save pricing & continue' : '儲存定價並繼續'}</span>
           </button>
         </div>
       </div>
