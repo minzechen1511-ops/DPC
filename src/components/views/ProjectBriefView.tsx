@@ -1,3 +1,6 @@
+import { generationError } from '../../utils/gateAJourney.ts';
+import { gateAJourneyText } from '../../utils/i18n.ts';
+import { gateAApproved, usableBrief } from '../../utils/gateAJourney.ts';
 import React, { useState, useEffect } from 'react';
 import { FileText, CheckCircle2, Lock, Unlock, Save, Sparkles } from 'lucide-react';
 import { DigitalProductProject, ProjectIntake } from '../../types/project.ts';
@@ -21,6 +24,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
   lang = 'en',
 }) => {
   const t = translations[lang];
+  const journey = gateAJourneyText[lang];
   const [intake, setIntake] = useState<ProjectIntake>(project.intake);
   const [lockedFields, setLockedFields] = useState<Record<string, boolean>>({});
   const [savedNotice, setSavedNotice] = useState(false);
@@ -52,6 +56,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
   };
 
   const handleSynthesizeBrief = async () => {
+    if (!gateAApproved(project)) return;
     setAiBusy(true);
     setAiError('');
     setAiSuccess('');
@@ -80,16 +85,11 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
       onUpdateIntake(merged);
       setAiSuccess(
         lang === 'en'
-          ? 'All 13 Project Brief fields have been refined and aligned for commercial positioning.'
-          : '已完成 13 項專案設定的 AI 商業定位強化與同步更新。'
+          ? 'Brief draft updated. Creator facts were preserved; audience and product claims still require validation.'
+          : '簡報草稿已更新；已保留創作者事實，受眾與產品主張仍待驗證。'
       );
     } catch (err: any) {
-      setAiError(
-        err?.message ||
-          (lang === 'en'
-            ? 'Could not reach server Gemini engine to synthesize the brief.'
-            : '無法連接伺服器端 Gemini 引擎以合成專案設定。')
-      );
+      setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
@@ -121,21 +121,32 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
           <button
             type="button"
             onClick={handleAcceptAll}
+            disabled={!gateAApproved(project) || !usableBrief({...project, intake}) || aiBusy}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>{t.approveBriefCta}</span>
+            <span>{journey.continueBrief}</span>
           </button>
         </div>
       </div>
 
+      <section aria-label={journey.steps[2]} className="border border-slate-200 rounded-xl p-5 space-y-3">
+        <h2 className="text-lg font-semibold">{journey.steps[2]}</h2>
+        <p className="text-sm text-slate-600">{lang === 'en' ? 'Carried forward from your selected, approved niche. Use this draft as-is; detailed fields and AI polish are optional. Unknown creator facts stay blank.' : '已承接您選定並核准的題材，可直接使用此草稿；詳細欄位與 AI 潤飾皆為選用。未知的創作者資料維持空白。'}</p>
+        <dl className="grid gap-3 sm:grid-cols-2 text-sm">{[
+          [lang === 'en' ? 'Audience hypothesis' : '受眾假設', intake.targetAudience],
+          [lang === 'en' ? 'Problem' : '問題', intake.problemsSolved],
+          [lang === 'en' ? 'Product direction' : '產品方向', intake.productIdea],
+          [lang === 'en' ? 'Intended transformation' : '預期轉變', intake.desiredTransformation],
+        ].map(([label,value]) => <div key={label}><dt className="font-semibold text-slate-900">{label}</dt><dd className="text-slate-700 mt-1">{value || (lang === 'en' ? 'Not provided' : '尚未提供')}</dd></div>)}</dl>
+      </section>
       {/* Synthesise.ai Brief Co-Pilot Bar */}
       <div className="lab-panel p-5 sm:p-6 bg-gradient-to-r from-teal-50/70 via-white to-sky-50/60 space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{lang === 'en' ? 'Synthesise.ai Brief Co-Pilot' : 'Synthesise.ai 專案定位智能助手'}</span>
+              <span>{lang === 'en' ? 'Optional brief polish' : '選用簡報潤飾'}</span>
             </div>
             <p className="text-sm text-slate-700">
               {lang === 'en'
@@ -154,13 +165,14 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
             <span>
               {aiBusy
                 ? lang === 'en' ? 'Synthesizing 13 Fields...' : '正在智能生成 13 項設定...'
-                : lang === 'en' ? 'AI Synthesize & Polish 13 Fields' : 'AI 一鍵優化 13 項設定'}
+                : lang === 'en' ? 'Optional: polish this brief with AI' : '選用：以 AI 潤飾此簡報'}
             </span>
           </button>
         </div>
 
         <input
           type="text"
+          aria-label={lang === 'en' ? 'Optional brief polish direction' : '選用簡報潤飾方向'}
           value={focusNote}
           onChange={(e) => setFocusNote(e.target.value)}
           placeholder={
@@ -180,10 +192,11 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
 
       {(savedNotice || aiSuccess) && (
         <p role="status" className="px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium">
-          {aiSuccess || (lang === 'en' ? '13-Field Project Brief draft saved.' : '13 項專案設定草稿已儲存。')}
+          {aiSuccess || (lang === 'en' ? 'Brief changes applied. Check the header for cloud saving, saved or retry status.' : '已套用簡報變更；請查看頁首的雲端儲存中、已儲存或重試狀態。')}
         </p>
       )}
 
+      <details className="group" onBlur={event => {if (!event.currentTarget.contains(event.relatedTarget as Node) && JSON.stringify(intake) !== JSON.stringify(project.intake)) onUpdateIntake(intake);}}><summary className="cursor-pointer font-semibold text-teal-800 p-3 focus-visible:outline-2">{journey.optional}</summary>
       {/* 13 Fields Full-Width Grid */}
       <div className="space-y-5">
         {/* Part 1 */}
@@ -232,6 +245,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
                 onChange={(e) => setIntake({ ...intake, experienceLevel: e.target.value as any })}
                 className="w-full font-medium bg-white border border-slate-300 rounded-xl px-3.5 py-2.5"
               >
+                <option value="">{lang === 'en' ? 'Not provided' : '尚未提供'}</option>
                 <option value="BEGINNER">BEGINNER</option>
                 <option value="INTERMEDIATE">INTERMEDIATE</option>
                 <option value="ADVANCED">ADVANCED</option>
@@ -436,6 +450,7 @@ export const ProjectBriefView: React.FC<ProjectBriefViewProps> = ({
           </div>
         </div>
       </div>
+      </details>
     </div>
   );
 };

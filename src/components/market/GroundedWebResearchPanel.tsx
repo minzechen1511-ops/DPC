@@ -87,11 +87,13 @@ export const GroundedWebResearchPanel: React.FC<GroundedWebResearchPanelProps> =
       id: `res-web-lead-${Date.now()}`,
       resourceName: source.title,
       publisher: source.domain || 'Web Search Source',
-      url: source.url,
-      scopeKind: 'supporting_interest',
-      accessStatus: 'not_checked',
+      originalURL: source.url,
+      purpose: 'Unverified web research lead', geography: 'Not established',
+      categoryCoverage: 'Not established', formatCoverage: 'Not established',
+      whatItSupports: 'Discovery only; inspect original evidence before review',
+      scopeKind: 'supporting_discovery',
+      accessStatus: 'unchecked',
       collectionMethod: 'manual_review',
-      updateFrequency: 'Live web index',
       importantLimitations:
         'Discovered via Gemini Google Search Grounding (gemini-4-hydrogen). Inspect original URL, date, and metric before approving.',
     };

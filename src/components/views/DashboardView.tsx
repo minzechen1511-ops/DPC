@@ -1,3 +1,5 @@
+import { GATE_A_STEPS, gateAJourney } from '../../utils/gateAJourney.ts';
+import { gateAJourneyText } from '../../utils/i18n.ts';
 import { isRetrievedSource } from '../../utils/sourceEvidence.ts';
 import { gateIssues } from '../../utils/gatePolicy.ts';
 import React from 'react';
@@ -45,6 +47,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     detail: string;
     cta: string;
   } => {
+    const journeyNext = gateAJourney(project).next;
+    const journeyIndex = GATE_A_STEPS.indexOf(journeyNext as any);
+    if (journeyIndex >= 0) {
+      return {stageId: journeyNext, title: gateAJourneyText[lang].steps[journeyIndex], detail: gateAJourneyText[lang].control, cta: lang === 'en' ? 'Continue recommended path' : '繼續推薦流程'};
+    }
     if ((marketResearch?.platformEvidence || []).length === 0) {
       return {
         stageId: 'market_research',

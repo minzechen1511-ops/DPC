@@ -1,3 +1,5 @@
+import { GateAJourneyNav } from './components/GateAJourneyNav.tsx';
+import { GATE_A_STEPS, gateAJourney, selectJourneyTopic } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { isRetrievedSource } from './utils/sourceEvidence.ts';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -23,7 +25,6 @@ import {
   runAutomatedMarketDiscovery,
   checkSeedResourceDirectory,
   deriveSynchronizedCandidates,
-  propagateTopicToDownstream,
   isGateAQualifiedEvidence,
   MarketSyncOptions,
 } from './utils/marketDiscoveryEngine.ts';
@@ -87,6 +88,7 @@ export default function App() {
   const [savedProjects, setSavedProjects] = useState<DigitalProductProject[]>([]);
   const [lang, setLang] = useState<Language>(() => loadStoredLang());
   const [activeView, setActiveView] = useState<NavigationItem>('dashboard');
+  useEffect(() => {document.getElementById('main-content')?.focus();}, [activeView]);
 
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const revisionsRef = useRef<Record<string, number>>({});
@@ -228,6 +230,7 @@ export default function App() {
 
             if (cloudList.length > 0) {
               const match = cloudList.find((p) => p.projectId === currentId) || cloudList[0];
+              if (!cloudHydratedRef.current && (GATE_A_STEPS as readonly string[]).includes(match.workflow.activeStage)) setActiveView(match.workflow.activeStage);
               if (!hasUnsavedCurrent || match.projectId !== currentId) {
                 skipAutosaveProjectIdRef.current = match.projectId;
                 dirtyProjectIdRef.current = null;
@@ -280,9 +283,9 @@ export default function App() {
 
   const persistProjectNow = useCallback(
     async (targetProject: DigitalProductProject) => {
-      if (!authUser) return;
+      if (!authUser) return false;
       if (targetProject.isBlankProject && !revisionsRef.current[targetProject.projectId]) {
-        return;
+        return true;
       }
       if (autosaveTimerRef.current) {
         window.clearTimeout(autosaveTimerRef.current);
@@ -308,6 +311,7 @@ export default function App() {
           dirtyProjectIdRef.current = null;
         }
         setSaveStatus('saved');
+        return true;
       } catch (err: any) {
         if (isProjectRevisionConflictError(err)) {
           setSaveStatus('conflict');
@@ -316,10 +320,11 @@ export default function App() {
               ? `Save blocked by revision conflict (expected r${err.expectedRevision}, cloud is at r${err.actualRevision}). Reload from Cloud to inspect the latest version.`
               : `版次衝突，已阻止舊資料覆蓋雲端（本機預期 r${err.expectedRevision}，雲端為 r${err.actualRevision}）。請先點擊重新載入雲端版本。`
           );
-          return;
+          return false;
         }
         setSaveStatus('error');
         setWorkspaceError(err?.message || 'Could not save project to Cloud Firestore.');
+        return false;
       }
     },
     [authUser, updateRevision]
@@ -431,13 +436,24 @@ export default function App() {
     });
   };
 
+  const setGateAProject = (update: (current: DigitalProductProject) => DigitalProductProject) => {
+    setProject(current => current.projectId === project.projectId ? update(current) : current);
+  };
+  const navigateJourney = (view: NavigationItem) => {
+    setActiveView(view);
+    if ((GATE_A_STEPS as readonly string[]).includes(view) || view === 'reference_library') {
+      setProject(current => ({...current, workflow: {...current.workflow, activeStage: view as any}}));
+    }
+  };
+
   const handleRunMarketDiscovery = async (options?: MarketSyncOptions) => {
     if (researchBusy) return;
     setResearchBusy(true);
     setResearchError('');
+    setGateAProject(prev => ({...prev, marketResearch: {...prev.marketResearch, scanState: 'running', lastScanError: ''}}));
     try {
       const result = await runAutomatedMarketDiscovery(options);
-      setProject((prev) => {
+      setGateAProject((prev) => {
         const preservedManual = (prev.marketResearch.platformEvidence || []).filter(
           (obs) =>
             !obs.isSample &&
@@ -466,6 +482,7 @@ export default function App() {
                 : null,
               sourceReports: result.sources,
               researchDate: result.checkedAt,
+              scanState: 'complete', lastScanError: '',
               confidence: hasQualified ? 'MEDIUM' : 'LIMITED',
             },
             workflow: {
@@ -481,7 +498,9 @@ export default function App() {
         );
       });
     } catch (error) {
-      setResearchError(error instanceof Error ? error.message : 'Research failed.');
+      const message = error instanceof Error ? error.message : 'Research failed.';
+      setResearchError(message);
+      setGateAProject(prev => ({...prev, marketResearch: {...prev.marketResearch, scanState: 'error', lastScanError: message}}));
     } finally {
       setResearchBusy(false);
     }
@@ -558,7 +577,7 @@ export default function App() {
 
   const handleSelectTopic = (topicId: string, selectedAudienceHypothesisId?: string) =>
     setProject((prev) => {
-      const next = propagateTopicToDownstream(prev, topicId, lang, selectedAudienceHypothesisId);
+      const next = selectJourneyTopic(prev, topicId, lang, selectedAudienceHypothesisId);
       const revoked = revokeApprovals({ ...next, isBlankProject: false }, 'gateA');
       return {
         ...revoked,
@@ -568,7 +587,13 @@ export default function App() {
         },
       };
     });
-  const handleApproveGateA = () => setProject((prev) => approveGate({ ...prev, isBlankProject: false }, 'gateA'));
+  const handleApproveGateA = () => {
+    if (gateIssues(project, 'gateA').length) return;
+    setProject(prev => prev.projectId === project.projectId
+      ? {...approveGate({...prev, isBlankProject: false}, 'gateA'), workflow: {
+        ...approveGate({...prev, isBlankProject: false}, 'gateA').workflow, activeStage: 'project_brief'}} : prev);
+    setActiveView('project_brief');
+  };
 
   const [checkingReferences, setCheckingReferences] = useState(false);
   const [workflowError, setWorkflowError] = useState('');
@@ -597,7 +622,7 @@ export default function App() {
   const handleApproveGateC = () => approveWithSourceCheck('gateC');
 
   const handleUpdateIntake = (updatedIntake: any) => {
-    setProject((prev) => ({
+    setGateAProject((prev) => ({
       ...prev,
       isBlankProject: false,
       updatedAt: new Date().toISOString(),
@@ -608,13 +633,15 @@ export default function App() {
         stageStatuses: {
           ...revokeApprovals(prev, 'gateB').workflow.stageStatuses,
           project_brief: 'COMPLETED',
+          uvz: JSON.stringify(prev.intake) === JSON.stringify(updatedIntake) ? prev.workflow.stageStatuses.uvz : 'NEEDS_REVIEW',
+          transformation_map: JSON.stringify(prev.intake) === JSON.stringify(updatedIntake) ? prev.workflow.stageStatuses.transformation_map : 'NEEDS_REVIEW',
         },
       },
     }));
   };
 
   const handleSelectUVZOption = (optionId: string) => {
-    setProject((prev) => {
+    setGateAProject((prev) => {
       const revoked = revokeApprovals(prev, 'gateB');
       const selected = prev.uvz.positioningOptions.find((o) => o.id === optionId);
       return {
@@ -626,6 +653,7 @@ export default function App() {
           stageStatuses: {
             ...revoked.workflow.stageStatuses,
             uvz: optionId ? 'COMPLETED' : 'PARTIAL',
+            transformation_map: prev.uvz.selectedOptionId === optionId ? prev.workflow.stageStatuses.transformation_map : 'NEEDS_REVIEW',
           },
         },
         charter: {
@@ -643,7 +671,8 @@ export default function App() {
   };
 
   const handleUpdateUvz = (updatedUvz: UVZAnalysis) => {
-    setProject((prev) => {
+    setGateAProject((prev) => {
+      if (prev.marketResearch.selectedTopicId !== project.marketResearch.selectedTopicId || JSON.stringify(prev.intake) !== JSON.stringify(project.intake)) return prev;
       const revoked = revokeApprovals(prev, 'gateB');
       const selected = updatedUvz.positioningOptions.find((o) => o.id === updatedUvz.selectedOptionId);
       const hasContent = updatedUvz.positioningOptions.length > 0 && Boolean(updatedUvz.selectedOptionId);
@@ -656,6 +685,7 @@ export default function App() {
           stageStatuses: {
             ...revoked.workflow.stageStatuses,
             uvz: hasContent ? 'COMPLETED' : 'PARTIAL',
+            transformation_map: 'NEEDS_REVIEW',
           },
         },
         charter: {
@@ -671,7 +701,7 @@ export default function App() {
   };
 
   const handleSelectTitleOption = (titleId: string) => {
-    setProject((prev) => {
+    setGateAProject((prev) => {
       const revoked = revokeApprovals(prev, 'gateB');
       const selected = prev.transformationMap.titleOptions.find((t) => t.id === titleId);
       return {
@@ -703,7 +733,8 @@ export default function App() {
   };
 
   const handleUpdateTransformationMap = (updatedMap: TransformationMap) => {
-    setProject((prev) => {
+    setGateAProject((prev) => {
+      if (prev.uvz.selectedOptionId !== project.uvz.selectedOptionId || JSON.stringify(prev.intake) !== JSON.stringify(project.intake)) return prev;
       const revoked = revokeApprovals(prev, 'gateB');
       const selected = updatedMap.titleOptions.find((t) => t.id === updatedMap.selectedTitleId);
       const isComplete =
@@ -953,7 +984,7 @@ export default function App() {
   };
 
   const handleStartNewProject = async (params: any) => {
-    if (!authUser) return;
+    if (!authUser) throw new Error('Sign in before creating a project.');
     setWorkspaceError(null);
     const now = new Date().toISOString();
     const newProj = sanitizeProjectForStorage({
@@ -1008,7 +1039,8 @@ export default function App() {
 
     skipAutosaveProjectIdRef.current = newProj.projectId;
     setProject(newProj);
-    await persistProjectNow(newProj);
+    if (!(await persistProjectNow(newProj))) throw new Error('Project creation could not be saved. Your draft remains open; retry cloud sync before continuing.');
+    navigateJourney('market_research');
     void ensureUserProfile(authUser, langRef.current, newProj.projectId);
   };
 
@@ -1119,12 +1151,19 @@ export default function App() {
   }
 
   const renderActiveView = () => {
+    const flow = gateAJourney(project);
+    const index = GATE_A_STEPS.indexOf(activeView as any);
+    if (index >= 2 && !flow.available[index]) return <section className="lab-panel p-6 space-y-3" role="status">
+      <h1 className="text-xl font-semibold">{lang === 'en' ? 'Complete the previous decision first' : '請先完成前一項決策'}</h1>
+      <p>{lang === 'en' ? 'Your saved drafts remain available. Follow the recommended path to approve the niche, accept the brief, or choose positioning before continuing.' : '已保留您的草稿。請依推薦流程核准題材、接受簡報或選擇定位後再繼續。'}</p>
+      <button type="button" onClick={() => navigateJourney(flow.next as NavigationItem)} className="px-4 py-2 rounded-lg bg-teal-800 text-white">{lang === 'en' ? 'Continue recommended path' : '繼續推薦流程'}</button>
+    </section>;
     switch (activeView) {
       case 'dashboard':
         return (
           <DashboardView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             progressPercent={progressPercent}
             lang={lang}
           />
@@ -1133,7 +1172,7 @@ export default function App() {
         return (
           <NewProjectWizard
             onStartProject={handleStartNewProject}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             lang={lang}
           />
         );
@@ -1141,7 +1180,7 @@ export default function App() {
         return (
           <MarketIntelligenceView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             researchBusy={researchBusy}
             directoryBusy={directoryBusy}
             researchError={researchError}
@@ -1156,7 +1195,7 @@ export default function App() {
             onSelectTopic={handleSelectTopic}
             onApproveGateA={handleApproveGateA}
             onRecordAiUsage={handleRecordAiUsage}
-            initialTab="directory"
+            initialTab="scan"
             lang={lang}
           />
         );
@@ -1164,7 +1203,7 @@ export default function App() {
         return (
           <MarketIntelligenceView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             researchBusy={researchBusy}
             directoryBusy={directoryBusy}
             researchError={researchError}
@@ -1187,7 +1226,7 @@ export default function App() {
         return (
           <ProjectBriefView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             onUpdateIntake={handleUpdateIntake}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
@@ -1197,7 +1236,7 @@ export default function App() {
         return (
           <UVZView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             onSelectOption={handleSelectUVZOption}
             onUpdateUvz={handleUpdateUvz}
             onRecordAiUsage={handleRecordAiUsage}
@@ -1208,7 +1247,7 @@ export default function App() {
         return (
           <TransformationMapView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             onSelectTitle={handleSelectTitleOption}
             onUpdateTransformationMap={handleUpdateTransformationMap}
             onRecordAiUsage={handleRecordAiUsage}
@@ -1258,7 +1297,7 @@ export default function App() {
               })
             }
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             lang={lang}
           />
         );
@@ -1266,7 +1305,7 @@ export default function App() {
         return (
           <ProductCharterView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             checkingReferences={checkingReferences}
             onApproveGateB={handleApproveGateB}
             onUpdateCharter={handleUpdateCharter}
@@ -1278,7 +1317,7 @@ export default function App() {
         return (
           <OutlineBuilderView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             onUpdateOutline={(out) =>
               setProject((prev) => {
                 const revoked = revokeApprovals(
@@ -1331,7 +1370,7 @@ export default function App() {
               )
             }
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             onUpdateChapter={handleUpdateChapter}
             onUpdateProductBible={handleUpdateProductBible}
             onRecordAiUsage={handleRecordAiUsage}
@@ -1384,7 +1423,7 @@ export default function App() {
             }
             onRecordAiUsage={handleRecordAiUsage}
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             lang={lang}
           />
         );
@@ -1392,7 +1431,7 @@ export default function App() {
         return (
           <QualityAssuranceView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             checkingReferences={checkingReferences}
             onApproveGateC={handleApproveGateC}
             lang={lang}
@@ -1402,7 +1441,7 @@ export default function App() {
         return (
           <BrandDesignView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             onUpdateBrand={handleUpdateBrand}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
@@ -1412,7 +1451,7 @@ export default function App() {
         return (
           <PricingLaunchView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             onUpdatePricingAndSales={handleUpdatePricingAndSales}
             onRecordAiUsage={handleRecordAiUsage}
             lang={lang}
@@ -1426,7 +1465,7 @@ export default function App() {
               setProject((prev) => revokeApprovals(prev, 'gateC'));
             }}
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             lang={lang}
           />
         );
@@ -1439,7 +1478,7 @@ export default function App() {
             onDuplicateProject={handleDuplicateProject}
             onDeleteProject={handleDeleteProject}
             onLoadProject={handleLoadProjectIntoStore}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             revisions={revisions}
             onRefreshProjects={handleReloadFromCloud}
             localBusy={cloudBusy}
@@ -1468,6 +1507,7 @@ export default function App() {
       case 'automation_settings':
         return (
           <AutomationSettingsView
+            setActiveView={navigateJourney}
             project={project}
             onSavePreferences={(prefs) =>
               setProject((prev) => ({
@@ -1491,7 +1531,7 @@ export default function App() {
         return (
           <DashboardView
             project={project}
-            setActiveView={setActiveView}
+            setActiveView={navigateJourney}
             progressPercent={progressPercent}
             lang={lang}
           />
@@ -1517,7 +1557,7 @@ export default function App() {
         onClose={() => setNavigationOpen(false)}
         project={project}
         activeView={activeView}
-        setActiveView={setActiveView}
+        setActiveView={navigateJourney}
         progressPercent={progressPercent}
         lang={lang}
       />
@@ -1528,7 +1568,7 @@ export default function App() {
           onToggleNavigation={() => setNavigationOpen((v) => !v)}
           project={project}
           activeView={activeView}
-          setActiveView={setActiveView}
+          setActiveView={navigateJourney}
           progressPercent={progressPercent}
           lang={lang}
           setLang={setLang}
@@ -1544,6 +1584,7 @@ export default function App() {
         />
 
         <main id="main-content" tabIndex={-1} className="workspace-main flex-1 min-w-0 overflow-y-auto p-3 sm:p-4 lg:p-5 flex flex-col">
+          <GateAJourneyNav project={project} current={activeView} onNavigate={navigateJourney} lang={lang} />
           {checkingReferences && (
             <p role="status" className="mb-3 p-3.5 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-lg text-sm font-medium">
               Checking original source records and retained excerpts. Approval remains pending.
@@ -1568,7 +1609,7 @@ export default function App() {
               )}
             </div>
           )}
-          <div className="flex-1 w-full">
+          <div key={project.projectId} className="flex-1 w-full">
             {renderActiveView()}
           </div>
         </main>

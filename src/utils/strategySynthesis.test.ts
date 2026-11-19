@@ -105,7 +105,7 @@ test('buildUvzSynthesisPrompt includes language, lens guidance, and custom focus
     lens: 'action_toolkit',
     focusNote: '強調週五回顧與報價單範本',
   });
-  assert.match(systemPrompt, /Synthesise\.ai/i);
+  assert.match(systemPrompt, /Digital Product Studio/i);
   assert.match(userPrompt, /Traditional Chinese/);
   assert.match(userPrompt, /即開即用實作套件/);
   assert.match(userPrompt, /強調週五回顧與報價單範本/);
@@ -139,13 +139,14 @@ test('parseUvzSynthesisResponse normalizes markdown-fenced JSON and assigns UVZ-
         "pros": "Strongest retention & bundle fit",
         "risks": "Requires 2-hour initial setup",
         "isRecommended": true
-      }
+      },
+      {"name":"Small Scope Kit", "angle":"Single workflow", "targetPersona":"New consultants", "promise":"Document one repeatable process", "pros":"Limited scope", "risks":"Unvalidated audience", "isRecommended":false}
     ]
   }
   \`\`\``;
 
   const parsed = parseUvzSynthesisResponse(raw, project.uvz);
-  assert.equal(parsed.positioningOptions.length, 2);
+  assert.equal(parsed.positioningOptions.length, 3);
   assert.equal(parsed.positioningOptions[0].id, 'UVZ-01');
   assert.equal(parsed.positioningOptions[1].id, 'UVZ-02');
   assert.equal(parsed.selectedOptionId, 'UVZ-02');

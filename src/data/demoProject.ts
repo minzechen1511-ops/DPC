@@ -2029,7 +2029,7 @@ export const BLANK_PROJECT: DigitalProductProject = {
     lastCheckpoint: new Date().toISOString(),
   },
   marketResearch: {
-    researchDate: new Date().toISOString().slice(0, 10),
+    researchDate: '',
     platformEvidence: [],
     topicCandidates: [],
     selectedTopicId: null,
@@ -2038,7 +2038,7 @@ export const BLANK_PROJECT: DigitalProductProject = {
   intake: {
     projectName: '',
     creatorName: '',
-    experienceLevel: 'BEGINNER',
+    experienceLevel: '',
     relevantExperience: '',
     expertise: '',
     interests: '',

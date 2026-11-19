@@ -1,5 +1,32 @@
 export type Language = 'en' | 'zh';
 
+export const gateAJourneyText = {
+  en: {
+    journey: 'Gate A journey · Market to product direction',
+    steps: ['Market Research', 'Topic Selection & Gate A', 'Recommended Project Brief', 'UVZ', 'Transformation Map'],
+    current: 'Current', completed: 'Completed', blocked: 'Blocked · complete the previous decision', upcoming: 'Upcoming',
+    control: 'AI prepares drafts. You select the niche and explicitly approve Gate A. No gate or evidence review is automatic.',
+    continueBrief: 'Continue with this brief', continueUvz: 'Continue with recommendation',
+    continueMap: 'Continue to Reference Library', generateUvz: 'Generate 3 positioning options', generateMap: 'Generate map & title options',
+    blockedA: 'Select a niche and explicitly approve Gate A before continuing.',
+    blockedUvz: 'Choose a UVZ positioning option before generating the map.',
+    optional: 'Optional details and manual edits',
+    noRunner: 'Per-stage AI assistance is available. Background generation and resumable guided jobs are not implemented. Saved drafts can be reopened; retry a failed stage without restarting the journey.',
+  },
+  zh: {
+    journey: 'Gate A 流程 · 從市場到產品方向',
+    steps: ['市場研究', '選題與 Gate A 核准', '推薦專案簡報', 'UVZ 定位', '轉變地圖'],
+    current: '目前階段', completed: '已完成', blocked: '尚未開放 · 請先完成前一項決策', upcoming: '接續階段',
+    control: 'AI 協助準備草稿；選題與 Gate A 核准由您明確操作。系統不會自動核准關卡或證據覆核。',
+    continueBrief: '使用此簡報繼續', continueUvz: '採用推薦定位並繼續',
+    continueMap: '繼續至來源研究庫', generateUvz: '生成 3 個定位方案', generateMap: '生成轉變地圖與書名選項',
+    blockedA: '請先選定題材並明確核准 Gate A，再繼續。',
+    blockedUvz: '請先選擇 UVZ 定位方案，再生成轉變地圖。',
+    optional: '選用細節與手動編輯',
+    noRunner: '目前支援逐階段 AI 輔助，尚未實作背景生成或可續跑的引導任務。已儲存草稿可重新開啟，失敗時可重試該階段，不必重啟整個流程。',
+  },
+};
+
 export const translations = {
   en: {
     // Header
@@ -27,7 +54,7 @@ export const translations = {
     navNewProject: 'Create New Project',
     navMarketResearch: '1. Market Research',
     navTopicSelection: '2. Topic Selection (Gate A)',
-    navProjectBrief: '3. Project Brief (13 Fields)',
+    navProjectBrief: '3. Recommended Project Brief',
     navUvz: '4. UVZ Analysis',
     navTransformationMap: '5. Transformation Map',
     navReferenceLibrary: '6. Reference Library',
@@ -118,20 +145,20 @@ export const translations = {
     companionAssetsLabel: 'Companion Toolkits & Deliverables',
     selectAndPropagateBtn: 'Select Niche & Initialize a New Research Plan',
     topicSelectedBadge: 'Selected Topic',
-    approveGateACta: 'Approve Gate A & Proceed to 13 Fields →',
+    approveGateACta: 'Explicitly approve Gate A & open recommended brief →',
     gateAApprovedBadge: 'Gate A Approved',
 
     // 13 Fields (Project Brief)
-    briefTitle: 'Project Setup & Boundaries (13 Mandatory Fields)',
-    briefSubtitle: 'Structured project brief auto-populated from Gate A topic selection',
+    briefTitle: 'Recommended Project Brief',
+    briefSubtitle: 'A useful draft from your approved niche; creator details and AI polish are optional.',
     part1Title: 'Part 1: Creator Background & Core Identity (Fields 1 – 6)',
     part2Title: 'Part 2: Audience & Transformation Strategy (Fields 7 – 10)',
     part3Title: 'Part 3: Style, Boundaries & Pricing Ladder (Fields 11 – 13)',
-    approveBriefCta: 'Approve Brief & Enter UVZ Strategy →',
+    approveBriefCta: 'Continue with this brief →',
 
     // UVZ
     uvzTitle: 'Unique Value Zone (UVZ Analysis)',
-    uvzSubtitle: 'Synthesizing buyer pain points, creator strengths, and competitive white space',
+    uvzSubtitle: 'Generate three comparable options from the approved niche and brief; creator fit remains unresolved when unknown.',
     buyerProblemsTitle: 'Buyer Problems Solved',
     solutionsTitle: 'Core Solution Architecture',
     positioningTitle: 'Positioning Angles & Market Personas',
@@ -140,7 +167,7 @@ export const translations = {
 
     // Transformation Map
     mapTitle: 'Customer Transformation Map',
-    mapSubtitle: 'Bridge the emotional and tangible gap from Current Symptoms to Empowered Outcomes',
+    mapSubtitle: 'Turn the selected UVZ into Before → Bridge → After and editable title options, then gather supporting references.',
     beforeStateTitle: '1. Before State (Current Symptoms & Drain)',
     bridgeProcessTitle: '2. The Bridge (Signature Methodology & Milestones)',
     afterStateTitle: '3. After State (Tangible Outcomes & Freedom Unlocked)',
@@ -228,7 +255,7 @@ export const translations = {
     navNewProject: '建立新專案',
     navMarketResearch: '1. 市場研究 (Market Research)',
     navTopicSelection: '2. 選題核准 (Gate A)',
-    navProjectBrief: '3. 13項專案設定',
+    navProjectBrief: '3. 推薦專案簡報',
     navUvz: '4. 獨特價值區 UVZ',
     navTransformationMap: '5. 客戶轉變地圖',
     navReferenceLibrary: '6. 來源研究與知識庫',
@@ -319,20 +346,20 @@ export const translations = {
     companionAssetsLabel: '規劃伴隨工具與交付物',
     selectAndPropagateBtn: '選定題材並初始化新的研究計畫',
     topicSelectedBadge: '已選定題材',
-    approveGateACta: '核准選定題材並進入 13 欄位 (Gate A) →',
+    approveGateACta: '明確核准 Gate A 並開啟推薦簡報 →',
     gateAApprovedBadge: 'Gate A 題材已核准',
 
     // 13 Fields (Project Brief)
-    briefTitle: '13項專案設定 (Project Brief — 13 Fields)',
-    briefSubtitle: '選定題材後系統全自動產生之 13 項標準欄位，可直接使用或單欄客製微調',
+    briefTitle: '推薦專案簡報',
+    briefSubtitle: '承接已核准題材的可用草稿，可直接繼續；創作者細節與 AI 潤飾皆為選用。',
     part1Title: '第一部分：創作者背景與專案身分 (欄位 1 – 6)',
     part2Title: '第二部分：客群與轉變策略 (欄位 7 – 10)',
     part3Title: '第三部分：外觀風格、安全邊界與定價 (欄位 11 – 13)',
-    approveBriefCta: '全部核准並進入 UVZ →',
+    approveBriefCta: '使用此簡報並繼續至 UVZ →',
 
     // UVZ
     uvzTitle: '獨特價值區 (UVZ Analysis)',
-    uvzSubtitle: '綜整買家核心難題、創作者優勢與市場空白切入點',
+    uvzSubtitle: '依核准題材與簡報生成三個可比較方案；未知的創作者適配條件維持待確認。',
     buyerProblemsTitle: '買家痛點問題',
     solutionsTitle: '核心解決架構',
     positioningTitle: '定位角度與市場角色',

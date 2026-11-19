@@ -1,3 +1,5 @@
+import { GATE_A_STEPS, gateAJourney } from '../utils/gateAJourney.ts';
+import { gateAJourneyText } from '../utils/i18n.ts';
 import { isRetrievedSource } from '../utils/sourceEvidence.ts';
 import React, { useState } from 'react';
 import {
@@ -92,6 +94,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getNextRecommendedStep = (): { id: NavigationItem; label: string } => {
     const gates = project.workflow.gates;
     const statuses = project.workflow.stageStatuses;
+    const journeyNext = gateAJourney(project).next;
+    const journeyIndex = GATE_A_STEPS.indexOf(journeyNext as any);
+    if (journeyIndex >= 0) {
+      return {id: journeyNext as NavigationItem, label: `${journeyIndex + 1}. ${gateAJourneyText[lang].steps[journeyIndex]}`};
+    }
     if ((project.marketResearch?.platformEvidence || []).length === 0) {
       return { id: 'market_research', label: lang === 'en' ? '1. Gather Market Evidence' : '1. 蒐集市場證據' };
     }

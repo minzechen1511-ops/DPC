@@ -1,3 +1,6 @@
+import { generationError } from '../../utils/gateAJourney.ts';
+import { gateAJourneyText } from '../../utils/i18n.ts';
+import { gateAApproved, selectedPositioning, usableMap } from '../../utils/gateAJourney.ts';
 import React, { useMemo, useState } from 'react';
 import { GitFork, Plus, Edit3, Save, X, Sparkles, RefreshCw, Compass } from 'lucide-react';
 import { DigitalProductProject, TransformationMap } from '../../types/project.ts';
@@ -36,6 +39,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
   lang = 'en',
 }) => {
   const t = translations[lang];
+  const journey = gateAJourneyText[lang];
   const { transformationMap } = project;
   const titleOptions = transformationMap?.titleOptions || [];
   const beforeState = transformationMap?.beforeState;
@@ -72,6 +76,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
 
   const handleSynthesizeMap = async (titlesOnly = false) => {
     if (aiBusy) return;
+    if (!gateAApproved(project) || !selectedPositioning(project) || aiBusy) return;
     setAiBusy(titlesOnly ? 'titles' : 'full');
     setAiError('');
     setAiSuccess('');
@@ -105,12 +110,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
           : `已自動生成完整 Before → Bridge → After 客戶轉變地圖與 ${updatedMap.titleOptions.length} 組書名建議。`
       );
     } catch (err: any) {
-      setAiError(
-        err?.message ||
-          (lang === 'en'
-            ? 'Could not reach server Gemini engine. Check Gemini AI Settings or sign in again.'
-            : '無法連接伺服器端 Gemini 引擎，請檢查「Gemini AI 與用量設定」或重新登入。')
-      );
+      setAiError(generationError(err, lang));
     } finally {
       setAiBusy(null);
     }
@@ -205,19 +205,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={Boolean(aiBusy)}
-            onClick={() => handleSynthesizeMap(false)}
-            className="px-4 py-2.5 text-sm font-semibold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-60"
-          >
-            <Sparkles className={`w-4 h-4 text-teal-700 ${aiBusy === 'full' ? 'animate-spin' : ''}`} />
-            <span>
-              {aiBusy === 'full'
-                ? lang === 'en' ? 'Synthesizing Map...' : '正在生成轉變地圖...'
-                : lang === 'en' ? 'AI Synthesize Full Map' : 'AI 一鍵生成轉變地圖'}
-            </span>
-          </button>
+
 
           <button
             type="button"
@@ -230,14 +218,21 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveView('reference_library')}
+            disabled={Boolean(aiBusy) || !gateAApproved(project) || !selectedPositioning(project)}
+            onClick={() => {
+              if (!usableMap(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW') {void handleSynthesizeMap(false); return;}
+              setActiveView('reference_library');
+            }}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
-            <span>{t.approveMapCta}</span>
+            <span>{!usableMap(project) || project.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW' ? journey.generateMap : journey.continueMap}</span>
           </button>
         </div>
       </div>
 
+      <p className="text-sm text-slate-700">{lang === 'en' ? `Carried forward: ${selectedPositioning(project)?.name || 'select a UVZ option first'}. The map turns that positioning into Before → Bridge → After and editable title/subtitle options. Reference Library will collect and review sources for these intended outcomes.` : `已承接：${selectedPositioning(project)?.name || '請先選擇 UVZ 方案'}。此步將定位轉為 Before → Bridge → After 與可編輯書名／副標題；接著前往來源研究庫，蒐集並審查支持這些目標的證據。`}</p>
+      <div aria-live="polite">{aiBusy && <p role="status" className="text-sm text-teal-900">{lang === 'en' ? 'Generating a draft… Existing work is retained until this request succeeds.' : '正在生成草稿… 請求成功前會保留現有內容。'}</p>}{aiError && <p role="alert" className="p-3 text-sm rounded-lg bg-rose-50 text-rose-900">{aiError} {lang === 'en' ? 'Your previous draft is retained. Retry the generation action.' : '已保留原草稿，請重試生成。'}</p>}</div>
+      <details><summary className="cursor-pointer font-semibold text-teal-800 p-3 focus-visible:outline-2">{lang === 'en' ? 'Optional AI settings and regeneration' : '選用 AI 設定與重新生成'}</summary>
       {/* Guided Automated Synthesis Panel */}
       <div className="lab-panel p-6 lg:p-7 space-y-5 bg-gradient-to-br from-white via-teal-50/20 to-indigo-50/25">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
@@ -262,8 +257,8 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
               {contextSummary.selectedUvzName
                 ? contextSummary.selectedUvzName
                 : lang === 'en'
-                ? 'No UVZ angle selected yet (AI will infer best fit)'
-                : '尚未選定 UVZ 定位（AI 將自動推算最佳切角）'}
+                ? 'Select a UVZ option before generating the map'
+                : '請先選擇 UVZ 定位，再生成地圖'}
             </span>
           </span>
         </div>
@@ -351,6 +346,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
         )}
       </div>
 
+      </details>
       {showAddTitle && (
         <form onSubmit={handleAddTitle} className="lab-panel border-teal-300 p-6 lg:p-7 space-y-4 text-sm">
           <h2 className="text-base font-bold text-slate-900">{lang === 'en' ? 'Add Custom Product Title & Subtitle' : '新增自訂商品書名與副標題'}</h2>
@@ -387,15 +383,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
                 ? 'Click "Synthesize Full Map & Titles" or "Generate 3 Title Ideas Only" above so AI proposes commercial titles & subtitles grounded in your niche.'
                 : '目前尚未生成書名候選。請點擊上方「生成完整轉變地圖與書名」或「僅重新生成 3 組書名」，讓 AI 自動產出高吸引力書名。'}
             </p>
-            <button
-              type="button"
-              disabled={Boolean(aiBusy)}
-              onClick={() => handleSynthesizeMap(false)}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-xl inline-flex items-center gap-2 disabled:opacity-60"
-            >
-              <Sparkles className={`w-4 h-4 ${aiBusy === 'full' ? 'animate-spin' : ''}`} />
-              <span>{lang === 'en' ? 'Auto-Synthesize Map & Titles' : '立即 AI 生成地圖與書名'}</span>
-            </button>
+
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

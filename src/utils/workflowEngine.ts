@@ -1,3 +1,4 @@
+import { gateAApproved } from './gateAJourney.ts';
 import { ChapterOutlineItem, DigitalProductProject, ReferenceCard, StageId, StageStatus } from '../types/project.ts';
 
 export const STAGE_ORDER: StageId[] = [
@@ -29,7 +30,7 @@ export const STAGE_METADATA_EN: Record<StageId, { title: string; subtitle: strin
     icon: 'Sparkles',
   },
   project_brief: {
-    title: '3. Project Brief (13 Fields)',
+    title: '3. Recommended Project Brief',
     subtitle: 'Creator background, audience pain points, brand voice & negative constraints',
     icon: 'FileText',
   },
@@ -102,7 +103,7 @@ export const STAGE_METADATA_ZH: Record<StageId, { title: string; subtitle: strin
     icon: 'Sparkles',
   },
   project_brief: {
-    title: '3. 13項專案設定 (Project Brief)',
+    title: '3. 推薦專案簡報',
     subtitle: '創作者背景、受眾痛點、品牌聲音與排他邊界',
     icon: 'FileText',
   },
@@ -193,9 +194,11 @@ export function checkStagePrerequisites(
     case 'reference_library':
     case 'uvz':
     case 'transformation_map':
-      if (!workflow.gates.gateA.isApproved || !marketResearch.selectedTopicId) {
+      if (!gateAApproved(project) || !marketResearch.selectedTopicId) {
         return { canRun: false, reason: '需先在 Gate A 核准並選取產品題材。' };
       }
+      if (stageId === 'uvz' && project.workflow.stageStatuses.project_brief !== 'COMPLETED') return {canRun: false, reason: 'Continue with the recommended brief or save your edits first.'};
+      if (stageId === 'transformation_map' && (project.workflow.stageStatuses.uvz !== 'COMPLETED' || !project.uvz.positioningOptions.some(option => option.id === project.uvz.selectedOptionId))) return {canRun: false, reason: 'Select a UVZ positioning option first.'};
       return { canRun: true };
 
     case 'product_charter':

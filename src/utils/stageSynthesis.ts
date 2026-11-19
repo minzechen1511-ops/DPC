@@ -122,8 +122,8 @@ export function parseBriefSynthesisResponse(
     ...existingIntake,
     projectName: String(parsed.projectName ?? '').trim() || existingIntake.projectName,
     relevantExperience:
-      String(parsed.relevantExperience ?? '').trim() || existingIntake.relevantExperience,
-    expertise: String(parsed.expertise ?? '').trim() || existingIntake.expertise,
+      existingIntake.relevantExperience,
+    expertise: existingIntake.expertise,
     interests: String(parsed.interests ?? '').trim() || existingIntake.interests,
     targetAudience: String(parsed.targetAudience ?? '').trim() || existingIntake.targetAudience,
     problemsSolved: String(parsed.problemsSolved ?? '').trim() || existingIntake.problemsSolved,

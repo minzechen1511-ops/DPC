@@ -116,7 +116,7 @@ export function buildUvzSynthesisPrompt(
   );
 
   const systemPrompt =
-    'You are an elite digital product positioning strategist (Synthesise.ai methodology). Output strictly valid JSON only with no markdown fences, grounded in realistic buyer psychology and commercial feasibility. Never fabricate fake revenue guarantees or medical/legal claims.';
+    'You are an elite digital product positioning strategist (Digital Product Studio editorial workflow). Output strictly valid JSON only with no markdown fences, grounded in realistic buyer psychology and commercial feasibility. Never fabricate creator identity, expertise, experience, credentials or results. Unknown creator facts remain unresolved. Treat proposed audiences, outcomes, pricing and demand as hypotheses, not measured facts. Never fabricate revenue guarantees or medical/legal claims.';
 
   const userPrompt = `Analyze the selected topic and project brief below, and synthesize a complete Unique Value Zone (UVZ) analysis + 3 distinct market positioning options in ${outputLang}.
 
@@ -124,8 +124,8 @@ CONTEXT INPUTS:
 - Topic / Product Concept: ${ctx.topicTitle}
 - Target Audience: ${ctx.targetAudience}
 - Core Problems Solved: ${ctx.coreProblem}
-- Creator Background & Expertise: ${project.intake?.expertise || 'Practical domain builder'} | ${project.intake?.relevantExperience || 'Hands-on implementation'}
-- Creator Interests & Strengths: ${project.intake?.interests || 'Structured systems & toolkits'}
+- Creator Background & Expertise: ${project.intake?.expertise || 'Unknown — do not invent'} | ${project.intake?.relevantExperience || 'Unknown — do not invent'}
+- Creator Interests & Strengths: ${project.intake?.interests || 'Not provided'}
 - Desired Buyer Transformation: ${project.intake?.desiredTransformation || selectedTopic?.bigPromise || 'Clarity and repeatable execution'}
 - Delivery Format: ${ctx.productFormat}
 - Market Differentiation Note: ${selectedTopic?.differentiationAngle || 'Combine clear explanations with usable templates'}
@@ -187,20 +187,20 @@ export function parseUvzSynthesisResponse(
 
   const normalizedOptions = rawOptions
     .filter((item: any) => item && (item.name || item.angle || item.promise))
-    .slice(0, 4)
+    .slice(0, 3)
     .map((item: any, idx: number) => ({
       id: `UVZ-${String(idx + 1).padStart(2, '0')}`,
       name: String(item.name || `Positioning Option ${idx + 1}`).trim(),
       angle: String(item.angle || '').trim(),
       targetPersona: String(item.targetPersona || '').trim(),
       promise: String(item.promise || '').trim(),
-      pros: String(item.pros || 'Strong buyer relevance').trim(),
+      pros: String(item.pros || 'Not established; validate with prospective buyers').trim(),
       risks: String(item.risks || 'Requires real buyer feedback').trim(),
       isRecommended: Boolean(item.isRecommended),
     }));
 
-  if (normalizedOptions.length === 0) {
-    throw new Error('AI response did not include any valid UVZ positioning options.');
+  if (normalizedOptions.length !== 3 || normalizedOptions.some(option => !option.angle || !option.promise || !option.targetPersona)) {
+    throw new Error('AI response must include 3 complete, comparable UVZ positioning options. Existing work was retained; retry generation.');
   }
 
   if (!normalizedOptions.some((o) => o.isRecommended)) {
@@ -241,7 +241,7 @@ export function buildTransformationSynthesisPrompt(
 
   const systemPrompt = options?.titlesOnly
     ? 'You are a commercial digital product copywriter and book titling strategist. Output strictly valid JSON only with no markdown fences.'
-    : 'You are a transformational learning & commercial product architect (Synthesise.ai methodology). Output strictly valid JSON only with no markdown fences, creating cohesive Before -> Bridge -> After customer transformation pathways and high-converting, truthful product titles.';
+    : 'You are a transformational learning & commercial product architect (Digital Product Studio editorial workflow). Output strictly valid JSON only with no markdown fences, creating cohesive Before -> Bridge -> After customer transformation pathways and high-converting, truthful product titles.';
 
   if (options?.titlesOnly) {
     const userPrompt = `Generate 3 distinct, compelling commercial Title + Subtitle + Rationale options in ${outputLang} for this digital product.
@@ -321,7 +321,7 @@ export function parseTitleOptionsResponse(
 
   const normalizedTitles = rawTitles
     .filter((item: any) => item && item.title)
-    .slice(0, 4)
+    .slice(0, 3)
     .map((item: any, idx: number) => ({
       id: `TITLE-${String(idx + 1).padStart(2, '0')}`,
       title: String(item.title).trim(),
@@ -363,7 +363,7 @@ export function parseTransformationSynthesisResponse(
   const rawTitles = Array.isArray(parsed.titleOptions) ? parsed.titleOptions : [];
   const normalizedTitles = rawTitles
     .filter((item: any) => item && item.title)
-    .slice(0, 4)
+    .slice(0, 3)
     .map((item: any, idx: number) => ({
       id: `TITLE-${String(idx + 1).padStart(2, '0')}`,
       title: String(item.title).trim(),

@@ -1,3 +1,4 @@
+import { gateAJourneyText } from '../../utils/i18n.ts';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Search,
@@ -46,7 +47,7 @@ import { EvidenceLedgerTable, MultiSourceMatrix, multiSourceStatusMeta } from '.
 import { GroundedWebResearchPanel } from '../market/GroundedWebResearchPanel.tsx';
 import type { AiUsageMeta } from '../../services/aiService.ts';
 
-export type MarketTabId = 'directory' | 'web_search' | 'manual' | 'signals' | 'niches';
+export type MarketTabId = 'scan' | 'directory' | 'web_search' | 'manual' | 'signals' | 'niches';
 
 interface MarketIntelligenceViewProps {
   researchBusy?: boolean;
@@ -91,11 +92,14 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
   onSelectTopic,
   onApproveGateA,
   onRecordAiUsage,
-  initialTab = 'niches',
+  initialTab = 'scan',
   lang = 'en',
 }) => {
   const t = translations[lang];
+  const journey = gateAJourneyText[lang];
+  const marketStep = initialTab === 'scan';
   const { marketResearch, workflow } = project;
+  const scanError = researchError || marketResearch.lastScanError || '';
   const observations = marketResearch?.platformEvidence || [];
   const allCandidates = marketResearch?.topicCandidates || [];
   const selectedId = marketResearch?.selectedTopicId;
@@ -114,7 +118,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
   const [focusedObsId, setFocusedObsId] = useState<string | null>(null);
   const [draftAudienceByTopic, setDraftAudienceByTopic] = useState<Record<string, string>>({});
 
-  const autoScannedRef = useRef<boolean>(false);
+  const autoScannedRef = useRef<string | null>(null);
   const realObservations = observations.filter((o) => !o.isSample);
   const liveChartCount = realObservations.filter((o) => isCurrentMarketEvidence(o)).length;
   const reviewedFallbackCount = realObservations.filter((o) => isReviewedFallbackEvidence(o)).length;
@@ -136,9 +140,9 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
   }, [initialTab]);
 
   useEffect(() => {
-    if (autoScannedRef.current || researchBusy) return;
+    if (!marketStep || autoScannedRef.current === project.projectId || researchBusy || marketResearch.scanState || marketResearch.researchDate || marketResearch.sourceReports?.length) return;
     if (liveChartCount === 0 && reviewedFallbackCount === 0 && allCandidates.length === 0) {
-      autoScannedRef.current = true;
+      autoScannedRef.current = project.projectId;
       void onRefreshResearch?.();
     }
   }, [liveChartCount, reviewedFallbackCount, allCandidates.length, researchBusy, onRefreshResearch]);
@@ -271,9 +275,9 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
 
   return (
     <div className="w-full space-y-5 pb-3">
-      {researchError && (
+      {scanError && (
         <div role="alert" className="p-4 bg-red-50 text-red-900 border border-red-200 rounded-xl text-sm font-medium">
-          <span>{researchError}</span>
+          <span>{scanError}</span>
         </div>
       )}
 
@@ -291,12 +295,12 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
             </div>
             <h1 className="text-2xl font-extrabold text-slate-900">
               {lang === 'en'
-                ? 'Market Research & Topic Selection (Gate A)'
-                : '市場研究實證與選題評估中心 (Gate A)'}
+                ? (marketStep ? journey.steps[0] : journey.steps[1])
+                : (marketStep ? journey.steps[0] : journey.steps[1])}
             </h1>
             <p className="text-sm text-slate-600 max-w-4xl">
               {lang === 'en'
-                ? 'Inspect research sources, run live official chart collectors, log or import manual fallback observations, and review honest Evidence Strength vs. Product Suitability before approving Gate A.'
+                ? 'Start with the available market scan, inspect its evidence and limitations, then review niche recommendations. Manual entry and imports are optional alternatives. Evidence strength and product suitability are assessed separately.'
                 : '檢視公開研究資源、執行即時榜單採集、登錄或匯入人工補充證據，並在核准 Gate A 前清楚區分「證據強度」與「產品適配假設」。'}
             </p>
           </div>
@@ -304,22 +308,22 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
               type="button"
-              onClick={() => void handleRunRefresh()}
+              onClick={() => marketStep && reviewedQualifiedCount > 0 ? setActiveView('topic_selection') : void handleRunRefresh()}
               disabled={busy}
               className="px-4 py-2.5 text-sm font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors inline-flex items-center gap-2 whitespace-nowrap"
             >
               <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin text-teal-700' : ''}`} />
-              <span>{busy ? t.refreshing : lang === 'en' ? 'Scan Live Collectors' : '掃描即時榜單採集器'}</span>
+              <span>{busy ? t.refreshing : marketStep && reviewedQualifiedCount > 0 ? (lang === 'en' ? 'Review niche recommendations' : '檢視推薦題材') : (lang === 'en' ? 'Run market scan / retry' : '執行市場掃描／重試')}</span>
             </button>
 
-            <button
+            {!marketStep && <button
               type="button"
               disabled={blockers.length > 0}
               title={blockers.join(' ')}
               onClick={() => {
                 if (blockers.length) return;
                 onApproveGateA?.();
-                setActiveView('project_brief');
+
               }}
               className={`px-5 py-2.5 text-sm font-semibold rounded-xl transition-all inline-flex items-center gap-2 shadow-sm whitespace-nowrap ${
                 gateAApproved
@@ -328,14 +332,21 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
               }`}
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{gateAApproved ? t.gateAApprovedBadge : t.approveGateACta}</span>
-            </button>
+              <span>{gateAApproved ? journey.continueBrief : t.approveGateACta}</span>
+            </button>}
           </div>
         </div>
 
+        {activeTab === 'scan' && <section aria-label={lang === 'en' ? 'Market scan status' : '市場掃描狀態'} className="border-t border-slate-200 pt-4 space-y-2" aria-live="polite">
+          <h2 className="font-semibold text-slate-900">{busy ? (lang === 'en' ? 'Collecting available sources…' : '正在採集可用來源…') : scanError ? (lang === 'en' ? 'Scan failed · your existing evidence is retained' : '掃描失敗 · 已保留現有證據') : marketResearch.scanState === 'running' ? (lang === 'en' ? 'Previous scan was interrupted · retry to continue' : '先前掃描已中斷 · 請重試以繼續') : reviewedQualifiedCount ? (lang === 'en' ? 'Evidence is available for niche review' : '已有可供選題審查的證據') : (lang === 'en' ? 'No qualified evidence yet' : '尚無合格證據')}</h2>
+          <p className="text-sm text-slate-700">{lang === 'en' ? `${realObservations.length} real observations; ${reviewedQualifiedCount} currently qualified. Website access alone is not validated evidence. Review original material, dates and limitations below.` : `${realObservations.length} 筆實際觀測；目前 ${reviewedQualifiedCount} 筆合格。網站可存取不代表證據已驗證；請檢視下方原文、日期與限制。`}</p>
+          <button type="button" onClick={() => {setShowSourcesPanel(true); setActiveTab('signals');}} className="underline text-sm text-teal-800">{lang === 'en' ? 'Inspect collected evidence and source diagnostics' : '檢視採集證據與來源診斷'}</button>
+          {!reviewedQualifiedCount && !busy && <button type="button" onClick={() => setActiveTab('manual')} className="block underline text-sm text-slate-700">{lang === 'en' ? 'Use traceable manual evidence instead' : '改用可追溯的人工證據'}</button>}
+        </section>}
         {/* 4 Route Tabs + Honest Evidence Counts */}
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-4 border-t border-slate-100">
           <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-100 rounded-xl self-start">
+            <button type="button" aria-pressed={activeTab === 'scan'} onClick={() => setActiveTab('scan')} className="px-3 py-2 rounded-lg text-sm font-semibold">{lang === 'en' ? 'Scan status' : '掃描狀態'}</button>
             <button
               type="button"
               onClick={() => setActiveTab('directory')}
@@ -346,7 +357,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
               }`}
             >
               <Globe className="w-4 h-4" />
-              <span>{lang === 'en' ? 'Resource Directory (9)' : '研究資源目錄 (9)'}</span>
+              <span>{lang === 'en' ? 'Sources & optional imports' : '來源與選用匯入'}</span>
             </button>
 
             <button
@@ -1032,19 +1043,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
                               </span>
                             </button>
 
-                            {isSelected && blockers.length === 0 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onApproveGateA?.();
-                                  setActiveView('project_brief');
-                                }}
-                                className="px-4 py-2 text-sm font-semibold rounded-xl bg-slate-900 hover:bg-slate-800 text-white inline-flex items-center gap-1.5"
-                              >
-                                <span>{lang === 'en' ? 'Approve Gate A & Next Step' : '核准 Gate A 並下一步'}</span>
-                                <ArrowRight className="w-4 h-4" />
-                              </button>
-                            )}
+
                           </div>
                         </div>
 

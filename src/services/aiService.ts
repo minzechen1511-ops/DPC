@@ -150,7 +150,7 @@ export function summarizeProjectForAiContext(project: DigitalProductProject): Re
   const selectedTopic = (project.marketResearch?.topicCandidates || []).find(
     (t) => t.id === project.marketResearch?.selectedTopicId
   );
-  const selectedUvz = (project.uvz?.recommendations || []).find(
+  const selectedUvz = (project.uvz?.positioningOptions || []).find(
     (r) => r.id === project.uvz?.selectedOptionId
   );
 
@@ -173,7 +173,7 @@ export function summarizeProjectForAiContext(project: DigitalProductProject): Re
       : undefined,
     targetAudience: project.charter?.targetAudience || project.intake?.targetAudience,
     centralPromise: project.charter?.centralPromise || project.transformationMap?.bigPromise,
-    uvzAngle: selectedUvz?.angle || project.uvz?.customStatement,
+    uvzAngle: selectedUvz?.angle,
     outlineChapterCount: project.outline?.length || 0,
     verifiedReferenceCount: project.referenceLibrary?.cards?.length || 0,
   };

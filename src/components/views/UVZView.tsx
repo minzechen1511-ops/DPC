@@ -1,3 +1,6 @@
+import { generationError } from '../../utils/gateAJourney.ts';
+import { gateAJourneyText } from '../../utils/i18n.ts';
+import { gateAApproved } from '../../utils/gateAJourney.ts';
 import React, { useMemo, useState } from 'react';
 import { Target, CheckCircle2, Plus, Edit3, Save, X, Sparkles, Compass, TrendingUp, Layers } from 'lucide-react';
 import { DigitalProductProject, UVZAnalysis } from '../../types/project.ts';
@@ -59,6 +62,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
   lang = 'en',
 }) => {
   const t = translations[lang];
+  const journey = gateAJourneyText[lang];
   const { uvz } = project;
   const options = uvz?.positioningOptions || [];
 
@@ -80,7 +84,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
   const [feasibilityText, setFeasibilityText] = useState(uvz?.commercialFeasibility || '');
 
   const handleSynthesizeUvzWithAi = async () => {
-    if (aiBusy) return;
+    if (aiBusy || !gateAApproved(project)) return;
     setAiBusy(true);
     setAiError('');
     setAiSuccess('');
@@ -99,7 +103,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
       });
       onRecordAiUsage?.(res?.usage, res?.model);
       const nextUvz = parseUvzSynthesisResponse(res?.content || '', uvz);
-      onUpdateUvz(nextUvz);
+      onUpdateUvz({...nextUvz, selectedOptionId: ''});
       setEditingProblems(false);
       setAiSuccess(
         lang === 'en'
@@ -107,12 +111,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
           : `已自動分析題材並生成 ${nextUvz.positioningOptions.length} 個 UVZ 定位方案、痛點矩陣與商業可行性評估。`
       );
     } catch (err: any) {
-      setAiError(
-        err?.message ||
-          (lang === 'en'
-            ? 'Could not reach server Gemini engine. Check Gemini AI Settings or sign in again.'
-            : '無法連接伺服器端 Gemini 引擎，請檢查「Gemini AI 與用量設定」或重新登入。')
-      );
+      setAiError(generationError(err, lang));
     } finally {
       setAiBusy(false);
     }
@@ -170,19 +169,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={aiBusy}
-            onClick={handleSynthesizeUvzWithAi}
-            className="px-4 py-2.5 text-sm font-semibold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-60"
-          >
-            <Sparkles className={`w-4 h-4 text-teal-700 ${aiBusy ? 'animate-spin' : ''}`} />
-            <span>
-              {aiBusy
-                ? lang === 'en' ? 'Synthesizing UVZ...' : 'AI 分析定位中...'
-                : lang === 'en' ? 'AI Synthesize UVZ' : 'AI 一鍵生成 UVZ 定位'}
-            </span>
-          </button>
+
 
           <button
             type="button"
@@ -195,15 +182,24 @@ export const UVZView: React.FC<UVZViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveView('transformation_map')}
+            disabled={aiBusy || !gateAApproved(project)}
+            onClick={() => {
+              if (!options.length || project.workflow.stageStatuses.uvz === 'NEEDS_REVIEW') { void handleSynthesizeUvzWithAi(); return; }
+              const selected = options.find(option => option.id === uvz.selectedOptionId) || options.find(option => option.isRecommended) || options[0];
+              onSelectOption(selected.id);
+              setActiveView('transformation_map');
+            }}
             className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
-            <span>{t.approveUvzCta}</span>
+            <span>{!options.length || project.workflow.stageStatuses.uvz === 'NEEDS_REVIEW' ? journey.generateUvz : journey.continueUvz}</span>
           </button>
         </div>
       </div>
 
-      {/* Guided Automated Synthesis Bar (Synthesise.ai Style) */}
+      <p className="text-sm text-slate-700">{lang === 'en' ? 'Uses your approved niche and available brief. Compare the recommendation, audience, promise, advantages and risks. Choose any option or add your own; no expertise or sales result is assumed.' : '承接已核准題材與現有簡報。請比較推薦理由、受眾、主張、優勢及風險；可任選方案或自訂，不預設專業能力或銷售成果。'}</p>
+      <div aria-live="polite">{aiBusy && <p role="status" className="text-sm text-teal-900">{lang === 'en' ? 'Generating a draft… Existing work is retained until this request succeeds.' : '正在生成草稿… 請求成功前會保留現有內容。'}</p>}{aiError && <p role="alert" className="p-3 text-sm rounded-lg bg-rose-50 text-rose-900">{aiError} {lang === 'en' ? 'Your previous draft is retained. Retry the generation action.' : '已保留原草稿，請重試生成。'}</p>}</div>
+      <details><summary className="cursor-pointer font-semibold text-teal-800 p-3 focus-visible:outline-2">{lang === 'en' ? 'Optional AI settings and regeneration' : '選用 AI 設定與重新生成'}</summary>
+      {/* Guided Automated Synthesis Bar (Digital Product Studio Style) */}
       <div className="lab-panel p-6 lg:p-7 space-y-5 bg-gradient-to-br from-white via-teal-50/20 to-sky-50/30">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
           <div>
@@ -211,8 +207,8 @@ export const UVZView: React.FC<UVZViewProps> = ({
               <Sparkles className="w-4 h-4 text-teal-700" />
               <span>
                 {lang === 'en'
-                  ? 'Automated Topic-to-UVZ Positioning Synthesizer'
-                  : 'AI 智慧選題定位分析器（免盲猜自動生成建議）'}
+                  ? 'Optional positioning draft settings'
+                  : 'AI 智慧選題定位分析器（根據核准脈絡生成草稿）'}
               </span>
             </h2>
             <p className="text-xs text-slate-600 mt-1">
@@ -284,8 +280,8 @@ export const UVZView: React.FC<UVZViewProps> = ({
           <label className="flex-1 block">
             <span className="text-xs font-bold text-slate-800 block mb-1.5">
               {lang === 'en'
-                ? '2. Optional Focus Hint (leave blank for fully automated market analysis)'
-                : '2. 補充指引或偏好關鍵字（可留白，由 AI 全自動分析）'}
+                ? '2. Optional Focus Hint (leave blank to use the approved project context)'
+                : '2. 補充指引或偏好關鍵字（可留白，使用已核准的專案脈絡）'}
             </span>
             <input
               type="text"
@@ -343,6 +339,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
         </form>
       )}
 
+      </details>
       {/* Positioning Alternatives */}
       <div className="lab-panel p-6 lg:p-7 space-y-5">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -362,18 +359,10 @@ export const UVZView: React.FC<UVZViewProps> = ({
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center space-y-3">
             <p className="text-sm text-slate-700 max-w-2xl mx-auto">
               {lang === 'en'
-                ? 'No positioning options defined yet. Click "Generate UVZ Options & Pain Matrix" above to automatically create 3 buyer-validated angles tailored to your topic.'
+                ? 'No positioning options defined yet. Click "Generate UVZ Options & Pain Matrix" above to automatically create 3 positioning hypotheses requiring buyer validation tailored to your topic.'
                 : '目前尚未建立定位方案。請點擊上方「自動生成 3 種定位與痛點矩陣」，讓系統根據您的主題自動設計 3 種商業切角供您挑選。'}
             </p>
-            <button
-              type="button"
-              disabled={aiBusy}
-              onClick={handleSynthesizeUvzWithAi}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-xl inline-flex items-center gap-2 disabled:opacity-60"
-            >
-              <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
-              <span>{lang === 'en' ? 'Auto-Generate 3 Positioning Options' : '立即 AI 自動生成 3 種定位'}</span>
-            </button>
+
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -411,7 +400,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
                         <span className="text-slate-700">{opt.promise}</span>
                       </div>
                       <div className="pt-2 text-xs text-emerald-800">
-                        <strong>{lang === 'en' ? 'Pros:' : '優勢：'}</strong> {opt.pros}
+                        <strong>{lang === 'en' ? (opt.isRecommended ? 'Why recommended:' : 'Advantages:') : (opt.isRecommended ? '推薦理由：' : '優勢：')}</strong> {opt.pros}
                       </div>
                       <div className="text-xs text-slate-600">
                         <strong>{lang === 'en' ? 'Risks:' : '風險考量：'}</strong> {opt.risks}
@@ -554,7 +543,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
                   <span>{lang === 'en' ? 'Creator Expertise Fit' : '創作者優勢契合度'}</span>
                 </div>
                 <p className="text-sm text-slate-700 leading-relaxed">
-                  {uvz?.creatorExpertiseFit || (lang === 'en' ? 'Run AI Synthesis to evaluate creator-to-topic credibility.' : '執行 AI 分析後將顯示創作者與此題材的可信度切入評估。')}
+                  {uvz?.creatorExpertiseFit || (lang === 'en' ? 'Creator expertise is unresolved until you provide actual background.' : '在您提供實際背景前，創作者專業適配仍待確認。')}
                 </p>
               </div>
 

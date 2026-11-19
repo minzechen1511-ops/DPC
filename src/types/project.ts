@@ -317,7 +317,7 @@ export interface TopicCandidate {
 export interface ProjectIntake {
   projectName: string; // 1
   creatorName: string; // 2
-  experienceLevel: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT'; // 3
+  experienceLevel: '' | 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT'; // 3
   relevantExperience: string; // 4
   expertise: string; // 5
   interests: string; // 6
@@ -675,6 +675,8 @@ export interface DigitalProductProject {
     lastCheckpoint: string;
   };
   marketResearch: {
+    scanState?: 'running' | 'complete' | 'error';
+    lastScanError?: string;
     researchDate: string;
     resourceDirectory?: GateAResourceEntry[];
     sourceReports?: Array<{ marketplace: string; url: string; status: string; message: string; checkedAt: string; count: number }>;

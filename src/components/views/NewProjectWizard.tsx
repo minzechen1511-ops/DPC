@@ -10,7 +10,7 @@ interface NewProjectWizardProps {
     language: string;
     productFormat: ProductFormat;
     referenceTarget: 8 | 20 | 30;
-  }) => void;
+  }) => Promise<void>;
   setActiveView: (view: any) => void;
   lang?: Language;
 }
@@ -29,20 +29,27 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({
   const [productFormat, setProductFormat] = useState<ProductFormat>('ebook_toolkit');
   const [referenceTarget, setReferenceTarget] = useState<8 | 20 | 30>(20);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [creating, setCreating] = useState(false);
+  const [creationError, setCreationError] = useState('');
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onStartProject({
+    if (creating) return;
+    setCreating(true); setCreationError('');
+    try { await onStartProject({
       projectName,
       market,
       language,
       productFormat,
       referenceTarget,
     });
-    setActiveView('market_research');
+    } catch (error) {setCreationError(error instanceof Error ? error.message : 'Could not create project. Retry without losing your inputs.');}
+    finally {setCreating(false);}
   };
 
   return (
     <div className="w-full space-y-5 pb-3">
+      {creating && <p role="status">{lang === 'en' ? 'Creating and saving your project…' : '正在建立並儲存您的專案…'}</p>}
+      {creationError && <p role="alert" className="p-3 text-rose-900 bg-rose-50 rounded-lg">{creationError}</p>}
       {/* Header Banner */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 lg:p-7">
         <div className="flex items-center gap-2 text-xs font-mono font-semibold text-teal-700 mb-1.5">
@@ -50,7 +57,7 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({
           <span>{t.navNewProject}</span>
         </div>
         <h1 className="text-2xl font-extrabold text-slate-900">
-          {lang === 'en' ? 'Create a New High-Value Digital Product' : '啟動新數位商品全自動研究與企劃'}
+          {lang === 'en' ? 'Create a New High-Value Digital Product' : '建立新數位商品並開始市場研究'}
         </h1>
         <p className="text-sm text-slate-600 mt-1 max-w-4xl">
           {lang === 'en'
@@ -140,11 +147,11 @@ export const NewProjectWizard: React.FC<NewProjectWizardProps> = ({
           </div>
 
           <button
-            type="submit"
+            type="submit" disabled={creating}
             className="w-full py-3.5 px-6 text-base font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center justify-center gap-2.5 shadow-sm"
           >
             <Sparkles className="w-5 h-5 text-amber-300" />
-            <span>{lang === 'en' ? 'Launch Market Intelligence & Discover Niches →' : '啟動市場情報調查並推薦題材 →'}</span>
+            <span>{lang === 'en' ? 'Create project & start Market Research →' : '啟動市場情報調查並推薦題材 →'}</span>
           </button>
         </form>
 
