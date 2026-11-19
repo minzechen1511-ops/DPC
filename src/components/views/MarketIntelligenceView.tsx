@@ -43,8 +43,10 @@ import { ScoreSpectrumBars } from '../ScientificVisuals.tsx';
 import { ResourceDirectoryPanel } from '../market/ResourceDirectoryPanel.tsx';
 import { ManualEvidenceReviewPanel } from '../market/ManualEvidenceReviewPanel.tsx';
 import { EvidenceLedgerTable, MultiSourceMatrix, multiSourceStatusMeta } from '../market/MultiSourceMatrix.tsx';
+import { GroundedWebResearchPanel } from '../market/GroundedWebResearchPanel.tsx';
+import type { AiUsageMeta } from '../../services/aiService.ts';
 
-export type MarketTabId = 'directory' | 'manual' | 'signals' | 'niches';
+export type MarketTabId = 'directory' | 'web_search' | 'manual' | 'signals' | 'niches';
 
 interface MarketIntelligenceViewProps {
   researchBusy?: boolean;
@@ -67,6 +69,7 @@ interface MarketIntelligenceViewProps {
   }) => void;
   onSelectTopic?: (topicId: string, selectedAudienceHypothesisId?: string) => void;
   onApproveGateA?: () => void;
+  onRecordAiUsage?: (usage?: AiUsageMeta, model?: string) => void;
   initialTab?: MarketTabId;
   lang?: Language;
 }
@@ -87,6 +90,7 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
   onSynchronizeToGateA,
   onSelectTopic,
   onApproveGateA,
+  onRecordAiUsage,
   initialTab = 'niches',
   lang = 'en',
 }) => {
@@ -347,6 +351,19 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
 
             <button
               type="button"
+              onClick={() => setActiveTab('web_search')}
+              className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 ${
+                activeTab === 'web_search'
+                  ? 'bg-white text-teal-800 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              <span>{lang === 'en' ? 'Web Research (Search)' : 'Google 搜尋實證'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('manual')}
               className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 ${
                 activeTab === 'manual'
@@ -579,6 +596,17 @@ export const MarketIntelligenceView: React.FC<MarketIntelligenceViewProps> = ({
           busy={directoryBusy}
           onCheckResources={onCheckResources}
           onRecordManualForResource={openManualReviewForResource}
+          lang={lang}
+        />
+      )}
+
+      {/* TAB 1B: LIVE WEB RESEARCH (GOOGLE SEARCH GROUNDING) */}
+      {activeTab === 'web_search' && (
+        <GroundedWebResearchPanel
+          projectId={project.projectId}
+          defaultDomain={project.preferences?.productFormat || ''}
+          onLogLeadToManualReview={openManualReviewForResource}
+          onRecordAiUsage={onRecordAiUsage}
           lang={lang}
         />
       )}

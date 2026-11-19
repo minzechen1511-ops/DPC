@@ -46,6 +46,7 @@ import {
 } from './services/firestoreProjects.ts';
 import { SerializedProjectSaveQueue } from './utils/projectSaveQueue.ts';
 import { StudioLogo } from './components/StudioLogo.tsx';
+import { StudioGeminiChat } from './components/StudioGeminiChat.tsx';
 
 // Views
 import { DashboardView } from './components/views/DashboardView.tsx';
@@ -91,6 +92,7 @@ export default function App() {
   const revisionsRef = useRef<Record<string, number>>({});
   const [saveStatus, setSaveStatus] = useState<LocalSaveStatus>('saved');
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [pendingLegacyProjects, setPendingLegacyProjects] = useState<DigitalProductProject[]>([]);
 
@@ -1153,6 +1155,7 @@ export default function App() {
             onSynchronizeToGateA={handleSynchronizeMarketToGateA}
             onSelectTopic={handleSelectTopic}
             onApproveGateA={handleApproveGateA}
+            onRecordAiUsage={handleRecordAiUsage}
             initialTab="directory"
             lang={lang}
           />
@@ -1175,6 +1178,7 @@ export default function App() {
             onSynchronizeToGateA={handleSynchronizeMarketToGateA}
             onSelectTopic={handleSelectTopic}
             onApproveGateA={handleApproveGateA}
+            onRecordAiUsage={handleRecordAiUsage}
             initialTab="niches"
             lang={lang}
           />
@@ -1536,6 +1540,7 @@ export default function App() {
           userDisplayName={authUser.displayName}
           userPhotoUrl={authUser.photoURL}
           onSignOut={() => void handleSignOut()}
+          onOpenCopilot={() => setCopilotOpen(true)}
         />
 
         <main id="main-content" tabIndex={-1} className="workspace-main flex-1 min-w-0 overflow-y-auto p-3 sm:p-4 lg:p-5 flex flex-col">
@@ -1568,6 +1573,15 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      <StudioGeminiChat
+        open={copilotOpen}
+        onClose={() => setCopilotOpen(false)}
+        project={project}
+        activeView={activeView}
+        onRecordAiUsage={handleRecordAiUsage}
+        lang={lang}
+      />
     </div>
   );
 }

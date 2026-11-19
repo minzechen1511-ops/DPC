@@ -277,6 +277,19 @@ export const ManualEvidenceReviewPanel: React.FC<ManualEvidenceReviewPanelProps>
         collectionMethodology: 'Manual inspection of specific public Payhip storefront listing',
         dataLimitations: 'Payhip marketplace does not expose verified public category rankings.',
       });
+    } else if (res.id.startsWith('res-web-lead')) {
+      setDraft({
+        ...DEFAULT_DRAFT,
+        productTitle: res.resourceName || '',
+        publisher: res.publisher || 'Web Research Source',
+        marketplace: 'Other Research Source',
+        productURL: res.url,
+        sourceURL: res.url,
+        sourceClass: 'supporting_context',
+        evidenceType: 'interest_signal',
+        collectionMethodology: 'Discovered via Gemini Google Search Grounding; manual page verification pending',
+        dataLimitations: res.importantLimitations || 'Verify page date, author/publisher authority, and exact quoted metric directly before approving.',
+      });
     } else {
       setDraft({
         ...DEFAULT_DRAFT,

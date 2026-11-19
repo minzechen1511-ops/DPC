@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Settings2, Menu, Cloud, RefreshCw, AlertTriangle, LogOut } from 'lucide-react';
+import { Download, Settings2, Menu, Cloud, RefreshCw, AlertTriangle, LogOut, Sparkles } from 'lucide-react';
 import { DigitalProductProject, StageId } from '../types/project.ts';
 import { getStageMetadata } from '../utils/workflowEngine.ts';
 import { Language, translations } from '../utils/i18n.ts';
@@ -24,6 +24,7 @@ interface HeaderProps {
   userDisplayName?: string | null;
   userPhotoUrl?: string | null;
   onSignOut?: () => void;
+  onOpenCopilot?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -43,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   userDisplayName,
   userPhotoUrl,
   onSignOut,
+  onOpenCopilot,
 }) => {
   const t = translations[lang];
 
@@ -157,6 +159,18 @@ export const Header: React.FC<HeaderProps> = ({
             繁中
           </button>
         </div>
+
+        {onOpenCopilot && (
+          <button
+            type="button"
+            onClick={onOpenCopilot}
+            aria-label={lang === 'en' ? 'Open Gemini Copilot' : '開啟 Gemini 助理'}
+            className="px-3.5 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-xs"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>{lang === 'en' ? 'AI Copilot' : 'Gemini 助理'}</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveView('ai_settings')}
