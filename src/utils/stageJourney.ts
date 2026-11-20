@@ -1,6 +1,6 @@
 import type {ChapterOutlineItem, DigitalProductProject, StageId} from '../types/project.ts';
 import {gateAApproved, selectedPositioning, setupStage, usableBrief, usableMap} from './gateAJourney.ts';
-import {gateIssues} from './gatePolicy.ts';
+import {gateIssues, revokeApprovals} from './gatePolicy.ts';
 import {isRetrievedSource} from './sourceEvidence.ts';
 import {computeOutlineStageStatus, getStageMetadata} from './workflowEngine.ts';
 import {countManuscriptWords} from './textMetrics.ts';
@@ -36,12 +36,32 @@ export function stageRequirements(p: DigitalProductProject, stage: StageId, lang
   if (!p.workflow.gates.gateB.isApproved || gateIssues(p,'gateB').length) return [text('Review and approve the current Product Charter at Gate B.','請覆核目前的產品憲章，並核准 Gate B。')];
   switch(stage) {
     case 'outline_builder': return need(computeOutlineStageStatus(p.outline,p.referenceLibrary.cards) === 'COMPLETED','Complete chapter titles, objectives, subtopics, word budgets and source mappings.','請完成章節標題、目標、子題、字數配置與來源對應。');
-    case 'content_studio': return need(p.outline.length > 0 && p.outline.every(ch => ch.isCompleted && countManuscriptWords(ch.contentMarkdown || '') >= Math.max(100, Math.floor(ch.targetWordCount / 2))),'Finish every chapter with substantive content. Passage support is reviewed at Gate C.','請完成每章實質內容；逐段支持將於 Gate C 覆核。');
+    case 'content_studio': return need(p.outline.length > 0 && p.outline.every(chapterDraftReady),'Finish every chapter with substantive content. Passage support is reviewed at Gate C.','請完成每章實質內容；逐段支持將於 Gate C 覆核。');
     case 'workbook_studio': return need(p.resources.some(r => r.contentMarkdown.trim().length > 150 && r.instructions.trim().length > 0),'Save a substantive companion resource with usable instructions.','請儲存包含實質內容與實作說明的伴隨資源。');
     case 'brand_design': return need(Boolean(p.brand.coverBrief.trim() && p.brand.fontBody.trim() && /^#[\da-f]{6}$/i.test(p.brand.primaryHex)),'Save your palette, typography and cover direction.','請儲存色票、字體與封面方向。');
     case 'pricing_launch': return need(p.pricingReport.regularPrice > 0 && Boolean(p.pricingReport.rationale.trim() && p.salesAssets.salesPageHeadline.trim() && p.salesAssets.heroPitch.trim()),'Save a proposed price, its assumptions, a headline and a product pitch. Prices remain validation hypotheses.','請儲存建議價格、假設、主標與產品介紹；價格仍屬待驗證假設。');
     default: return [];
   }
+}
+export function chapterDraftReady(chapter: ChapterOutlineItem) {
+  return chapter.isCompleted && countManuscriptWords(chapter.contentMarkdown || '') >= Math.max(100, Math.floor(chapter.targetWordCount / 2));
+}
+export function updateChapterDraft(project: DigitalProductProject, chapterId: string, content: string, wordCount: number): DigitalProductProject {
+  const previous = project.outline.find(ch => ch.id === chapterId);
+  if (!previous) return project;
+  const chapter = {...previous, contentMarkdown: content, actualWordCount: wordCount, isCompleted: true, lastGeneratedAt: new Date().toISOString()};
+  chapter.isCompleted = chapterDraftReady(chapter);
+  if (previous.contentMarkdown === content && previous.isCompleted === chapter.isCompleted && previous.actualWordCount === wordCount) return project;
+  const outline = project.outline.map(ch => ch.id === chapterId ? chapter : ch);
+  const revised = markLaterStagesForReview(revokeApprovals(project, 'gateC'), 'content_studio');
+  return {...revised, isBlankProject: false, outline,
+    workflow: {...revised.workflow, stageStatuses: {...revised.workflow.stageStatuses,
+      content_studio: outline.every(chapterDraftReady) ? 'COMPLETED' : 'PARTIAL'}},
+    qualityReport: {...project.qualityReport, actualWordCount: outline.reduce((sum, ch) => sum + (ch.actualWordCount || 0), 0)},
+  };
+}
+export function firstUnfinishedPrerequisite(project: DigitalProductProject, stage: StageId) {
+  return JOURNEY_STAGES.slice(0, JOURNEY_STAGES.indexOf(stage)).find(id => !stageFinished(project, id));
 }
 export function stageFinished(p: DigitalProductProject, stage: StageId) {
   return p.workflow.stageStatuses[stage] === 'COMPLETED' && !stageRequirements(p,stage).length;
@@ -75,7 +95,7 @@ export function prepareStageHandoff(p: DigitalProductProject, stage: StageId) {
   const destination = nextActionableStage(p,stage);
   if (!destination || stageRequirements(p,stage).length) return null;
   // Earlier decisions must be current. No stage completion can manufacture an approval.
-  if (JOURNEY_STAGES.slice(0,JOURNEY_STAGES.indexOf(stage)).some(id => !stageFinished(p,id))) return null;
+  if (firstUnfinishedPrerequisite(p, stage)) return null;
   return {...p, updatedAt:new Date().toISOString(), workflow:{...p.workflow, activeStage:destination,
     stageStatuses:{...p.workflow.stageStatuses,[stage]:'COMPLETED' as const}}};
 }

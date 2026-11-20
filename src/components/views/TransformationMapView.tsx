@@ -26,7 +26,7 @@ interface TransformationMapViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onSelectTitle: (titleId: string) => void;
-  onUpdateTransformationMap: (map: TransformationMap) => void;
+  onUpdateTransformationMap: (map: TransformationMap, finish?: boolean) => void;
   onUpdateAiSettings?: (settings: any) => void;
   onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
@@ -190,6 +190,9 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
     void handleSynthesizeMap(lastTitlesOnly, nextModel, 'openrouter');
   };
 
+  const canFinishWithTitle = project.workflow.stageStatuses.transformation_map !== 'NEEDS_REVIEW'
+    && Boolean(beforeState?.currentPains.length && bridgeProcess?.keyMilestones.length && afterState?.tangibleOutcomes.length);
+
   const handleAddTitle = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.title.trim()) return;
@@ -208,7 +211,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
       ],
       selectedTitleId: id,
     };
-    onUpdateTransformationMap(updated);
+    onUpdateTransformationMap(updated, canFinishWithTitle);
     setNewTitle({ title: '', subtitle: '', rationale: '' });
     setShowAddTitle(false);
   };
@@ -261,7 +264,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
         completedDeliverables: splitLines(deliverablesText),
         measurableMetrics: splitLines(metricsText),
       },
-    });
+    }, Boolean(transformationMap.selectedTitleId));
     setEditingMap(false);
   };
 
@@ -461,7 +464,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
             <input placeholder={lang === 'en' ? 'Hook / Conversion Rationale' : '轉換訴求說明'} value={newTitle.rationale} onChange={(e) => setNewTitle({ ...newTitle, rationale: e.target.value })} />
           </div>
           <button type="submit" className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl">
-            {lang === 'en' ? 'Save & Select Title' : '儲存並選定此書名'}
+            {canFinishWithTitle ? (lang === 'en' ? 'Use title & continue' : '採用書名並繼續') : (lang === 'en' ? 'Save & select title' : '儲存並選定書名')}
           </button>
         </form>
       )}
@@ -553,7 +556,7 @@ export const TransformationMapView: React.FC<TransformationMapViewProps> = ({
                 className="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-1.5"
               >
                 <Save className="w-4 h-4" />
-                <span>{lang === 'en' ? 'Save Full Matrix' : '儲存完整矩陣'}</span>
+                <span>{transformationMap.selectedTitleId && splitLines(painsText).length > 0 && splitLines(milestonesText).length > 0 && splitLines(outcomesText).length > 0 ? (lang === 'en' ? 'Save map & continue' : '儲存地圖並繼續') : (lang === 'en' ? 'Save map' : '儲存地圖')}</span>
               </button>
             </div>
           ) : (

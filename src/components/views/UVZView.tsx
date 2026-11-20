@@ -25,7 +25,7 @@ interface UVZViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   onSelectOption: (optionId: string) => void;
-  onUpdateUvz: (uvz: UVZAnalysis) => void;
+  onUpdateUvz: (uvz: UVZAnalysis, finish?: boolean) => void;
   onUpdateAiSettings?: (settings: any) => void;
   onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
@@ -207,7 +207,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
       ],
       selectedOptionId: id,
     };
-    onUpdateUvz(updated);
+    onUpdateUvz(updated, true);
     setNewOpt({ name: '', angle: '', targetPersona: '', promise: '', pros: '', risks: '' });
     setShowAddOption(false);
   };
@@ -220,7 +220,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
       differentiationOpportunities: differentiationText.split('\n').map((s) => s.trim()).filter(Boolean),
       creatorExpertiseFit: expertiseFitText.trim(),
       commercialFeasibility: feasibilityText.trim(),
-    });
+    }, Boolean(uvz.selectedOptionId) && project.workflow.stageStatuses.uvz !== 'NEEDS_REVIEW');
     setEditingProblems(false);
   };
 
@@ -431,7 +431,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
             <input placeholder={lang === 'en' ? 'Risks / Validation Scope (optional)' : '風險與驗證重點（選填）'} value={newOpt.risks} onChange={(e) => setNewOpt({ ...newOpt, risks: e.target.value })} />
           </div>
           <button type="submit" className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl">
-            {lang === 'en' ? 'Save Positioning Option' : '儲存定位方案'}
+            {lang === 'en' ? 'Use this positioning & continue' : '採用此定位並繼續'}
           </button>
         </form>
       )}
@@ -547,7 +547,7 @@ export const UVZView: React.FC<UVZViewProps> = ({
                 className="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-1.5"
               >
                 <Save className="w-4 h-4" />
-                <span>{lang === 'en' ? 'Save Analysis' : '儲存分析'}</span>
+                <span>{uvz.selectedOptionId && project.workflow.stageStatuses.uvz !== 'NEEDS_REVIEW' ? (lang === 'en' ? 'Save analysis & continue' : '儲存分析並繼續') : (lang === 'en' ? 'Save analysis' : '儲存分析')}</span>
               </button>
             </div>
           ) : (

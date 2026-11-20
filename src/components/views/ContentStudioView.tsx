@@ -2,6 +2,7 @@ import { gateIssues } from '../../utils/gatePolicy.ts';
 import { CitationReviewPanel } from '../CitationReviewPanel.tsx';
 import { isRetrievedSource } from '../../utils/sourceEvidence.ts';
 import { countManuscriptWords } from '../../utils/textMetrics.ts';
+import {chapterDraftReady} from '../../utils/stageJourney.ts';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Feather,
@@ -202,7 +203,8 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
         : '';
       if (fallbackTag) setFallbackNotice(fallbackTag);
 
-      if (res && res.content) {
+      if (!res?.content?.trim()) throw new Error(lang === 'en' ? 'The model returned an empty chapter.' : '模型傳回空白章節。');
+      if (res.content) {
         setContentDraft(res.content);
         const words = countManuscriptWords(res.content);
         onUpdateChapter(selectedChapterId, res.content, words);
@@ -223,7 +225,7 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
     }
   };
 
-  const pendingChapters = chapters.filter((ch) => !ch.isCompleted || !(ch.contentMarkdown || '').trim());
+  const pendingChapters = chapters.filter(chapter => !chapterDraftReady(chapter));
 
   const handleBatchGeneratePending = async (
     overrideModel?: string,
@@ -273,16 +275,13 @@ ${JSON.stringify(permittedSources.map((card) => ({ id: card.id, title: card.sour
               : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
           );
         }
-        if (res?.content) {
-          const words = countManuscriptWords(res.content);
-          onUpdateChapter(chapter.id, res.content, words);
-          runningBible = extractChapterContinuity(chapter, res.content, runningBible);
-          onUpdateProductBible?.(runningBible);
-          if (chapter.id === selectedChapterId) {
-            setContentDraft(res.content);
-          }
-          completedCount += 1;
-        }
+        if (!res?.content?.trim()) throw new Error(lang === 'en' ? 'The model returned an empty chapter.' : '模型傳回空白章節。');
+        const words = countManuscriptWords(res.content);
+        onUpdateChapter(chapter.id, res.content, words);
+        runningBible = extractChapterContinuity(chapter, res.content, runningBible);
+        onUpdateProductBible?.(runningBible);
+        if (chapter.id === selectedChapterId) setContentDraft(res.content);
+        completedCount += 1;
       }
       setAiSuccess(
         lang === 'en'

@@ -16,14 +16,15 @@ import { BLANK_PROJECT } from '../../data/demoProject.ts';
 import { Language, translations } from '../../utils/i18n.ts';
 import { sanitizeProjectForStorage } from '../../utils/projectStorage.ts';
 
+import {recommendedJourneyStage, stageName} from '../../utils/stageJourney.ts';
+
 interface MyProjectsViewProps {
   currentProject: DigitalProductProject;
   savedProjects: DigitalProductProject[];
   onSwitchProject: (project: DigitalProductProject) => void;
   onDuplicateProject: (project: DigitalProductProject) => void;
   onDeleteProject: (projectId: string) => void;
-  onLoadProject: (project: DigitalProductProject) => void;
-  setActiveView: (view: any) => void;
+  onLoadProject: (project: DigitalProductProject) => Promise<void>;
   revisions?: Record<string, number>;
   onRefreshProjects?: () => Promise<void>;
   localBusy?: boolean;
@@ -41,7 +42,6 @@ export const MyProjectsView: React.FC<MyProjectsViewProps> = ({
   onDuplicateProject,
   onDeleteProject,
   onLoadProject,
-  setActiveView,
   revisions = {},
   onRefreshProjects,
   localBusy = false,
@@ -73,16 +73,11 @@ export const MyProjectsView: React.FC<MyProjectsViewProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
         if (parsed.projectId && (parsed.charter || parsed.name)) {
-          onLoadProject(sanitizeProjectForStorage(parsed));
-          setNotice({
-            type: 'success',
-            text: lang === 'en' ? 'Sanitized project restored to your cloud library.' : '已安全去識別化並匯入至您的雲端專案庫。',
-          });
-          setActiveView('dashboard');
+          await onLoadProject(sanitizeProjectForStorage(parsed));
         } else {
           setNotice({
             type: 'error',
@@ -105,11 +100,7 @@ export const MyProjectsView: React.FC<MyProjectsViewProps> = ({
       createdAt: now,
       updatedAt: now,
     });
-    setNotice({
-      type: 'success',
-      text: lang === 'en' ? 'Created a clean blank cloud workspace.' : '已建立全新空白雲端工作區。',
-    });
-    setActiveView('dashboard');
+
   };
 
   const projectsList = savedProjects.length ? savedProjects : [currentProject];
@@ -367,27 +358,14 @@ export const MyProjectsView: React.FC<MyProjectsViewProps> = ({
                     )}
                   </div>
 
-                  {isActive ? (
-                    <button
-                      type="button"
-                      onClick={() => setActiveView('dashboard')}
-                      className="text-sm text-indigo-700 font-semibold hover:text-indigo-900 inline-flex items-center gap-1.5"
-                    >
-                      <span>{lang === 'en' ? 'Open Dashboard' : '進入工作台'}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSwitchProject(proj);
-                        setActiveView('dashboard');
-                      }}
-                      className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
-                    >
-                      {lang === 'en' ? 'Switch Active' : '切換使用'}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => onSwitchProject(isActive ? currentProject : proj)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-teal-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  >
+                    {lang === 'en' ? 'Resume' : '繼續'} · {stageName(recommendedJourneyStage(isActive ? currentProject : proj), lang)}
+                    <ArrowRight size={16} aria-hidden="true" />
+                  </button>
                 </div>
               </div>
             </div>

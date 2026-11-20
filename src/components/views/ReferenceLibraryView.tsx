@@ -8,7 +8,7 @@ import { compileReferenceLibraryMarkdown } from '../../utils/markdownCompiler.ts
 import { Language, translations } from '../../utils/i18n.ts';
 
 interface ReferenceLibraryViewProps {
-  onAddSource: (source: ReferenceCard, chapterIds: string[]) => void;
+  onAddSource: (source: ReferenceCard, chapterIds: string[], continueToCharter: boolean) => void;
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
   lang?: Language;
@@ -74,10 +74,12 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
       setSourceMessage('The quote or bibliography does not match the retrieved text. Correct it or save an unverified note.');
       return;
     }
-    onAddSource(card, sourceChapters);
-    setSourceMessage(`Saved ${id}; downstream approvals require review.`);
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    onAddSource(card, sourceChapters, isRetrievedSource(card) && submitter?.getAttribute('value') !== 'stay');
+    setSourceMessage(lang === 'en' ? `Added ${id} to the project draft.` : `已將 ${id} 加入專案草稿。`);
     setSource(emptySource);
     setRetrieval(undefined);
+    setSourceChapters([]);
   };
 
   const pillars = ['ALL', ...Object.keys(referenceLibrary?.coveragePillars || {})];
@@ -222,8 +224,13 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
           </label>
           <div className="md:col-span-2 flex flex-wrap items-center gap-4">
             <button className="px-5 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-semibold rounded-xl" type="submit">
-              Save source
+              {retrieval && source.confirmed
+                ? (lang === 'en' ? 'Save reviewed source & open charter' : '儲存已覆核來源並開啟憲章')
+                : (lang === 'en' ? 'Save research note' : '儲存研究筆記')}
             </button>
+            {retrieval && source.confirmed && <button type="submit" value="stay" className="rounded-lg px-3 py-2 font-semibold text-teal-800 underline focus-visible:outline-2">
+              {lang === 'en' ? 'Save & add another source' : '儲存並新增下一個來源'}
+            </button>}
             <p role="status" className="text-sm font-medium text-teal-800">
               {sourceMessage}
             </p>
@@ -258,6 +265,7 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
               <span>Markdown</span>
             </button>
             <button
+              disabled={!cards.some(isRetrievedSource)}
               onClick={() => setActiveView('product_charter')}
               className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm whitespace-nowrap"
             >

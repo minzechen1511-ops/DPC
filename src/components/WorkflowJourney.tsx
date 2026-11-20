@@ -1,13 +1,16 @@
 import React from 'react';
 import {ArrowLeft, ArrowRight, Check, LockKeyhole, Loader2} from 'lucide-react';
 import type {DigitalProductProject, StageId} from '../types/project.ts';
-import {JOURNEY_PHASES, JOURNEY_STAGES, journeyStage, journeyStepState, nextActionableStage, stageFinished, stageName, stageRequirements, stageHandoffCopy} from '../utils/stageJourney.ts';
+import {JOURNEY_PHASES, JOURNEY_STAGES, firstUnfinishedPrerequisite, journeyStage, journeyStepState, nextActionableStage, stageFinished, stageName, stageRequirements, stageHandoffCopy} from '../utils/stageJourney.ts';
 
 interface Props {project:DigitalProductProject; current:string; lang:'en'|'zh'; onNavigate:(stage:StageId)=>void;}
 export function WorkflowJourney({project,current,lang,onNavigate}:Props) {
   const stage=journeyStage(current);
   if (!stage) return null;
   const phase=JOURNEY_PHASES.findIndex(group=>group.includes(stage));
+  const number = JOURNEY_STAGES.indexOf(stage) + 1;
+  const blocker = firstUnfinishedPrerequisite(project, stage);
+  const destination = nextActionableStage(project, stage);
   const labels=lang==='en'?['Discover & define','Research & plan','Create & review','Package & launch']:['探索與定義','研究與規劃','創作與覆核','組裝與上市'];
   const copy=lang==='en'?{title:'Your product journey',done:'Complete',current:'Current',blocked:'Decision required',review:'Needs review',upcoming:'Upcoming',edit:'Revisit any finished stage from the sidebar.'}:{title:'您的產品開發流程',done:'已完成',current:'目前階段',blocked:'待完成前置決策',review:'需要覆核',upcoming:'尚未開始',edit:'可隨時從側欄返回已完成階段修改。'};
   const stepItems=JOURNEY_PHASES[phase].map(id=>{const done=stageFinished(project,id);const review=journeyStepState(project,id)==='needs_review';const blocked=JOURNEY_STAGES.slice(0,JOURNEY_STAGES.indexOf(id)).some(s=>!stageFinished(project,s));return <li key={id}>
@@ -16,12 +19,23 @@ export function WorkflowJourney({project,current,lang,onNavigate}:Props) {
         </button>
       </li>;});
   return <nav aria-label={copy.title} className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-    <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4"><h2 className="font-semibold text-slate-900">{copy.title}</h2><p className="text-xs text-slate-600">{copy.edit}</p></div>
+    <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-teal-800">{lang === 'en' ? `Step ${number} of ${JOURNEY_STAGES.length}` : `第 ${number} 步，共 ${JOURNEY_STAGES.length} 步`}</p>
+        <h2 className="text-lg font-bold text-slate-900">{stageName(stage, lang)}</h2>
+      </div>
+      {blocker ? <button type="button" onClick={() => onNavigate(blocker)} className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950 underline focus-visible:outline-2">
+        <ArrowLeft size={16} aria-hidden="true"/>{lang === 'en' ? 'Finish first' : '請先完成'} · {stageName(blocker, lang)}
+      </button> : destination && <div className="flex min-w-0 items-center gap-3">
+        <ArrowRight size={19} className="shrink-0 text-teal-700" aria-hidden="true"/>
+        <div><p className="text-xs text-slate-600">{lang === 'en' ? 'Opens after saving' : '完成並儲存後開啟'}</p><p className="text-sm font-semibold text-slate-800">{stageName(destination, lang)}</p></div>
+      </div>}
+    </div>
     <ol className="journey-phase-grid grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-      {JOURNEY_PHASES.map((group,index)=>{const done=group.every(id=>stageFinished(project,id));return <li key={index} className={index===phase?'text-teal-900':'text-slate-600'}>
-        <div className={`h-1 mb-2 rounded-full ${done?'bg-teal-700':index===phase?'bg-teal-300':'bg-slate-200'}`} />
+      {JOURNEY_PHASES.map((group,index)=>{const completed=group.filter(id=>stageFinished(project,id)).length;const done=completed===group.length;return <li key={index} className={index===phase?'text-teal-900':'text-slate-600'}>
+        <div className="mb-2 flex gap-1" aria-hidden="true">{group.map(id => <span key={id} className={`h-1.5 flex-1 rounded-full ${stageFinished(project,id) ? 'bg-teal-700' : id === stage ? 'bg-teal-300 ring-1 ring-teal-700' : 'bg-slate-200'}`}/>)}</div>
         <span className="flex items-center gap-2 text-sm font-semibold">{done&&<Check size={15} aria-hidden="true"/>}{labels[index]}<span className="sr-only"> · {done?copy.done:index===phase?copy.current:copy.upcoming}</span></span>
-        <span className="block text-xs mt-1 tabular-nums">{group.filter(id=>stageFinished(project,id)).length}/{group.length} {lang==='en'?'finished':'已完成'}</span>
+        <span className="block text-xs mt-1 tabular-nums">{completed}/{group.length} {lang==='en'?'finished':'已完成'}</span>
       </li>;})}
     </ol>
     <ol className="journey-stage-list hidden sm:flex sm:flex-wrap gap-2 mt-4 border-t border-slate-100 pt-3">{stepItems}</ol>

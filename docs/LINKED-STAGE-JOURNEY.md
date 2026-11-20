@@ -48,3 +48,9 @@ AI generation uses existing per-stage services. The job API only stores metadata
 - Hosted testing of the accepted Transformation Map's forward action exposed Firestore's exhausted free daily write quota. The UI stayed on the current stage and exposed retry, as required; at that check successful live advancement was blocked by the external quota. Raw wrapped database errors were replaced with readable recovery guidance and a sanitized JSON recovery-backup action. No gates or selections were changed for this test. Final hosted observations belong in the delivery handoff.
 
 Delivery requires a normal non-force main push, Studio pull, reload and hosted verification. Firebase/provider quotas and network errors can still block saving or generation; the UI must retain their true status.
+
+## Continuing from the work itself
+
+The stage header shows the current step and the destination that opens after a successful save. Its phase bars contain one segment per stage. When an earlier decision needs attention, the header links directly to that decision. My Projects resumes the first unfinished or review-required step.
+
+Custom UVZ selection and saving a complete edited map use the same handoff as suggested options. Saving a checked, matching source opens Product Charter, with a secondary action for researchers collecting more sources. Saving an unverified note stays in Reference Library. Batch writing evaluates the accumulated manuscript after each chapter update. Undersized chapters remain available for retry. Revising a manuscript retains chapter text and reopens dependent work. The header sync retry repeats a failed handoff as well as its save.

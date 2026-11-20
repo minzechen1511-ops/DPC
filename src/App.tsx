@@ -1,6 +1,6 @@
 import { addAiUsage } from './utils/aiSettings.ts';
 import { WorkflowJourney, WorkflowHandoff } from './components/WorkflowJourney.tsx';
-import {handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, StageHandoffRunner, stageName, stageRequirements, workflowSaveError, markLaterStagesForReview, preserveChapterDraftsOnOutlineEdit} from './utils/stageJourney.ts';
+import {updateChapterDraft, recommendedJourneyStage, handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, StageHandoffRunner, stageName, stageRequirements, workflowSaveError, markLaterStagesForReview, preserveChapterDraftsOnOutlineEdit} from './utils/stageJourney.ts';
 import { GATE_A_STEPS, gateAJourney, selectJourneyTopic, setupStage, usableMap } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { isRetrievedSource } from './utils/sourceEvidence.ts';
@@ -94,12 +94,13 @@ export default function App() {
   const activeViewRef=useRef(activeView);
   activeViewRef.current=activeView;
   useEffect(() => {const main=document.getElementById('main-content'); main?.scrollTo({top:0}); main?.focus();}, [activeView]);
-  const [pendingHandoff,setPendingHandoff] = useState<{projectId:string;stage:StageId;navigation:number}|null>(null);
+  const [pendingHandoff,setPendingHandoff] = useState<{projectId:string;stage:StageId;navigation:number;whenReady:boolean}|null>(null);
   const [handoffBusy,setHandoffBusy] = useState(false);
   const [handoffError,setHandoffError] = useState('');
   const [handoffNotice,setHandoffNotice] = useState<{from:StageId;to:StageId}|null>(null);
   const handoffRunner = useRef(new StageHandoffRunner());
   const navigationRevision = useRef(0);
+  const visit = navigationRevision.current;
 
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const revisionsRef = useRef<Record<string, number>>({});
@@ -462,11 +463,11 @@ export default function App() {
       setProject(current => ({...current, workflow: {...current.workflow, activeStage: destination as any}}));
     }
   };
-  const requestHandoff = (stage:StageId) => {
-    if (handoffRunner.current.busy) return;
+  const requestHandoff = (stage:StageId, whenReady=false) => {
+    if (handoffRunner.current.busy || navigationRevision.current !== visit) return;
     if (journeyStage(activeViewRef.current)!==stage || currentProjectRef.current.projectId!==project.projectId) return;
     setHandoffError('');
-    setPendingHandoff({projectId:project.projectId,stage,navigation:navigationRevision.current});
+    setPendingHandoff({projectId:project.projectId,stage,navigation:visit,whenReady});
   };
   const downloadRecoveryBackup = () => {
     const current=currentProjectRef.current;
@@ -487,7 +488,7 @@ export default function App() {
     if (!contextCurrent()) {setPendingHandoff(null);return;}
     const snapshot=prepareStageHandoff(current,pendingHandoff.stage);
     if (!snapshot) {
-      setHandoffError(stageRequirements(current,pendingHandoff.stage,langRef.current)[0] || (langRef.current==='en'?'Complete the earlier stages on the recommended path first.':'請先依推薦流程完成前置階段。'));
+      if (!pendingHandoff.whenReady) setHandoffError(stageRequirements(current,pendingHandoff.stage,langRef.current)[0] || (langRef.current==='en'?'Complete the earlier stages on the recommended path first.':'請先依推薦流程完成前置階段。'));
       setPendingHandoff(null); return;
     }
     setHandoffBusy(true);
@@ -498,6 +499,7 @@ export default function App() {
     const isCurrent=()=>contextCurrent() && JSON.stringify(currentProjectRef.current)===JSON.stringify(snapshot);
     void handoffRunner.current.run(snapshot,persistProjectNow,isCurrent).then(moved=>{
       if (moved) {
+        navigationRevision.current += 1;
         setActiveView(snapshot.workflow.activeStage);
         setHandoffNotice({from:pendingHandoff.stage,to:snapshot.workflow.activeStage});
       } else if (isCurrent()) {
@@ -738,7 +740,7 @@ export default function App() {
     requestHandoff('uvz');
   };
 
-  const handleUpdateUvz = (updatedUvz: UVZAnalysis) => {
+  const handleUpdateUvz = (updatedUvz: UVZAnalysis, finish=false) => {
     setGateAProject((prev) => {
       if (prev.marketResearch.selectedTopicId !== project.marketResearch.selectedTopicId || JSON.stringify(prev.intake) !== JSON.stringify(project.intake)) return prev;
       const revoked = markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'uvz');
@@ -752,7 +754,7 @@ export default function App() {
           ...revoked.workflow,
           stageStatuses: {
             ...revoked.workflow.stageStatuses,
-            uvz: hasContent ? 'COMPLETED' : 'PARTIAL',
+            uvz: !finish && hasContent && prev.workflow.stageStatuses.uvz === 'NEEDS_REVIEW' ? 'NEEDS_REVIEW' : hasContent ? 'COMPLETED' : 'PARTIAL',
             transformation_map: 'NEEDS_REVIEW',
           },
         },
@@ -766,6 +768,7 @@ export default function App() {
         uvz: updatedUvz,
       };
     });
+    if (finish) requestHandoff('uvz', true);
   };
 
   const handleSelectTitleOption = (titleId: string) => {
@@ -802,7 +805,7 @@ export default function App() {
     requestHandoff('transformation_map');
   };
 
-  const handleUpdateTransformationMap = (updatedMap: TransformationMap) => {
+  const handleUpdateTransformationMap = (updatedMap: TransformationMap, finish=false) => {
     setGateAProject((prev) => {
       if (JSON.stringify(prev.uvz) !== JSON.stringify(project.uvz) || JSON.stringify(prev.intake) !== JSON.stringify(project.intake)) return prev;
       const revoked = markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'transformation_map');
@@ -816,7 +819,7 @@ export default function App() {
           ...revoked.workflow,
           stageStatuses: {
             ...revoked.workflow.stageStatuses,
-            transformation_map: isComplete ? 'COMPLETED' : 'PARTIAL',
+            transformation_map: !finish && isComplete && prev.workflow.stageStatuses.transformation_map === 'NEEDS_REVIEW' ? 'NEEDS_REVIEW' : isComplete ? 'COMPLETED' : 'PARTIAL',
           },
         },
         transformationMap: updatedMap,
@@ -831,6 +834,7 @@ export default function App() {
         },
       };
     });
+    if (finish) requestHandoff('transformation_map', true);
   };
 
   const handleUpdateCharter = (updatedCharter: ProductCharter) => {
@@ -858,40 +862,14 @@ export default function App() {
   };
 
   const handleUpdateChapter = (chapterId: string, content: string, wordCount: number) => {
-    setProject((prev) => ({
-      ...prev,
-      isBlankProject: false,
-      updatedAt: new Date().toISOString(),
-      workflow: {
-        ...revokeApprovals(prev, 'gateC').workflow,
-        stageStatuses: {
-          ...revokeApprovals(prev, 'gateC').workflow.stageStatuses,
-          content_studio: prev.outline.every((ch) => ch.id === chapterId || ch.isCompleted) ? 'COMPLETED' : 'PARTIAL',
-        },
-      },
-      outline: prev.outline.map((ch) =>
-        ch.id === chapterId
-          ? {
-              ...ch,
-              contentMarkdown: content,
-              actualWordCount: wordCount,
-              isCompleted: true,
-              lastGeneratedAt: new Date().toISOString(),
-            }
-          : ch
-      ),
-      qualityReport: {
-        ...prev.qualityReport,
-        actualWordCount: prev.outline.reduce(
-          (sum, c) => sum + (c.id === chapterId ? wordCount : c.actualWordCount || 0),
-          0
-        ),
-      },
-    }));
-    if (project.outline.length && project.outline.every(ch=>ch.id===chapterId || ch.isCompleted) && wordCount >= 100) requestHandoff('content_studio');
+    if (project.projectId !== currentProjectRef.current.projectId || visit !== navigationRevision.current || !currentProjectRef.current.outline.some(ch => ch.id === chapterId)) return;
+    setProject(prev => updateChapterDraft(prev, chapterId, content, wordCount));
+    // Evaluate the accumulated manuscript after React applies this chapter and its continuity update.
+    requestHandoff('content_studio', true);
   };
 
   const handleUpdateProductBible = (updatedBible: ProductBible) => {
+    if (project.projectId !== currentProjectRef.current.projectId || visit !== navigationRevision.current) return;
     setProject((prev) => {
       const revoked = revokeApprovals(prev, 'gateC');
       return {
@@ -981,14 +959,24 @@ export default function App() {
     setProject(prev => prev.projectId !== project.projectId ? prev : ({...prev,isBlankProject:false,aiSettings:addAiUsage(prev.aiSettings,usage)}));
   };
 
-  const handleSwitchProject = (target: DigitalProductProject) => {
+  const handleSwitchProject = async (target: DigitalProductProject) => {
+    const current = currentProjectRef.current;
+    if (current.projectId === target.projectId) {
+      navigateJourney(recommendedJourneyStage(current));
+      return;
+    }
+    if (dirtyProjectIdRef.current === current.projectId || saveQueueRef.current.hasPending(current.projectId)) {
+      if (!(await persistProjectNow(current)) || visit !== navigationRevision.current || currentProjectRef.current !== current) return;
+    }
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
     dirtyProjectIdRef.current = null;
     skipAutosaveProjectIdRef.current = target.projectId;
-    setProject(sanitizeProjectForStorage(target));
+    const selected = sanitizeProjectForStorage(target);
+    setProject(selected);
+    navigateJourney(recommendedJourneyStage(selected));
     setSaveStatus('saved');
     setWorkflowError('');
     setWorkspaceError(null);
@@ -1125,9 +1113,15 @@ export default function App() {
       'gateA'
     );
 
+    clean.workflow.activeStage = recommendedJourneyStage(clean);
     skipAutosaveProjectIdRef.current = clean.projectId;
     setProject(clean);
-    await persistProjectNow(clean);
+    dirtyProjectIdRef.current = clean.projectId;
+    const saved = await persistProjectNow(clean);
+    if (saved && visit === navigationRevision.current && currentProjectRef.current.projectId === clean.projectId) {
+      navigationRevision.current += 1;
+      setActiveView(clean.workflow.activeStage);
+    }
   };
 
   const handleImportLegacyLocal = async () => {
@@ -1328,7 +1322,7 @@ export default function App() {
       case 'reference_library':
         return (
           <ReferenceLibraryView
-            onAddSource={(source, chapterIds) =>
+            onAddSource={(source, chapterIds, continueToCharter) => {
               setProject((prev) => {
                 const nextCards = [...prev.referenceLibrary.cards, source];
                 const nextOutline = prev.outline.map((ch) =>
@@ -1365,8 +1359,9 @@ export default function App() {
                     },
                   },
                 };
-              })
-            }
+              });
+              if (continueToCharter && isRetrievedSource(source)) requestHandoff('reference_library');
+            }}
             project={project}
             setActiveView={navigateFromStage}
             lang={lang}
@@ -1559,7 +1554,6 @@ export default function App() {
             onDuplicateProject={handleDuplicateProject}
             onDeleteProject={handleDeleteProject}
             onLoadProject={handleLoadProjectIntoStore}
-            setActiveView={navigateFromStage}
             revisions={revisions}
             onRefreshProjects={handleReloadFromCloud}
             localBusy={cloudBusy}
@@ -1650,7 +1644,11 @@ export default function App() {
           workspaceReady={cloudHydratedRef.current}
           workspaceLoading={cloudBusy}
           activeRevision={revisions[project.projectId]}
-          onRetrySave={() => void persistProjectNow(project)}
+          onRetrySave={() => {
+            const stage = journeyStage(activeView);
+            if (handoffError && stage) requestHandoff(stage);
+            else void persistProjectNow(project);
+          }}
           onReloadProject={() => void handleReloadFromCloud()}
           userEmail={authUser.email}
           userDisplayName={authUser.displayName}

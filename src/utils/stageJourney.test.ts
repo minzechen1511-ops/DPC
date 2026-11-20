@@ -6,7 +6,7 @@ import {journeyFixture} from '../../tests/gateAJourneyFixture.ts';
 import {approveGate,revokeApprovals} from './gatePolicy.ts';
 import {selectJourneyTopic} from './gateAJourney.ts';
 import {sanitizeProjectForStorage} from './projectStorage.ts';
-import {JOURNEY_STAGES, handoffContextCurrent, journeyStage,nextJourneyStage,prepareStageHandoff,recommendedJourneyStage,saveStageHandoff,stageRequirements,workflowSaveError,StageHandoffRunner,markLaterStagesForReview,journeyStepState,nextActionableStage,preserveChapterDraftsOnOutlineEdit} from './stageJourney.ts';
+import {chapterDraftReady, updateChapterDraft, firstUnfinishedPrerequisite, JOURNEY_STAGES, handoffContextCurrent, journeyStage,nextJourneyStage,prepareStageHandoff,recommendedJourneyStage,saveStageHandoff,stageRequirements,workflowSaveError,StageHandoffRunner,markLaterStagesForReview,journeyStepState,nextActionableStage,preserveChapterDraftsOnOutlineEdit} from './stageJourney.ts';
 import {WorkflowJourney,WorkflowHandoff} from '../components/WorkflowJourney.tsx';
 import {getStageMetadata} from './workflowEngine.ts';
 import {translations} from './i18n.ts';
@@ -152,4 +152,47 @@ test('journey and finish controls expose real blocked/current states and bilingu
     assert.match(footer,/disabled=""/);
     assert.match(footer,lang==='en'?/Gates and evidence reviews/:/關卡與證據覆核/);
   }
+});
+
+test('batch handoff uses the accumulated chapters, including an undersized legacy draft on retry', () => {
+  const p = approvedTopic();
+  p.outline = ['one', 'two'].map(id => ({id, title:id, targetWordCount:240, contentMarkdown:'', isCompleted:false} as any));
+  const full = 'word '.repeat(120);
+  const first = updateChapterDraft(p, 'one', full, 120);
+  assert.equal(first.workflow.stageStatuses.content_studio, 'PARTIAL');
+  const partial = updateChapterDraft(first, 'two', 'word '.repeat(110), 110);
+  assert.equal(partial.outline[1].isCompleted, false);
+  assert.equal(chapterDraftReady({...partial.outline[1], isCompleted:true}), false);
+  assert.equal(partial.workflow.stageStatuses.content_studio, 'PARTIAL');
+  const complete = updateChapterDraft(partial, 'two', full, 120);
+  assert.equal(complete.workflow.stageStatuses.content_studio, 'COMPLETED');
+  assert.equal(complete.qualityReport.actualWordCount, 240);
+  assert.equal(complete.workflow.gates.gateC.isApproved, false);
+  assert.equal(updateChapterDraft(complete, 'one', full, 120), complete);
+  assert.equal(updateChapterDraft(complete, 'missing', full, 120), complete);
+});
+
+test('editing a completed manuscript reopens dependent work and preserves the other chapters', () => {
+  const p = approvedTopic();
+  const full = 'word '.repeat(100);
+  p.outline = ['one','two'].map(id => ({id,targetWordCount:160,contentMarkdown:full,isCompleted:true,actualWordCount:100} as any));
+  p.workflow.stageStatuses.workbook_studio = 'COMPLETED';
+  p.workflow.gates.gateC.isApproved = true;
+  const revised = updateChapterDraft(p, 'two', 'Short draft', 2);
+  assert.equal(revised.workflow.stageStatuses.content_studio, 'PARTIAL');
+  assert.equal(revised.workflow.stageStatuses.workbook_studio, 'NEEDS_REVIEW');
+  assert.equal(revised.workflow.gates.gateC.isApproved, false);
+  assert.equal(revised.outline[0], p.outline[0]);
+});
+
+test('the journey shows the saved handoff destination or a direct return to its first unresolved decision', () => {
+  const p = approvedTopic();
+  const render = (view: string) => renderToStaticMarkup(React.createElement(WorkflowJourney,{project:p,current:view,lang:'en',onNavigate:()=>{}}));
+  assert.equal(firstUnfinishedPrerequisite(p, 'project_brief'), undefined);
+  assert.match(render('project_brief'), /Step 2 of 13/);
+  assert.match(render('project_brief'), /Opens after saving/);
+  assert.equal(firstUnfinishedPrerequisite(p, 'reference_library'), 'project_brief');
+  const blocked = render('reference_library');
+  assert.match(blocked, /Finish first.*Recommended Project Brief/);
+  assert.doesNotMatch(blocked, /Opens after saving/);
 });
