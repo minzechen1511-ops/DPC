@@ -35,7 +35,7 @@ export function stageRequirements(p: DigitalProductProject, stage: StageId, lang
   }
   if (!p.workflow.gates.gateB.isApproved || gateIssues(p,'gateB').length) return [text('Review and approve the current Product Charter at Gate B.','請覆核目前的產品憲章，並核准 Gate B。')];
   switch(stage) {
-    case 'outline_builder': return need(computeOutlineStageStatus(p.outline,p.referenceLibrary.cards) === 'COMPLETED','Complete chapter titles, objectives, subtopics, word budgets and source mappings.','請完成章節標題、目標、子題、字數配置與來源對應。');
+    case 'outline_builder': return need(computeOutlineStageStatus(p.outline,p.referenceLibrary.cards.filter(isRetrievedSource)) === 'COMPLETED','Complete chapter titles, objectives, subtopics, word budgets and source mappings.','請完成章節標題、目標、子題、字數配置與來源對應。');
     case 'content_studio': return need(p.outline.length > 0 && p.outline.every(chapterDraftReady),'Finish every chapter with substantive content. Passage support is reviewed at Gate C.','請完成每章實質內容；逐段支持將於 Gate C 覆核。');
     case 'workbook_studio': return need(p.resources.some(r => r.contentMarkdown.trim().length > 150 && r.instructions.trim().length > 0),'Save a substantive companion resource with usable instructions.','請儲存包含實質內容與實作說明的伴隨資源。');
     case 'brand_design': return need(Boolean(p.brand.coverBrief.trim() && p.brand.fontBody.trim() && /^#[\da-f]{6}$/i.test(p.brand.primaryHex)),'Save your palette, typography and cover direction.','請儲存色票、字體與封面方向。');

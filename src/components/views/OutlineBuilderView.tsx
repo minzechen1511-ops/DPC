@@ -9,7 +9,10 @@ import {
   normalizeStudioProvider,
 } from '../../services/aiService.ts';
 import { countManuscriptWords } from '../../utils/textMetrics.ts';
-import { checkStagePrerequisites } from '../../utils/workflowEngine.ts';
+import {outlineFromCharter, suggestedReferences} from '../../utils/researchPlanning.ts';
+import {isRetrievedSource} from '../../utils/sourceEvidence.ts';
+import {gateIssues} from '../../utils/gatePolicy.ts';
+import { checkStagePrerequisites, computeOutlineStageStatus } from '../../utils/workflowEngine.ts';
 import { buildOutlineSynthesisPrompt, parseOutlineSynthesisResponse } from '../../utils/stageSynthesis.ts';
 import { generationError } from '../../utils/gateAJourney.ts';
 import { AiEngineQuickControl, useOpenRouterConnected } from '../AiEngineQuickControl.tsx';
@@ -18,7 +21,7 @@ import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 interface OutlineBuilderViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
-  onUpdateOutline: (outline: ChapterOutlineItem[]) => void;
+  onUpdateOutline: (outline: ChapterOutlineItem[], finish?: boolean) => void;
   onUpdateAiSettings?: (settings: any) => void;
   onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
   lang?: Language;
@@ -42,6 +45,12 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
   const [focusNote, setFocusNote] = useState('');
   const openrouterConnected = useOpenRouterConnected();
 
+  const sources = project.referenceLibrary.cards.filter(isRetrievedSource);
+  const gateReady = prereq.canRun && !gateIssues(project, 'gateB').length;
+  const proposal = chapters.length ? chapters : outlineFromCharter(project, lang);
+  const unresolved = proposal.filter(ch => !ch.mappedReferenceIds.some(id => sources.some(card => card.id === id)));
+  const canUsePlan = gateReady && !unresolved.length && computeOutlineStageStatus(proposal, sources) === 'COMPLETED';
+  const en = lang === 'en';
   const totalWords = chapters.reduce((sum, ch) => sum + (ch.actualWordCount || ch.targetWordCount || 0), 0);
   const maxTargetWords = Math.max(1, ...chapters.map((ch) => Math.max(ch.targetWordCount || 0, countManuscriptWords(ch.contentMarkdown || ''))));
 
@@ -63,24 +72,24 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
       ],
       targetWordCount: 1800,
       practicalDeliverable: lang === 'en' ? 'Completed chapter worksheet' : '已完成之章節工作表',
-      mappedReferenceIds: project.referenceLibrary.cards.slice(0, 2).map((c) => c.id),
+      mappedReferenceIds: [],
       exampleScenarios: [],
       completionMilestone: lang === 'en' ? 'Deliverable reviewed against sources' : '依來源完成交付檢核',
       isCompleted: false,
       isLocked: false,
     };
-    onUpdateOutline([...chapters, newChapter]);
+    onUpdateOutline([...chapters, newChapter], false);
   };
 
   const handleDeleteChapter = (id: string) => {
     const filtered = chapters
       .filter((c) => c.id !== id)
       .map((c, idx) => ({ ...c, order: idx + 1 }));
-    onUpdateOutline(filtered);
+    onUpdateOutline(filtered, false);
   };
 
   const handleDraftOutlineWithAi = async (overrideModel?: string, overrideProvider?: ActiveStudioProvider) => {
-    if (aiBusy) return;
+    if (aiBusy || !gateReady || chapters.length) return;
     setAiBusy(true);
     setAiError('');
     setFallbackNotice('');
@@ -112,9 +121,9 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
             : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
         );
       }
-      const availableRefs = project.referenceLibrary.cards.map((c) => c.id);
+      const availableRefs = sources.map(c => c.id);
       const built = parseOutlineSynthesisResponse(res?.content || '', availableRefs);
-      onUpdateOutline(built);
+      onUpdateOutline(built.map(ch => ({...ch, mappedReferenceIds:suggestedReferences(ch.title+' '+ch.objective,sources)})), false);
     } catch (err: any) {
       setAiError(generationError(err, lang));
     } finally {
@@ -177,42 +186,30 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={aiBusy || !prereq.canRun}
-            onClick={() => void handleDraftOutlineWithAi()}
-            className="px-4 py-2.5 text-sm font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            <Sparkles className={`w-4 h-4 ${aiBusy ? 'animate-spin' : ''}`} />
-            <span>
-              {aiBusy
-                ? lang === 'en' ? 'Drafting Outline...' : '正在規劃大綱...'
-                : lang === 'en' ? 'Draft Outline with AI' : 'AI 自動規劃章節大綱'}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            disabled={!prereq.canRun}
-            onClick={handleAddChapter}
-            className="px-4 py-2.5 text-sm font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{lang === 'en' ? 'Add Chapter' : '新增章節'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveView('content_studio')}
-            className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
-          >
-            <span>{t.generateAllChaptersCta}</span>
-          </button>
-        </div>
+        <button type="button" disabled={!canUsePlan || aiBusy} onClick={() => onUpdateOutline(proposal, true)} className="rounded-xl bg-teal-800 px-5 py-3 font-semibold text-white disabled:bg-slate-200 disabled:text-slate-600">
+          {en ? 'Use this outline & open Content Studio' : '採用大綱並開啟內容工作室'}
+        </button>
       </div>
+      {gateReady && <section className="lab-panel space-y-4 p-5">
+        <h2 className="text-lg font-bold">{chapters.length ? (en?'Your chapter plan':'您的章節計畫') : (en?'Recommended chapter plan':'建議章節計畫')}</h2>
+        <p className="text-sm text-slate-600">{en?'Each chapter pairs a reader objective with a practical deliverable. Suggested readings still need passage-level review during writing.':'每章連結讀者目標與可操作的交付物。撰寫時仍需逐段覆核建議閱讀資料。'}</p>
+        <ol className="divide-y divide-slate-200">{proposal.map((ch,i) => {
+          const mapped = sources.filter(card => ch.mappedReferenceIds.includes(card.id));
+          return <li key={ch.id} className="flex gap-3 py-4">
+            <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-50 font-semibold text-teal-800">{i+1}</span>
+            <div className="min-w-0 space-y-1"><h3 className="font-semibold">{ch.title}</h3><p className="text-sm">{ch.practicalDeliverable}</p>
+              {mapped.length>0 && <p className="text-xs text-slate-600">{en?'Suggested reading':'建議閱讀'} · {mapped.map(c => c.sourceTitle).join(' · ')}</p>}
+              <details open={mapped.length ? undefined : true}><summary className="cursor-pointer text-sm text-teal-800">{en ? (mapped.length?'Change reading':'Choose a relevant reading') : (mapped.length?'更換閱讀資料':'選擇相關閱讀資料')}</summary>
+                <select aria-label={(en?'Reading for ':'閱讀資料：')+ch.title} value={mapped[0]?.id || ''} onChange={e => onUpdateOutline(proposal.map(item=>item.id===ch.id ? {...item,mappedReferenceIds:e.target.value?[e.target.value]:[]} : item), false)} className="my-2 max-w-full rounded border bg-white p-2 text-sm">
+                  <option value="">{en?'Choose a reviewed source':'選擇已覆核來源'}</option>{sources.map(c=><option key={c.id} value={c.id}>{c.sourceTitle}</option>)}
+                </select>
+              </details>
+            </div>
+          </li>})}</ol>
+        {unresolved.length>0 && <p className="text-sm text-amber-900">{en?'Choose readings for the unmatched chapters above, or collect another source.':'請為未配對的章節選擇閱讀資料，或再蒐集其他來源。'} <button type="button" className="font-semibold underline" onClick={()=>setActiveView('reference_library')}>{en?'Open Reference Library':'前往參考資料庫'}</button></p>}
+      </section>}
 
-      {!prereq.canRun && (
+      {!gateReady && (
         <div role="status" className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-2.5 text-sm text-amber-950">
             <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
@@ -240,7 +237,12 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
         </div>
       )}
 
-      {/* Synthesise.ai Curriculum Guidance Bar */}
+      <details><summary className="cursor-pointer text-sm font-semibold text-teal-800">{en?'Customize chapters or draft an alternative with AI':'自訂章節或使用 AI 草擬大綱'}</summary>
+      <div className="mt-3 flex flex-wrap gap-3">
+        {!chapters.length && proposal.length>0 && <button type="button" disabled={!gateReady || aiBusy} onClick={()=>onUpdateOutline(proposal,false)} className="rounded-lg border px-4 py-2 text-sm">{en?'Edit the recommended chapters':'編輯建議章節'}</button>}
+        {!chapters.length && <button type="button" disabled={!gateReady || aiBusy} onClick={()=>void handleDraftOutlineWithAi()} className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{en?'Draft an outline with AI':'以 AI 草擬大綱'}</button>}
+        <button type="button" disabled={!gateReady || aiBusy} onClick={handleAddChapter} className="rounded-lg border px-4 py-2 text-sm">{en?'Add a chapter manually':'手動新增章節'}</button>
+      </div>
       <div className="lab-panel p-4 sm:p-5 bg-gradient-to-r from-teal-50/60 via-white to-sky-50/50 space-y-3">
         <AiEngineQuickControl
           project={project}
@@ -373,7 +375,7 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
                               practicalDeliverable: String(values.get('practicalDeliverable') || item.practicalDeliverable).trim(),
                             }
                           : item
-                      )
+                      ), false
                     );
                   }}
                 >
@@ -469,6 +471,8 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
           ))
         )}
       </div>
+      </details>
+      {aiBusy && <p role="status">{en?'Drafting your outline…':'正在草擬大綱…'}</p>}
     </div>
   );
 };

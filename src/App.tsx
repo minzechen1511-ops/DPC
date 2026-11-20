@@ -1,6 +1,6 @@
 import { addAiUsage } from './utils/aiSettings.ts';
 import { WorkflowJourney, WorkflowHandoff } from './components/WorkflowJourney.tsx';
-import {visitJourneyStage, updateChapterDraft, recommendedJourneyStage, handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, StageHandoffRunner, stageName, stageRequirements, workflowSaveError, markLaterStagesForReview, preserveChapterDraftsOnOutlineEdit} from './utils/stageJourney.ts';
+import {firstUnfinishedPrerequisite, visitJourneyStage, updateChapterDraft, recommendedJourneyStage, handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, StageHandoffRunner, stageName, stageRequirements, workflowSaveError, markLaterStagesForReview, preserveChapterDraftsOnOutlineEdit} from './utils/stageJourney.ts';
 import { GATE_A_STEPS, gateAJourney, selectJourneyTopic, setupStage, usableMap } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { isRetrievedSource } from './utils/sourceEvidence.ts';
@@ -666,27 +666,30 @@ export default function App() {
   const [checkingReferences, setCheckingReferences] = useState(false);
   const [workflowError, setWorkflowError] = useState('');
 
-  const approveWithSourceCheck = async (gate: 'gateB' | 'gateC'): Promise<boolean> => {
-    if (checkingReferences || gateIssues(project, gate).length) return false;
+  const approveWithSourceCheck = async (gate: 'gateB' | 'gateC', proposal?: ProductCharter): Promise<boolean> => {
+    const changed = proposal && gate === 'gateB' && JSON.stringify(proposal) !== JSON.stringify(project.charter);
+    const candidate = changed ? markLaterStagesForReview(revokeApprovals({...project, charter:proposal}, 'gateB'), 'product_charter') : project;
+    if (gate === 'gateB' && firstUnfinishedPrerequisite(project,'product_charter')) return false;
+    if (checkingReferences || gateIssues(candidate, gate).length) return false;
     setCheckingReferences(true);
     setWorkflowError('');
     try {
-      const result = await verifyProjectReferences(project);
+      const result = await verifyProjectReferences(candidate);
       if (!result.valid) {
         setWorkflowError(result.message);
         return false;
       }
-      if (currentProjectRef.current !== project) {
+      if (currentProjectRef.current !== project || visit !== navigationRevision.current) {
         setWorkflowError('The project changed during source checking. Review the current state and approve again.');
         return false;
       }
-      setProject((prev) => (prev === project ? approveGate(prev, gate) : prev));
+      setProject((prev) => (prev === project ? approveGate(candidate, gate) : prev));
       return true;
     } finally {
       setCheckingReferences(false);
     }
   };
-  const handleApproveGateB = () => approveWithSourceCheck('gateB');
+  const handleApproveGateB = (proposal:ProductCharter) => approveWithSourceCheck('gateB', proposal);
   const handleApproveGateC = () => approveWithSourceCheck('gateC');
 
   const handleUpdateIntake = (updatedIntake: any, accept=false) => {
@@ -839,6 +842,7 @@ export default function App() {
   };
 
   const handleUpdateCharter = (updatedCharter: ProductCharter) => {
+    if (visit !== navigationRevision.current || currentProjectRef.current.projectId !== project.projectId || currentProjectRef.current.charter !== project.charter) return;
     setProject((prev) => {
       const revoked = markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'product_charter');
       return {
@@ -1386,8 +1390,9 @@ export default function App() {
           <OutlineBuilderView
             project={project}
             setActiveView={navigateFromStage}
-            onUpdateOutline={(out) => {
-              if(JSON.stringify(out)===JSON.stringify(project.outline)) {requestHandoff('outline_builder');return;}
+            onUpdateOutline={(out, finish=true) => {
+              if (visit !== navigationRevision.current || currentProjectRef.current.projectId !== project.projectId || currentProjectRef.current.outline !== project.outline) return;
+              if(JSON.stringify(out)===JSON.stringify(project.outline)) {if (finish) requestHandoff('outline_builder');return;}
               setProject((prev) => {
                 const revoked = revokeApprovals(
                   { ...prev, isBlankProject: false, updatedAt: new Date().toISOString(), outline: preserveChapterDraftsOnOutlineEdit(prev.outline,out) },
@@ -1399,12 +1404,12 @@ export default function App() {
                     ...revoked.workflow,
                     stageStatuses: {
                       ...markLaterStagesForReview(revoked,'outline_builder').workflow.stageStatuses,
-                      outline_builder: computeOutlineStageStatus(out, prev.referenceLibrary.cards),
+                      outline_builder: finish ? computeOutlineStageStatus(out, prev.referenceLibrary.cards) : 'PARTIAL',
                     },
                   },
                 };
               });
-              if (computeOutlineStageStatus(out,project.referenceLibrary.cards) === 'COMPLETED') requestHandoff('outline_builder');
+              if (finish && computeOutlineStageStatus(out,project.referenceLibrary.cards) === 'COMPLETED') requestHandoff('outline_builder');
             }}
             onUpdateAiSettings={handleUpdateAiSettings}
             onRecordAiUsage={handleRecordAiUsage}

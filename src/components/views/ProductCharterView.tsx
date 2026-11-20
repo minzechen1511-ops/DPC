@@ -1,5 +1,7 @@
 import { gateIssues } from '../../utils/gatePolicy.ts';
-import React, { useState, useEffect } from 'react';
+import {firstUnfinishedPrerequisite} from '../../utils/stageJourney.ts';
+import {charterFromSetup} from '../../utils/researchPlanning.ts';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Compass, CheckCircle2, AlertTriangle, Edit3, Save, X, Sparkles } from 'lucide-react';
 import { DigitalProductProject, ProductCharter, ProductFormat } from '../../types/project.ts';
 import { Language, translations } from '../../utils/i18n.ts';
@@ -17,7 +19,7 @@ import { AiRateLimitNotice } from '../AiRateLimitNotice.tsx';
 interface ProductCharterViewProps {
   project: DigitalProductProject;
   setActiveView: (view: any) => void;
-  onApproveGateB: () => Promise<boolean>;
+  onApproveGateB: (proposal: ProductCharter) => Promise<boolean>;
   onUpdateCharter: (charter: ProductCharter) => void;
   onUpdateAiSettings?: (settings: any) => void;
   onRecordAiUsage?: (usage?: { total_tokens?: number; estimatedCostUsd?: number }, model?: string, provider?: ActiveStudioProvider) => void;
@@ -36,8 +38,10 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
   lang = 'en',
 }) => {
   const t = translations[lang];
-  const blockers = gateIssues(project, 'gateB');
-  const { charter, workflow } = project;
+  const charter = useMemo(() => charterFromSetup(project), [project]);
+  const blockers = gateIssues({...project, charter}, 'gateB');
+  const { workflow } = project;
+  const earlier = firstUnfinishedPrerequisite(project,'product_charter');
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ProductCharter>(charter);
   const [disclaimersText, setDisclaimersText] = useState((charter?.explicitDisclaimers || []).join('\n'));
@@ -52,11 +56,12 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
   const openrouterConnected = useOpenRouterConnected();
 
   useEffect(() => {
-    setDraft(project.charter);
-    setDisclaimersText((project.charter?.explicitDisclaimers || []).join('\n'));
-    setPillarsText((project.charter?.structuralPillars || []).join('\n'));
-    setObjectivesText((project.charter?.learningObjectives || []).join('\n'));
-  }, [project.projectId, project.charter]);
+    if (editing) return;
+    setDraft(charter);
+    setDisclaimersText((charter?.explicitDisclaimers || []).join('\n'));
+    setPillarsText((charter?.structuralPillars || []).join('\n'));
+    setObjectivesText((charter?.learningObjectives || []).join('\n'));
+  }, [charter, editing]);
 
   const handleSaveCharter = (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +111,8 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
           : `已自動從 ${res.primaryModel} 切換至 ${res.model} 以避開限流。`
         : '';
       if (fallbackTag) setFallbackNotice(fallbackTag);
-      const updated = parseCharterSynthesisResponse(res?.content || '', charter);
+      const refined = parseCharterSynthesisResponse(res?.content || '', charter);
+      const updated = {...refined, productTitle:charter.productTitle || refined.productTitle, subtitle:charter.subtitle || refined.subtitle};
       setDraft(updated);
       setDisclaimersText((updated.explicitDisclaimers || []).join('\n'));
       setPillarsText((updated.structuralPillars || []).join('\n'));
@@ -166,7 +172,7 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
   return (
     <div className="w-full space-y-5 pb-3">
       {blockers.length > 0 && (
-        <details open className="p-5 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-950">
+        <details className="p-5 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-950">
           <summary className="font-bold cursor-pointer">
             {lang === 'en' ? 'Review requirements before approval' : '核准前請完成審查要求'}
           </summary>
@@ -205,11 +211,11 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
 
           <button
             type="button"
-            disabled={blockers.length > 0 || checkingReferences}
+            disabled={Boolean(earlier) || blockers.length > 0 || checkingReferences || editing || aiBusy}
             title={blockers.join(' ')}
             onClick={async () => {
               if (blockers.length) return;
-              if (await onApproveGateB()) setActiveView('outline_builder');
+              if (await onApproveGateB(charter)) setActiveView('outline_builder');
             }}
             className={`px-5 py-2.5 text-sm font-semibold rounded-xl transition-all flex items-center gap-2 shadow-sm whitespace-nowrap ${
               workflow?.gates?.gateB?.isApproved
@@ -218,18 +224,27 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
             }`}
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>{workflow?.gates?.gateB?.isApproved ? t.gateBApprovedBadge : t.approveGateBCta}</span>
+            <span>{checkingReferences ? (lang==='en' ? 'Checking sources…' : '正在查核來源…') : workflow.gates.gateB.isApproved ? (lang==='en' ? 'Continue to Outline' : '繼續至大綱') : (lang==='en' ? 'Approve this charter at Gate B' : '在 Gate B 核准此憲章')}</span>
           </button>
         </div>
       </div>
 
+      <section className="lab-panel space-y-4 p-5">
+        <div><p className="text-sm font-semibold text-teal-800">{lang==='en' ? 'Recommended product plan' : '建議產品計畫'}</p><h2 className="text-xl font-bold text-slate-900">{charter.productTitle}</h2><p className="text-sm text-slate-600">{charter.subtitle}</p></div>
+        <div className="grid gap-4 md:grid-cols-2"><div><h3 className="font-semibold">{lang==='en' ? 'Who it helps' : '目標讀者'}</h3><p className="text-sm">{charter.targetAudience}</p></div><div><h3 className="font-semibold">{lang==='en' ? 'What they will make or learn' : '讀者將產出或學會什麼'}</h3><ul className="list-disc space-y-1 pl-5 text-sm">{charter.learningObjectives.map((goal,i)=><li key={i}>{goal}</li>)}</ul></div></div>
+        {charter.companionResourcePlan.length>0 && <p className="text-sm text-slate-700"><strong>{lang==='en'?'Included tools':'搭配工具'}</strong> · {charter.companionResourcePlan.join(' · ')}</p>}
+        {charter.companionResourcePlan[0] && <p className="border-t border-teal-100 pt-3 text-sm text-slate-700"><strong>{lang==='en'?'Buyer validation to try':'建議的買家驗證'}</strong> · {lang==='en'
+          ? `Show “${charter.companionResourcePlan[0]}” to a prospective reader. Watch them try it, then ask whether they would pay for the complete product and why.`
+          : `將「${charter.companionResourcePlan[0]}」展示給潛在讀者，觀察對方實作，再詢問是否願為完整產品付費及其原因。`}</p>}
+      </section>
+      <details><summary className="cursor-pointer text-sm font-semibold text-teal-800">{lang==='en'?'Optional AI refinement and model settings':'選填 AI 潤飾與模型設定'}</summary>
       {/* Synthesise.ai Charter Co-Pilot Bar */}
       <div className="lab-panel p-5 sm:p-6 bg-gradient-to-r from-teal-50/70 via-white to-sky-50/60 space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="text-xs font-mono uppercase tracking-wider font-bold text-teal-800 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{lang === 'en' ? 'Synthesise.ai Charter Architect' : 'Synthesise.ai 產品憲章統一對齊引擎'}</span>
+              <span>{lang === 'en' ? 'Charter refinement' : '產品憲章潤飾'}</span>
             </div>
             <p className="text-sm text-slate-700">
               {lang === 'en'
@@ -275,6 +290,7 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
         />
       </div>
 
+      </details>
       {aiError && (
         <AiRateLimitNotice
           errorMessage={aiError}
@@ -432,7 +448,7 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
           </div>
         </form>
       ) : (
-        <div className="lab-panel p-6 lg:p-7 space-y-6">
+        <details className="lab-panel p-6 lg:p-7 space-y-6"><summary className="cursor-pointer font-semibold">{lang==='en' ? 'Full charter and editorial details' : '完整憲章與編輯細節'}</summary>
           <div className="space-y-2.5 pb-5 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono font-bold text-teal-800 uppercase tracking-wider">
@@ -503,7 +519,7 @@ export const ProductCharterView: React.FC<ProductCharterViewProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </details>
       )}
     </div>
   );

@@ -3,18 +3,21 @@ import { Search, ExternalLink, BookOpen, Loader2 } from 'lucide-react';
 import type { DigitalProductProject } from '../types/project.ts';
 import type { ResearchResult, RetrievedResearchDocument, ResearchParagraph } from '../types/research.ts';
 import { normalizeEvidenceText } from '../utils/sourceEvidence.ts';
+import {accessibleResult, publicResearchLead, suggestedPassage, suggestedSearch} from '../utils/researchPlanning.ts';
+import type {Language} from '../utils/i18n.ts';
 import { apiFetch } from '../services/apiClient.ts';
 
 interface Props {
   project: DigitalProductProject;
+  lang?: Language;
   onSelect: (document: RetrievedResearchDocument, paragraph: ResearchParagraph) => void;
 }
 
-export const ReferenceSearchPanel: React.FC<Props> = ({ project, onSelect }) => {
-  const topic = (project.charter.productTitle || project.intake.productIdea || '')
-    .replace(/practical learning toolkit|foundations and learning goals/gi, '')
-    .replace(/[:—]/g, ' ')
-    .trim();
+export const ReferenceSearchPanel: React.FC<Props> = ({ project, onSelect, lang='en' }) => {
+  const topic = suggestedSearch(project);
+  const en = lang === 'en';
+  const [activity, setActivity] = useState('');
+  const [leadFailure, setLeadFailure] = useState('');
   const [query, setQuery] = useState(topic.slice(0, 250));
   const [results, setResults] = useState<ResearchResult[]>([]);
   const [reports, setReports] = useState<Array<{ provider: string; state: string; message: string }>>([]);
@@ -23,19 +26,39 @@ export const ReferenceSearchPanel: React.FC<Props> = ({ project, onSelect }) => 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const search = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const search = async (event?: React.FormEvent, guided=false) => {
+    event?.preventDefault();
+    if (busy || query.trim().length < 3) return;
     setBusy(true);
     setError('');
+    setLeadFailure('');
     setResults([]);
     setReports([]);
     setDocument(null);
     try {
+      const lead = guided && publicResearchLead(query);
+      if (lead) {
+        setActivity(en ? 'Retrieving the public spending guide…' : '正在取回公開支出指南…');
+        try {
+          await loadDocument({url:lead}, undefined, true);
+          return;
+        } catch (err) { setLeadFailure(err instanceof Error ? err.message : String(err)); }
+      }
+      setActivity(en ? 'Searching research providers…' : '正在搜尋研究來源…');
       const response = await apiFetch(`/api/references/search?q=${encodeURIComponent(query.trim())}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Search failed.');
       setResults(data.results || []);
       setReports(data.sources || []);
+      if (guided) {
+        const candidate = accessibleResult(data.results || []);
+        if (!candidate) {
+          setError(en ? 'No matching accessible text was found. Try different search terms or provide an original public page below.' : '尚未找到符合主題的可讀內文。請調整搜尋詞，或在下方提供公開來源網址。');
+          return;
+        }
+        setActivity(en ? 'Retrieving original text…' : '正在取回原始內文…');
+        await loadDocument(candidate.pmcid ? {pmcid:candidate.pmcid} : {url:candidate.fullTextURL}, candidate, true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Reference search failed.');
     } finally {
@@ -43,11 +66,7 @@ export const ReferenceSearchPanel: React.FC<Props> = ({ project, onSelect }) => 
     }
   };
 
-  const retrieve = async (input: { pmcid?: string; url?: string }, selected?: ResearchResult) => {
-    setBusy(true);
-    setError('');
-    setDocument(null);
-    try {
+  const loadDocument = async (input: { pmcid?: string; url?: string }, selected?: ResearchResult, suggest=false) => {
       const response = await apiFetch('/api/references/retrieve', {
         method: 'POST',
         body: JSON.stringify(input),
@@ -66,6 +85,19 @@ export const ReferenceSearchPanel: React.FC<Props> = ({ project, onSelect }) => 
         }
       }
       setDocument(data);
+      if (suggest) {
+        const passage = suggestedPassage(data.paragraphs, query);
+        if (passage) onSelect(data, passage);
+        else setError(en ? 'Text retrieved. Choose a relevant passage below to prepare your review.' : '已取得內文，請選取相關段落以開始覆核。');
+      }
+  };
+  const retrieve = async (input: {pmcid?: string; url?: string}, selected?: ResearchResult) => {
+    setBusy(true);
+    setError('');
+    setDocument(null);
+    setActivity(en ? 'Retrieving original text…' : '正在取回原始內文…');
+    try {
+      await loadDocument(input, selected);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Retrieval failed.');
     } finally {
@@ -78,13 +110,22 @@ export const ReferenceSearchPanel: React.FC<Props> = ({ project, onSelect }) => 
       <div>
         <h2 className="text-xl font-bold flex gap-2.5 items-center text-slate-900">
           <Search size={22} className="text-teal-700" />
-          Research sources for Gate B
+          {en ? 'Find a source for your product' : '為產品尋找參考來源'}
         </h2>
         <p className="text-sm text-slate-600 mt-1 max-w-4xl">
-          Search the actual literature, inspect the original text, and choose an exact supporting paragraph. Metadata, abstracts and keyword matches are discovery aids; they do not validate a chapter claim.
+          {en ? 'Start with your topic. The studio looks for accessible original text and suggests a passage for you to review.' : '從已選題材開始，工作室會尋找可讀原文，並建議一段內文供您覆核。'}
         </p>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" disabled={busy || query.trim().length < 3} onClick={() => void search(undefined, true)} className="rounded-xl bg-teal-800 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">
+          {en ? 'Find a passage to review' : '尋找可覆核的段落'}
+        </button>
+        <span className="text-sm text-slate-600">{query}</span>
+      </div>
+      {busy && <p role="status" className="text-sm text-teal-900">{activity}</p>}
+      {leadFailure && <p role="status" className="text-sm text-amber-900">{en ? 'Public page retrieval failed' : '公開頁面取回失敗'} · {leadFailure}</p>}
+      <details><summary className="cursor-pointer text-sm font-semibold text-teal-800">{en ? 'Change search terms or browse results manually' : '調整搜尋詞或手動瀏覽結果'}</summary>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
         <form onSubmit={search} className="lg:col-span-8 flex flex-col sm:flex-row gap-3">
           <label className="flex-1 min-w-0 text-sm font-semibold text-slate-800">
@@ -107,7 +148,7 @@ export const ReferenceSearchPanel: React.FC<Props> = ({ project, onSelect }) => 
           </button>
         </form>
 
-        <label className="lg:col-span-4 block text-sm font-semibold text-slate-800">
+        {project.outline.length > 0 && <label className="lg:col-span-4 block text-sm font-semibold text-slate-800">
           Focus on a chapter
           <select
             className="block mt-1.5 border border-slate-300 rounded-xl px-4 py-2.5 w-full bg-slate-50 font-normal"
@@ -124,9 +165,10 @@ export const ReferenceSearchPanel: React.FC<Props> = ({ project, onSelect }) => 
               </option>
             ))}
           </select>
-        </label>
+        </label>}
       </div>
 
+      </details>
       {reports.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {reports.map((report) => (

@@ -29,8 +29,8 @@ const hash = (body: string) => createHash('sha256').update(body).digest('hex');
 const plain = (text: string) => normalizeEvidenceText(load(text).text());
 const terms = (query: string) => [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || [])].slice(0,25);
 const relevance = (query: string, text: string) => ({ query, matchedTerms: terms(query).filter(term => text.toLowerCase().includes(term)) });
-async function readPublicSource(url: string): Promise<{body:string;contentType:string}> {
- const response = await proxyFetch(url,{dispatcher,redirect:'error',signal:AbortSignal.timeout(15000),headers:{Accept:'application/json,application/xml,text/xml,text/html','User-Agent':'DigitalProductStudio/1.0 (author-directed public reference research)'}});
+async function readPublicSource(url: string, timeoutMs=15000): Promise<{body:string;contentType:string}> {
+ const response = await proxyFetch(url,{dispatcher,redirect:'error',signal:AbortSignal.timeout(timeoutMs),headers:{Accept:'application/json,application/xml,text/xml,text/html','User-Agent':'DigitalProductStudio/1.0 (author-directed public reference research)'}});
  if(!response.ok)throw new Error(`Source returned HTTP ${response.status}; no retrieved evidence is available.`);
  const contentType=response.headers.get('content-type') || '';
  if(!/json|xml|html|text\/plain/i.test(contentType)){await response.body?.cancel();throw new Error('This source is not accessible HTML/XML/JSON. PDF or paywalled text has not been validated.');}
@@ -62,8 +62,9 @@ export function parsePmcFullText(body: string, pmcid: string, retrievedAt=new Da
  if(!/^PMC\d+$/.test(pmcid))throw new Error('Invalid PMC identifier.');
  const $=load(body,{xml:true});const article=$('article').first();
  if(!article.length||!article.find('body p').length)throw new Error('Full article body is unavailable; metadata and abstracts do not count as full text.');
- const actualPmc=article.find('article-id[pub-id-type="pmc"]').first().text().trim();
- if(!actualPmc||actualPmc.replace(/^PMC/,'')!==pmcid.slice(3))throw new Error('Retrieved article identifier does not match the selected record.');
+ const metadata=article.children('front').children('article-meta');
+ const ids=metadata.children('article-id[pub-id-type="pmc"], article-id[pub-id-type="pmcid"]').toArray();
+ if(!ids.length || ids.some(id => $(id).text().trim().replace(/^PMC/,'') !== pmcid.slice(3)))throw new Error('Retrieved article identifier does not match the selected record.');
  if(/retracted|retraction/i.test(article.attr('article-type') || '')||article.find('related-article[related-article-type="retracted-article"]').length)throw new Error('Retraction notice detected; this cannot serve as validated support.');
  const paragraphs=article.find('body p').toArray().map((element,index)=>{
   const paragraph=$(element),section=paragraph.parents('sec').first();
@@ -98,7 +99,7 @@ export async function retrieveReference(input: {pmcid?:string;url?:string}): Pro
  if(input.pmcid){if(!/^PMC\d+$/.test(input.pmcid))throw new Error('Invalid PMC identifier.');key=input.pmcid;url=`https://www.ebi.ac.uk/europepmc/webservices/rest/${input.pmcid}/fullTextXML`;}
  else {url=input.url||'';if(!isAllowedResearchUrl(url))throw new Error('Use a supported HTTPS government, university or public research page. Private, arbitrary and credential-bearing URLs are rejected.');key=url;}
  const cacheKey=`document:${key}`;if(cache.has(cacheKey)&&cache.get(cacheKey)!.until>Date.now())return cache.get(cacheKey)!.value;
- const {body}=await readPublicSource(url);
+ const {body}=await readPublicSource(url, input.pmcid ? 35000 : 15000);
  const document=input.pmcid?parsePmcFullText(body,input.pmcid):parseTrustedPage(body,url);
  if(cache.size>50)cache.clear();cache.set(cacheKey,{until:Date.now()+10*60_000,value:document});return document;
 }

@@ -1,7 +1,7 @@
 import { ReferenceSearchPanel } from '../ReferenceSearchPanel.tsx';
 import type { RetrievedSourceEvidence } from '../../types/research.ts';
 import { isRetrievedSource, chapterResearchFingerprint } from '../../utils/sourceEvidence.ts';
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { BookOpen, Search, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { DigitalProductProject, ReferenceCard } from '../../types/project.ts';
 import { compileReferenceLibraryMarkdown } from '../../utils/markdownCompiler.ts';
@@ -33,10 +33,16 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
   const [retrieval, setRetrieval] = useState<RetrievedSourceEvidence | undefined>();
   const [sourceFormOpen, setSourceFormOpen] = useState(false);
   const [sourceChapters, setSourceChapters] = useState<string[]>([]);
+  const reviewInput = useRef<HTMLAnchorElement>(null);
+  useEffect(() => { if (retrieval) reviewInput.current?.focus(); }, [retrieval]);
   const [sourceMessage, setSourceMessage] = useState('');
 
   const addSource = (event: React.FormEvent) => {
     event.preventDefault();
+    if (source.relevance.trim().length < 20) {
+      setSourceMessage(lang === 'en' ? 'Explain the relevance in at least 20 characters.' : '請用至少 20 個字元說明相關性。');
+      return;
+    }
     const id = `REF-${Date.now()}`;
     const card: ReferenceCard = {
       id,
@@ -65,7 +71,7 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
       verificationLocator: source.locator,
       verifiedAt: source.confirmed ? new Date().toISOString() : undefined,
       practicalFramework: { name: 'Editorial application', editorialOrigin: 'Author synthesis; review against the quoted source.', actionSteps: [] },
-      editorialNotes: { targetChapters: sourceChapters, exerciseSuggestions: [], worksheetIntegration: '', verificationNotes: `${source.locator}: ${source.quote}` },
+      editorialNotes: { targetChapters: sourceChapters, exerciseSuggestions: [], worksheetIntegration: '', verificationNotes: [source.relevance, source.locator, source.quote].join('\n') },
       brandGuidelines: { toneApplication: 'Accurate attribution and qualified claims', visualDirection: 'Cited tables and original diagrams', audienceFraming: project.charter.targetAudience },
       pillars: [],
       rightsNotes: 'Link and brief attributed quotation only; source copyright remains with its owner.',
@@ -120,12 +126,16 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
   return (
     <div className="w-full space-y-5 pb-3">
       <ReferenceSearchPanel
+        lang={lang}
         project={project}
         onSelect={(document, paragraph) => {
           const { paragraphs: _p, license: _l, ...metadata } = document;
           setRetrieval({ ...metadata, excerpt: paragraph.text, locator: paragraph.locator });
+          setSourceChapters([]);
           setSource({
             ...emptySource,
+            summary: paragraph.text.slice(0,1200),
+            claim: paragraph.text.slice(0,1200),
             title: document.title,
             author: document.authors.join(', '),
             publisher: document.publisher,
@@ -136,7 +146,7 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
             locator: paragraph.locator,
           });
           setSourceFormOpen(true);
-          setSourceMessage('Source text retrieved. Explain the supported claim and chapter relevance before saving.');
+          setSourceMessage('');
         }}
       />
 
@@ -146,10 +156,18 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
         </summary>
         <p className="text-sm text-slate-600 mt-3">
           {retrieval
-            ? 'Bibliography is supplied by the retrieved document. Keep the quote verbatim and explain what it supports.'
+            ? (lang==='en'?'Read the original passage, explain how it applies to your product, and confirm your review.':'請閱讀原始段落，說明它如何適用於本產品，再確認覆核。')
             : 'No source text retrieved. You may save research notes, but a checkbox cannot validate them or unlock Gate B.'}
         </p>
         <form onSubmit={addSource} className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
+          {retrieval && <div className="md:col-span-2 space-y-2 rounded-xl border border-teal-200 bg-teal-50 p-4">
+            <a ref={reviewInput} href={retrieval.canonicalUrl} target="_blank" rel="noreferrer" className="font-semibold underline">{retrieval.title}</a>
+            <p className="text-xs text-slate-600">{retrieval.publisher} · {retrieval.locator} · {lang==='en'?'Retrieved':'取回日期'} {retrieval.retrievedAt.slice(0,10)}</p>
+            <blockquote className="border-l-2 border-teal-600 pl-3 leading-relaxed">{retrieval.excerpt}</blockquote>
+          </div>}
+          <details className="md:col-span-2" open={retrieval ? undefined : true} key={retrieval ? 'retrieved' : 'manual'}>
+            <summary className="cursor-pointer font-semibold text-slate-700">{lang==='en' ? 'Source details and excerpt' : '來源細節與摘錄'}</summary>
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
           {(
             [
               ['title', 'Source title'],
@@ -179,14 +197,14 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
               ['summary', 'Substantive research summary'],
               ['claim', 'Specific supported claim'],
               ['quote', 'Exact supporting excerpt'],
-              ['relevance', 'Why this source is relevant to the selected chapter objectives'],
+
             ] as const
           ).map(([key, label]) => (
             <label key={key} className="space-y-1.5 md:col-span-2 font-semibold text-slate-800">
               {label}
               <textarea
                 required
-                minLength={key === 'summary' ? 50 : 20}
+                minLength={key === 'summary' && !retrieval ? 50 : 20}
                 rows={4}
                 value={source[key]}
                 onChange={(e) => setSource({ ...source, [key]: e.target.value })}
@@ -194,7 +212,12 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
               />
             </label>
           ))}
-          <fieldset className="md:col-span-2 flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+          </div></details>
+          <label className="md:col-span-2 font-semibold text-slate-800">
+            {lang==='en' ? 'What will this passage help your reader do?' : '這段原文能協助讀者完成什麼？'}
+            <textarea required minLength={20} value={source.relevance} onChange={e=>setSource({...source,relevance:e.target.value})} rows={2} placeholder={lang==='en' ? 'Give your reason in one sentence (20 characters or more).' : '請用一句話說明理由（至少 20 個字元）。'} className="mt-2 block w-full rounded-xl border border-slate-300 p-3 font-normal"/>
+          </label>
+          {project.outline.length > 0 && <fieldset className="md:col-span-2 flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
             <legend className="px-2 font-bold text-slate-800">Map to relevant chapters</legend>
             {project.outline.map((ch) => (
               <label key={ch.id} className="flex gap-2.5 items-center text-sm">
@@ -210,16 +233,17 @@ export const ReferenceLibraryView: React.FC<ReferenceLibraryViewProps> = ({
                 {ch.title}
               </label>
             ))}
-          </fieldset>
+          </fieldset>}
           <label className="md:col-span-2 flex gap-3 items-start p-3 rounded-xl bg-teal-50/50 border border-teal-200 text-sm">
             <input
               type="checkbox"
               className="mt-1"
+              disabled={!retrieval}
               checked={source.confirmed}
               onChange={(e) => setSource({ ...source, confirmed: e.target.checked })}
             />
             <span>
-              I inspected the retrieved source and checked this exact excerpt and its relevance. Per-passage support decisions are reviewed later in Content Studio. Without retrieved text this remains an unverified note.
+              {lang==='en'?'I inspected the original passage and checked its relevance to this product.':'我已檢查原始段落，並確認其與本產品的關聯。'}
             </span>
           </label>
           <div className="md:col-span-2 flex flex-wrap items-center gap-4">

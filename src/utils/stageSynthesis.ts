@@ -209,7 +209,7 @@ export function buildCharterSynthesisPrompt(
   const outputLang = lang === 'en' ? 'English' : 'Traditional Chinese (繁體中文)';
 
   const systemPrompt =
-    'You are a senior digital publishing director (Synthesise.ai methodology). Output strictly valid JSON only with no markdown fences, unifying upstream positioning and transformation strategy into an actionable, bestseller-caliber Product Charter.';
+    'Prepare a reader-focused product charter using the supplied decisions. Preserve the selected title and positioning. Treat commercial outcomes as unvalidated. Return only JSON.';
 
   const userPrompt = `Synthesize and harmonize the Product Charter in ${outputLang} using all upstream decisions from Stages 1-5:
 
@@ -229,7 +229,7 @@ ${focusNote?.trim() ? `- Creator Alignment Note: ${focusNote.trim()}` : ''}
 
 Return valid JSON matching this exact schema:
 {
-  "productTitle": "Polished bestseller title",
+  "productTitle": "Selected product title",
   "subtitle": "Outcome-focused commercial subtitle",
   "targetAudience": "Sharp 2-sentence buyer definition",
   "primaryProblemSolved": "Sharp 2-sentence core problem statement",
@@ -303,9 +303,9 @@ export function buildOutlineSynthesisPrompt(
     (project.transformationMap?.bridgeProcess?.keyMilestones || []).join(' -> ') || 'Not specified';
 
   const systemPrompt =
-    'You are an editorial curriculum architect (Synthesise.ai methodology). Output strictly valid JSON only containing an array of 5 to 7 structured chapters engineered to turn readers into successful practitioners.';
+    'Design an editorial learning sequence with worked examples, original practice and tangible reader deliverables. Return only a JSON array of chapters.';
 
-  const userPrompt = `Design a commercial bestseller chapter outline in ${outputLang}. Return JSON array ONLY:
+  const userPrompt = `Design a practical chapter outline tailored to this audience in ${outputLang}. Return JSON array ONLY:
 - Product Title: ${project.charter?.productTitle || project.name}
 - Subtitle: ${project.charter?.subtitle || ''}
 - Target Audience: ${project.charter?.targetAudience || project.intake?.targetAudience || ''}
@@ -347,9 +347,7 @@ export function parseOutlineSynthesisResponse(
       subtopics: cleanStringArray(item.subtopics, ['Core concept', 'Step-by-step practice', 'Action review']),
       targetWordCount: Number(item.targetWordCount) || 1800,
       practicalDeliverable: String(item.practicalDeliverable || 'Actionable chapter worksheet').trim(),
-      mappedReferenceIds: availableReferenceIds.length
-        ? [availableReferenceIds[idx % availableReferenceIds.length]]
-        : [],
+      mappedReferenceIds: Array.isArray(item.mappedReferenceIds) ? availableReferenceIds.filter(id => item.mappedReferenceIds.includes(id)) : [],
       exampleScenarios: [],
       completionMilestone: String(item.completionMilestone || 'Chapter deliverable verified').trim(),
       isCompleted: false,

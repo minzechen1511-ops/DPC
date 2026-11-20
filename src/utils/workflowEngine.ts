@@ -1,3 +1,4 @@
+import {isRetrievedSource} from './sourceEvidence.ts';
 import { gateAApproved } from './gateAJourney.ts';
 import { ChapterOutlineItem, DigitalProductProject, ReferenceCard, StageId, StageStatus } from '../types/project.ts';
 
@@ -203,7 +204,7 @@ export function checkStagePrerequisites(
       if (!workflow.gates.gateA.isApproved) {
         return { canRun: false, reason: '需先在 Gate A 核准選題。' };
       }
-      if (project.referenceLibrary.verifiedCount < 3) {
+      if (!project.referenceLibrary.cards.some(isRetrievedSource)) {
         return { canRun: false, reason: '需要至少具備初步驗證的研究文獻作為憲章基礎。' };
       }
       return { canRun: true };

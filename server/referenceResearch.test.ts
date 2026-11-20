@@ -51,3 +51,11 @@ test('research snapshot hashes ignore transport scripts but detect changed sourc
  const changed=parseTrustedPage(body.replace('stable substantive','changed substantive'),'https://www.example.gov/guide');
  assert.equal(first.contentHash,same.contentHash);assert.notEqual(first.contentHash,changed.contentHash);
 });
+
+test('Europe PMC accepts matching front-matter pmcid and legacy pmc forms and rejects conflicting identities',()=> {
+ const modern=xml.replace('pub-id-type="pmc">123','pub-id-type="pmcid">PMC123');
+ assert.equal(parsePmcFullText(modern,'PMC123').documentId,'PMC123');
+ assert.throws(()=>parsePmcFullText(modern,'PMC999'),/identifier/);
+ const conflict=modern.replace('<article-meta>','<article-meta><article-id pub-id-type="pmc">999</article-id>');
+ assert.throws(()=>parsePmcFullText(conflict,'PMC123'),/identifier/);
+});

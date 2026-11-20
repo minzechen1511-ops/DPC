@@ -99,6 +99,7 @@ test('parseOutlineSynthesisResponse normalizes chapters and maps available refer
         targetWordCount: 2000,
         practicalDeliverable: 'Weekly Menu Matrix',
         completionMilestone: '5 dinners planned with <18 items',
+        mappedReferenceIds: ['REF-02','UNKNOWN'],
       },
     ]),
     ['REF-01', 'REF-02']
@@ -106,6 +107,7 @@ test('parseOutlineSynthesisResponse normalizes chapters and maps available refer
 
   assert.equal(chapters.length, 2);
   assert.equal(chapters[0].id, 'CH-01');
+  assert.deepEqual(chapters[0].mappedReferenceIds, []);
   assert.deepEqual(chapters[1].mappedReferenceIds, ['REF-02']);
   assert.equal(chapters[1].completionMilestone, '5 dinners planned with <18 items');
 });
