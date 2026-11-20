@@ -22,6 +22,7 @@ import { migrateProjectSchema } from '../utils/projectMigration.ts';
 import type { Language } from '../utils/i18n.ts';
 import {
   assertExpectedRevision,
+  sameSavedProject,
   ProjectRevisionConflictError,
   isProjectRevisionConflictError,
 } from '../utils/projectSaveQueue.ts';
@@ -35,6 +36,7 @@ export interface FirestoreProjectRecord {
 
 export interface SaveProjectOptions {
   expectedRevision?: number;
+  confirmExisting?: boolean;
 }
 
 const VALID_ID_REGEX = /^[a-zA-Z0-9_\-]+$/;
@@ -193,6 +195,12 @@ export async function saveProjectToFirestore(
     ...project,
     projectId: safeProjectId,
   });
+
+  if (options.confirmExisting && options.expectedRevision !== undefined && options.expectedRevision > 0) {
+    const record = await fetchProjectFromFirestore(uid, safeProjectId);
+    assertExpectedRevision(safeProjectId, record?.revision ?? null, options.expectedRevision);
+    if (record && sameSavedProject(record.project, sanitized)) return record;
+  }
 
   const payloadFields = stripUndefinedDeep({
     projectId: safeProjectId,

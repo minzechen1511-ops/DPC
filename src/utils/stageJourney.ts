@@ -66,6 +66,11 @@ export function firstUnfinishedPrerequisite(project: DigitalProductProject, stag
 export function stageFinished(p: DigitalProductProject, stage: StageId) {
   return p.workflow.stageStatuses[stage] === 'COMPLETED' && !stageRequirements(p,stage).length;
 }
+/** Browsing a completed step keeps the saved resume point. Actual edits still enter the save queue. */
+export function visitJourneyStage(project: DigitalProductProject, view: StageId) {
+  if (project.workflow.activeStage === view || stageFinished(project, view)) return project;
+  return {...project, workflow:{...project.workflow, activeStage:view}};
+}
 export function markLaterStagesForReview(p:DigitalProductProject, from:StageId) {
   const statuses={...p.workflow.stageStatuses};
   for(const stage of JOURNEY_STAGES.slice(JOURNEY_STAGES.indexOf(from)+1)) {

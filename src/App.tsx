@@ -1,6 +1,6 @@
 import { addAiUsage } from './utils/aiSettings.ts';
 import { WorkflowJourney, WorkflowHandoff } from './components/WorkflowJourney.tsx';
-import {updateChapterDraft, recommendedJourneyStage, handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, StageHandoffRunner, stageName, stageRequirements, workflowSaveError, markLaterStagesForReview, preserveChapterDraftsOnOutlineEdit} from './utils/stageJourney.ts';
+import {visitJourneyStage, updateChapterDraft, recommendedJourneyStage, handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, StageHandoffRunner, stageName, stageRequirements, workflowSaveError, markLaterStagesForReview, preserveChapterDraftsOnOutlineEdit} from './utils/stageJourney.ts';
 import { GATE_A_STEPS, gateAJourney, selectJourneyTopic, setupStage, usableMap } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { isRetrievedSource } from './utils/sourceEvidence.ts';
@@ -295,7 +295,7 @@ export default function App() {
   }, [authUser,workspaceLoadAttempt]);
 
   const persistProjectNow = useCallback(
-    async (targetProject: DigitalProductProject) => {
+    async (targetProject: DigitalProductProject, confirmExisting=false) => {
       if (!authUser) return false;
       if (targetProject.isBlankProject && !revisionsRef.current[targetProject.projectId]) {
         return true;
@@ -316,7 +316,7 @@ export default function App() {
         const result = await saveQueueRef.current.enqueue(
           targetProject,
           (snapshot, expectedRevision) =>
-            saveProjectToFirestore(authUser.uid, snapshot, { expectedRevision }),
+            saveProjectToFirestore(authUser.uid, snapshot, { expectedRevision, confirmExisting: confirmExisting && snapshot === targetProject }),
           initialExpected
         );
         updateRevision(result.project.projectId, result.revision);
@@ -459,9 +459,8 @@ export default function App() {
     setHandoffNotice(null);
     setHandoffError('');
     setActiveView(destination);
-    if (journeyStage(destination)) {
-      setProject(current => ({...current, workflow: {...current.workflow, activeStage: destination as any}}));
-    }
+    const stage = journeyStage(destination);
+    if (stage) setProject(current => visitJourneyStage(current, stage));
   };
   const requestHandoff = (stage:StageId, whenReady=false) => {
     if (handoffRunner.current.busy || navigationRevision.current !== visit) return;
@@ -497,14 +496,16 @@ export default function App() {
     currentProjectRef.current=snapshot;
     setProject(snapshot);
     const isCurrent=()=>contextCurrent() && JSON.stringify(currentProjectRef.current)===JSON.stringify(snapshot);
-    void handoffRunner.current.run(snapshot,persistProjectNow,isCurrent).then(moved=>{
+    // Reconfirm an already saved destination directly with Firestore. Any different content still requires a write.
+    const confirmExisting = current.workflow.activeStage === snapshot.workflow.activeStage;
+    void handoffRunner.current.run(snapshot, value => persistProjectNow(value, confirmExisting), isCurrent).then(moved=>{
       if (moved) {
         navigationRevision.current += 1;
         setActiveView(snapshot.workflow.activeStage);
         setHandoffNotice({from:pendingHandoff.stage,to:snapshot.workflow.activeStage});
       } else if (isCurrent()) {
         skipAutosaveProjectIdRef.current=snapshot.projectId;
-        setProject(prev=>({...prev,workflow:{...prev.workflow,activeStage:pendingHandoff.stage}}));
+        setProject(prev=>({...prev,workflow:{...prev.workflow,activeStage:current.workflow.activeStage}}));
         setHandoffError(langRef.current==='en'?'Your work remains open. Cloud save did not complete; retry save & continue.':'已保留目前工作。雲端儲存未完成，請重試儲存並繼續。');
       }
     }).catch(()=>setHandoffError(langRef.current==='en'?'The handoff failed. Your current work remains open; retry.':'階段交接失敗，已保留目前工作，請重試。')).finally(()=>{

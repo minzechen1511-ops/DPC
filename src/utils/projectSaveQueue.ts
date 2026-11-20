@@ -1,3 +1,5 @@
+import type {DigitalProductProject} from '../types/project.ts';
+
 export class ProjectRevisionConflictError extends Error {
   readonly projectId: string;
   readonly expectedRevision: number;
@@ -41,6 +43,20 @@ export function assertExpectedRevision(
     throw new ProjectRevisionConflictError(projectId, expectedRevision, existingRevision);
   }
   return existingRevision + 1;
+}
+
+/** Compare normalized workspace data, including decisions, evidence, and the resume point.
+ * Firestore owns the modification timestamp. Object field order has no persistence semantics.
+ */
+export function sameSavedProject(left: DigitalProductProject, right: DigitalProductProject): boolean {
+  function serialized(project: DigitalProductProject) {
+    const {updatedAt, ...fields} = project;
+    return JSON.stringify(fields, (_key, value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+      return Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]]));
+    });
+  }
+  return serialized(left) === serialized(right);
 }
 
 interface PendingEntry<TProject, TResult> {

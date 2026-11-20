@@ -6,7 +6,8 @@ import {journeyFixture} from '../../tests/gateAJourneyFixture.ts';
 import {approveGate,revokeApprovals} from './gatePolicy.ts';
 import {selectJourneyTopic} from './gateAJourney.ts';
 import {sanitizeProjectForStorage} from './projectStorage.ts';
-import {chapterDraftReady, updateChapterDraft, firstUnfinishedPrerequisite, JOURNEY_STAGES, handoffContextCurrent, journeyStage,nextJourneyStage,prepareStageHandoff,recommendedJourneyStage,saveStageHandoff,stageRequirements,workflowSaveError,StageHandoffRunner,markLaterStagesForReview,journeyStepState,nextActionableStage,preserveChapterDraftsOnOutlineEdit} from './stageJourney.ts';
+import {sameSavedProject} from './projectSaveQueue.ts';
+import {visitJourneyStage, chapterDraftReady, updateChapterDraft, firstUnfinishedPrerequisite, JOURNEY_STAGES, handoffContextCurrent, journeyStage,nextJourneyStage,prepareStageHandoff,recommendedJourneyStage,saveStageHandoff,stageRequirements,workflowSaveError,StageHandoffRunner,markLaterStagesForReview,journeyStepState,nextActionableStage,preserveChapterDraftsOnOutlineEdit} from './stageJourney.ts';
 import {WorkflowJourney,WorkflowHandoff} from '../components/WorkflowJourney.tsx';
 import {getStageMetadata} from './workflowEngine.ts';
 import {translations} from './i18n.ts';
@@ -195,4 +196,19 @@ test('the journey shows the saved handoff destination or a direct return to its 
   const blocked = render('reference_library');
   assert.match(blocked, /Finish first.*Recommended Project Brief/);
   assert.doesNotMatch(blocked, /Opens after saving/);
+});
+
+test('revisiting a completed stage keeps the resume point and an identical server-confirmed handoff needs no new project revision', () => {
+  const p = prepareStageHandoff(approvedTopic(), 'topic_selection')!;
+  assert.equal(visitJourneyStage(p, 'topic_selection'), p);
+  assert.equal(visitJourneyStage(p, 'project_brief'), p);
+  const handoff = prepareStageHandoff(p, 'topic_selection')!;
+  assert.equal(sameSavedProject({...p, updatedAt:'server timestamp'}, handoff), true);
+  assert.equal(sameSavedProject(p, {...handoff, intake:{...handoff.intake, targetAudience:'Different audience'}}), false);
+  assert.equal(sameSavedProject(p, {...handoff, workflow:{...handoff.workflow, activeStage:'uvz'}}), false);
+  assert.equal(sameSavedProject(p, revokeApprovals(handoff, 'gateA')), false);
+  const changed = structuredClone(handoff);
+  changed.marketResearch.platformEvidence[0].evidenceExcerpt += 'different excerpt';
+  assert.equal(sameSavedProject(p, changed), false);
+  assert.equal(visitJourneyStage(p, 'uvz').workflow.activeStage, 'uvz');
 });
