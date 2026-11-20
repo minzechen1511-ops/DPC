@@ -1,6 +1,6 @@
 import { addAiUsage } from './utils/aiSettings.ts';
 import { WorkflowJourney, WorkflowHandoff } from './components/WorkflowJourney.tsx';
-import {handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, saveStageHandoff, stageName, stageRequirements, workflowSaveError} from './utils/stageJourney.ts';
+import {handoffContextCurrent, journeyStage, nextJourneyStage, prepareStageHandoff, StageHandoffRunner, stageName, stageRequirements, workflowSaveError, markLaterStagesForReview, preserveChapterDraftsOnOutlineEdit} from './utils/stageJourney.ts';
 import { GATE_A_STEPS, gateAJourney, selectJourneyTopic, setupStage, usableMap } from './utils/gateAJourney.ts';
 import { verifyProjectReferences } from './services/referenceVerification.ts';
 import { isRetrievedSource } from './utils/sourceEvidence.ts';
@@ -98,13 +98,14 @@ export default function App() {
   const [handoffBusy,setHandoffBusy] = useState(false);
   const [handoffError,setHandoffError] = useState('');
   const [handoffNotice,setHandoffNotice] = useState<{from:StageId;to:StageId}|null>(null);
-  const handoffRunning = useRef(false);
+  const handoffRunner = useRef(new StageHandoffRunner());
   const navigationRevision = useRef(0);
 
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const revisionsRef = useRef<Record<string, number>>({});
   const [saveStatus, setSaveStatus] = useState<LocalSaveStatus>('saved');
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [workspaceLoadAttempt,setWorkspaceLoadAttempt] = useState(0);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [pendingLegacyProjects, setPendingLegacyProjects] = useState<DigitalProductProject[]>([]);
@@ -188,7 +189,7 @@ export default function App() {
       setCloudBusy(true);
       setWorkspaceError(null);
       try {
-        await ensureUserProfile(authUser, langRef.current);
+        await ensureUserProfile(authUser, langRef.current,'',{readOnlyIfExists:true});
         if (cancelled) return;
 
         const legacy = inspectLegacyLocalProjects();
@@ -266,7 +267,7 @@ export default function App() {
           (err: any) => {
             if (cancelled) return;
             setWorkspaceError(
-              err?.message ||
+              workflowSaveError(err,langRef.current) ||
                 (langRef.current === 'en'
                   ? 'Could not sync projects from Cloud Firestore.'
                   : '無法從 Cloud Firestore 同步專案資料。')
@@ -276,7 +277,7 @@ export default function App() {
         );
       } catch (err: any) {
         if (!cancelled) {
-          setWorkspaceError(err?.message || 'Failed to initialize cloud user profile.');
+          setWorkspaceError(workflowSaveError(err,langRef.current));
           setCloudBusy(false);
         }
       }
@@ -290,7 +291,7 @@ export default function App() {
         unsubscribeSnapshot();
       }
     };
-  }, [authUser]);
+  }, [authUser,workspaceLoadAttempt]);
 
   const persistProjectNow = useCallback(
     async (targetProject: DigitalProductProject) => {
@@ -462,7 +463,7 @@ export default function App() {
     }
   };
   const requestHandoff = (stage:StageId) => {
-    if (handoffRunning.current) return;
+    if (handoffRunner.current.busy) return;
     if (journeyStage(activeViewRef.current)!==stage || currentProjectRef.current.projectId!==project.projectId) return;
     setHandoffError('');
     setPendingHandoff({projectId:project.projectId,stage,navigation:navigationRevision.current});
@@ -480,7 +481,7 @@ export default function App() {
     else navigateJourney(view);
   };
   useEffect(() => {
-    if (!pendingHandoff || handoffRunning.current) return;
+    if (!pendingHandoff || handoffRunner.current.busy) return;
     const current=currentProjectRef.current;
     const contextCurrent=()=>handoffContextCurrent(pendingHandoff,{projectId:currentProjectRef.current.projectId,view:activeViewRef.current,navigation:navigationRevision.current});
     if (!contextCurrent()) {setPendingHandoff(null);return;}
@@ -489,13 +490,13 @@ export default function App() {
       setHandoffError(stageRequirements(current,pendingHandoff.stage,langRef.current)[0] || (langRef.current==='en'?'Complete the earlier stages on the recommended path first.':'請先依推薦流程完成前置階段。'));
       setPendingHandoff(null); return;
     }
-    handoffRunning.current=true; setHandoffBusy(true);
+    setHandoffBusy(true);
     skipAutosaveProjectIdRef.current=snapshot.projectId;
     dirtyProjectIdRef.current=snapshot.projectId;
     currentProjectRef.current=snapshot;
     setProject(snapshot);
     const isCurrent=()=>contextCurrent() && JSON.stringify(currentProjectRef.current)===JSON.stringify(snapshot);
-    void saveStageHandoff(snapshot,persistProjectNow,isCurrent).then(moved=>{
+    void handoffRunner.current.run(snapshot,persistProjectNow,isCurrent).then(moved=>{
       if (moved) {
         setActiveView(snapshot.workflow.activeStage);
         setHandoffNotice({from:pendingHandoff.stage,to:snapshot.workflow.activeStage});
@@ -505,7 +506,7 @@ export default function App() {
         setHandoffError(langRef.current==='en'?'Your work remains open. Cloud save did not complete; retry save & continue.':'已保留目前工作。雲端儲存未完成，請重試儲存並繼續。');
       }
     }).catch(()=>setHandoffError(langRef.current==='en'?'The handoff failed. Your current work remains open; retry.':'階段交接失敗，已保留目前工作，請重試。')).finally(()=>{
-      handoffRunning.current=false;setHandoffBusy(false);setPendingHandoff(null);
+      setHandoffBusy(false);setPendingHandoff(null);
     });
   },[pendingHandoff,persistProjectNow]);
 
@@ -642,7 +643,7 @@ export default function App() {
     setProject((prev) => {
       const next = selectJourneyTopic(prev, topicId, lang, selectedAudienceHypothesisId);
       if (next === prev) return prev;
-      const revoked = revokeApprovals({ ...next, isBlankProject: false }, 'gateA');
+      const revoked = markLaterStagesForReview(revokeApprovals({ ...next, isBlankProject: false }, 'gateA'),'topic_selection');
       return {
         ...revoked,
         workflow: {
@@ -693,9 +694,9 @@ export default function App() {
       intake: updatedIntake,
       charter: { ...prev.charter, isApproved: false, approvedAt: undefined },
       workflow: {
-        ...revokeApprovals(prev, 'gateB').workflow,
+        ...markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'project_brief').workflow,
         stageStatuses: {
-          ...revokeApprovals(prev, 'gateB').workflow.stageStatuses,
+          ...markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'project_brief').workflow.stageStatuses,
           project_brief: accept ? 'COMPLETED' : 'NEEDS_REVIEW',
           uvz: JSON.stringify(prev.intake) === JSON.stringify(updatedIntake) ? prev.workflow.stageStatuses.uvz : 'NEEDS_REVIEW',
           transformation_map: JSON.stringify(prev.intake) === JSON.stringify(updatedIntake) ? prev.workflow.stageStatuses.transformation_map : 'NEEDS_REVIEW',
@@ -707,7 +708,7 @@ export default function App() {
 
   const handleSelectUVZOption = (optionId: string) => {
     setGateAProject((prev) => {
-      const revoked = revokeApprovals(prev, 'gateB');
+      const revoked = markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'uvz');
       const selected = prev.uvz.positioningOptions.find((o) => o.id === optionId);
       if (!selected || (prev.uvz.selectedOptionId === optionId && prev.workflow.stageStatuses.uvz === 'COMPLETED')) return prev;
       return {
@@ -740,7 +741,7 @@ export default function App() {
   const handleUpdateUvz = (updatedUvz: UVZAnalysis) => {
     setGateAProject((prev) => {
       if (prev.marketResearch.selectedTopicId !== project.marketResearch.selectedTopicId || JSON.stringify(prev.intake) !== JSON.stringify(project.intake)) return prev;
-      const revoked = revokeApprovals(prev, 'gateB');
+      const revoked = markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'uvz');
       const selected = updatedUvz.positioningOptions.find((o) => o.id === updatedUvz.selectedOptionId);
       const hasContent = updatedUvz.positioningOptions.length > 0 && Boolean(updatedUvz.selectedOptionId);
       return {
@@ -769,7 +770,7 @@ export default function App() {
 
   const handleSelectTitleOption = (titleId: string) => {
     setGateAProject((prev) => {
-      const revoked = revokeApprovals(prev, 'gateB');
+      const revoked = markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'transformation_map');
       const selected = prev.transformationMap.titleOptions.find((t) => t.id === titleId);
       if (!selected || (prev.transformationMap.selectedTitleId === titleId && prev.workflow.stageStatuses.transformation_map === 'COMPLETED')) return prev;
       return {
@@ -804,7 +805,7 @@ export default function App() {
   const handleUpdateTransformationMap = (updatedMap: TransformationMap) => {
     setGateAProject((prev) => {
       if (JSON.stringify(prev.uvz) !== JSON.stringify(project.uvz) || JSON.stringify(prev.intake) !== JSON.stringify(project.intake)) return prev;
-      const revoked = revokeApprovals(prev, 'gateB');
+      const revoked = markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'transformation_map');
       const selected = updatedMap.titleOptions.find((t) => t.id === updatedMap.selectedTitleId);
       const isComplete = usableMap({...prev, transformationMap: updatedMap});
       return {
@@ -834,7 +835,7 @@ export default function App() {
 
   const handleUpdateCharter = (updatedCharter: ProductCharter) => {
     setProject((prev) => {
-      const revoked = revokeApprovals(prev, 'gateB');
+      const revoked = markLaterStagesForReview(revokeApprovals(prev, 'gateB'),'product_charter');
       return {
         ...prev,
         isBlankProject: false,
@@ -1213,6 +1214,11 @@ export default function App() {
   }
 
   const renderActiveView = () => {
+    if (!cloudHydratedRef.current) return <section role="status" className="lab-panel p-6 space-y-3">
+      <h1 className="text-xl font-semibold">{cloudBusy?(lang==='en'?'Loading your saved workspace…':'正在載入已儲存工作區…'):(lang==='en'?'Workspace has not loaded':'工作區尚未載入')}</h1>
+      <p className="text-sm text-slate-700">{lang==='en'?'Your existing projects have not been replaced. Wait for cloud loading or retry if it failed.':'既有專案未被取代；請等待雲端載入，若失敗可重試。'}</p>
+      {!cloudBusy&&<button type="button" onClick={()=>setWorkspaceLoadAttempt(attempt=>attempt+1)} className="px-4 py-2 rounded-lg bg-teal-800 text-white">{lang==='en'?'Retry workspace loading':'重試載入工作區'}</button>}
+    </section>;
     const flow = gateAJourney(project);
     const index = GATE_A_STEPS.indexOf(setupStage(activeView) as any);
     if (index >= 1 && !flow.available[index]) return <section className="lab-panel p-6 space-y-3" role="status">
@@ -1351,7 +1357,7 @@ export default function App() {
                   workflow: {
                     ...revoked.workflow,
                     stageStatuses: {
-                      ...revoked.workflow.stageStatuses,
+                      ...markLaterStagesForReview(revoked,'reference_library').workflow.stageStatuses,
                       outline_builder:
                         nextOutline.length > 0
                           ? computeOutlineStageStatus(nextOutline, nextCards)
@@ -1385,9 +1391,10 @@ export default function App() {
             project={project}
             setActiveView={navigateFromStage}
             onUpdateOutline={(out) => {
+              if(JSON.stringify(out)===JSON.stringify(project.outline)) {requestHandoff('outline_builder');return;}
               setProject((prev) => {
                 const revoked = revokeApprovals(
-                  { ...prev, isBlankProject: false, updatedAt: new Date().toISOString(), outline: out },
+                  { ...prev, isBlankProject: false, updatedAt: new Date().toISOString(), outline: preserveChapterDraftsOnOutlineEdit(prev.outline,out) },
                   'gateC'
                 );
                 return {
@@ -1395,7 +1402,7 @@ export default function App() {
                   workflow: {
                     ...revoked.workflow,
                     stageStatuses: {
-                      ...revoked.workflow.stageStatuses,
+                      ...markLaterStagesForReview(revoked,'outline_builder').workflow.stageStatuses,
                       outline_builder: computeOutlineStageStatus(out, prev.referenceLibrary.cards),
                     },
                   },
@@ -1640,6 +1647,8 @@ export default function App() {
           lang={lang}
           setLang={setLang}
           saveStatus={saveStatus}
+          workspaceReady={cloudHydratedRef.current}
+          workspaceLoading={cloudBusy}
           activeRevision={revisions[project.projectId]}
           onRetrySave={() => void persistProjectNow(project)}
           onReloadProject={() => void handleReloadFromCloud()}

@@ -1,7 +1,7 @@
 import React from 'react';
 import {ArrowLeft, ArrowRight, Check, LockKeyhole, Loader2} from 'lucide-react';
 import type {DigitalProductProject, StageId} from '../types/project.ts';
-import {JOURNEY_PHASES, JOURNEY_STAGES, journeyStage, nextJourneyStage, stageFinished, stageName, stageRequirements, stageHandoffCopy} from '../utils/stageJourney.ts';
+import {JOURNEY_PHASES, JOURNEY_STAGES, journeyStage, journeyStepState, nextActionableStage, stageFinished, stageName, stageRequirements, stageHandoffCopy} from '../utils/stageJourney.ts';
 
 interface Props {project:DigitalProductProject; current:string; lang:'en'|'zh'; onNavigate:(stage:StageId)=>void;}
 export function WorkflowJourney({project,current,lang,onNavigate}:Props) {
@@ -9,10 +9,10 @@ export function WorkflowJourney({project,current,lang,onNavigate}:Props) {
   if (!stage) return null;
   const phase=JOURNEY_PHASES.findIndex(group=>group.includes(stage));
   const labels=lang==='en'?['Discover & define','Research & plan','Create & review','Package & launch']:['探索與定義','研究與規劃','創作與覆核','組裝與上市'];
-  const copy=lang==='en'?{title:'Your product journey',done:'Complete',current:'Current',blocked:'Decision required',upcoming:'Upcoming',edit:'Revisit any finished stage from the sidebar.'}:{title:'您的產品開發流程',done:'已完成',current:'目前階段',blocked:'待完成前置決策',upcoming:'尚未開始',edit:'可隨時從側欄返回已完成階段修改。'};
-  const stepItems=JOURNEY_PHASES[phase].map(id=>{const done=stageFinished(project,id);const blocked=JOURNEY_STAGES.slice(0,JOURNEY_STAGES.indexOf(id)).some(s=>!stageFinished(project,s));return <li key={id}>
+  const copy=lang==='en'?{title:'Your product journey',done:'Complete',current:'Current',blocked:'Decision required',review:'Needs review',upcoming:'Upcoming',edit:'Revisit any finished stage from the sidebar.'}:{title:'您的產品開發流程',done:'已完成',current:'目前階段',blocked:'待完成前置決策',review:'需要覆核',upcoming:'尚未開始',edit:'可隨時從側欄返回已完成階段修改。'};
+  const stepItems=JOURNEY_PHASES[phase].map(id=>{const done=stageFinished(project,id);const review=journeyStepState(project,id)==='needs_review';const blocked=JOURNEY_STAGES.slice(0,JOURNEY_STAGES.indexOf(id)).some(s=>!stageFinished(project,s));return <li key={id}>
         <button type="button" aria-current={id===stage?'step':undefined} disabled={blocked&&!done&&id!==stage} onClick={()=>onNavigate(id)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800 disabled:text-slate-500 ${id===stage?'bg-teal-800 text-white':'text-slate-700 hover:bg-slate-100'}`}>
-          {done?<Check size={16} aria-hidden="true"/>:blocked?<LockKeyhole size={14} aria-hidden="true"/>:null}{stageName(id,lang)}<span className="sr-only"> · {done?copy.done:id===stage?copy.current:blocked?copy.blocked:copy.upcoming}</span>
+          {done?<Check size={16} aria-hidden="true"/>:blocked?<LockKeyhole size={14} aria-hidden="true"/>:null}{stageName(id,lang)}{review&&<span className="text-xs"> · {copy.review}</span>}<span className="sr-only"> · {done?copy.done:id===stage?copy.current:blocked?copy.blocked:copy.upcoming}</span>
         </button>
       </li>;});
   return <nav aria-label={copy.title} className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
@@ -35,7 +35,7 @@ export function WorkflowJourney({project,current,lang,onNavigate}:Props) {
 export function WorkflowHandoff({project,current,lang,onNavigate,onFinish,busy,error,onRetry}:Props&{onFinish:()=>void;busy:boolean;error:string;onRetry:()=>void}) {
   const stage=journeyStage(current);
   if (!stage || stage==='export_center') return null;
-  const next=nextJourneyStage(stage)!;
+  const next=nextActionableStage(project,stage)!;
   const previous=JOURNEY_STAGES[JOURNEY_STAGES.indexOf(stage)-1];
   const issues=stageRequirements(project,stage,lang);
   const gate=['topic_selection','product_charter','quality_assurance'].includes(stage);

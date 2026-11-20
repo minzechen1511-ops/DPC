@@ -1,4 +1,4 @@
-import type {DigitalProductProject, StageId} from '../types/project.ts';
+import type {ChapterOutlineItem, DigitalProductProject, StageId} from '../types/project.ts';
 import {gateAApproved, selectedPositioning, setupStage, usableBrief, usableMap} from './gateAJourney.ts';
 import {gateIssues} from './gatePolicy.ts';
 import {isRetrievedSource} from './sourceEvidence.ts';
@@ -46,9 +46,33 @@ export function stageRequirements(p: DigitalProductProject, stage: StageId, lang
 export function stageFinished(p: DigitalProductProject, stage: StageId) {
   return p.workflow.stageStatuses[stage] === 'COMPLETED' && !stageRequirements(p,stage).length;
 }
+export function markLaterStagesForReview(p:DigitalProductProject, from:StageId) {
+  const statuses={...p.workflow.stageStatuses};
+  for(const stage of JOURNEY_STAGES.slice(JOURNEY_STAGES.indexOf(from)+1)) {
+    if (statuses[stage]==='COMPLETED'||statuses[stage]==='PARTIAL') statuses[stage]='NEEDS_REVIEW';
+  }
+  return {...p,workflow:{...p.workflow,stageStatuses:statuses}};
+}
+export function preserveChapterDraftsOnOutlineEdit(previous:ChapterOutlineItem[],incoming:ChapterOutlineItem[]) {
+  const context=(ch:ChapterOutlineItem)=>JSON.stringify([ch.title,ch.objective,ch.subtopics,ch.targetWordCount,ch.mappedReferenceIds]);
+  return incoming.map(ch=>{
+    const old=previous.find(item=>item.id===ch.id);
+    return old?.contentMarkdown && context(old)!==context(ch)
+      ? {...ch,contentMarkdown:ch.contentMarkdown||old.contentMarkdown,isCompleted:false} : ch;
+  });
+}
+export function journeyStepState(p:DigitalProductProject, stage:StageId) {
+  if (stageFinished(p,stage)) return 'completed';
+  if (p.workflow.stageStatuses[stage]==='NEEDS_REVIEW'||p.workflow.stageStatuses[stage]==='COMPLETED') return 'needs_review';
+  return JOURNEY_STAGES.slice(0,JOURNEY_STAGES.indexOf(stage)).some(id=>!stageFinished(p,id))?'blocked':'upcoming';
+}
 export function recommendedJourneyStage(p: DigitalProductProject) {return JOURNEY_STAGES.find(stage => !stageFinished(p,stage)) || 'export_center';}
+export function nextActionableStage(p:DigitalProductProject, stage:StageId) {
+  if(stage==='export_center') return undefined;
+  return JOURNEY_STAGES.slice(JOURNEY_STAGES.indexOf(stage)+1).find(id=>!stageFinished(p,id)) || 'export_center';
+}
 export function prepareStageHandoff(p: DigitalProductProject, stage: StageId) {
-  const destination = nextJourneyStage(stage);
+  const destination = nextActionableStage(p,stage);
   if (!destination || stageRequirements(p,stage).length) return null;
   // Earlier decisions must be current. No stage completion can manufacture an approval.
   if (JOURNEY_STAGES.slice(0,JOURNEY_STAGES.indexOf(stage)).some(id => !stageFinished(p,id))) return null;
@@ -60,10 +84,19 @@ export function prepareStageHandoff(p: DigitalProductProject, stage: StageId) {
 export async function saveStageHandoff(snapshot: DigitalProductProject, persist: (p:DigitalProductProject)=>Promise<boolean>, isCurrent:()=>boolean) {
   return await persist(snapshot) && isCurrent();
 }
+export class StageHandoffRunner {
+  busy=false;
+  async run(snapshot:DigitalProductProject,persist:(p:DigitalProductProject)=>Promise<boolean>,isCurrent:()=>boolean) {
+    if(this.busy) return false;
+    this.busy=true;
+    try {return await saveStageHandoff(snapshot,persist,isCurrent);} finally {this.busy=false;}
+  }
+}
 export function workflowSaveError(error:unknown, lang:'en'|'zh') {
   let message=error instanceof Error?error.message:String(error || '');
   // Firestore's wrapper can include account metadata. Show the cause, not that payload.
   try {const detail=JSON.parse(message);if(typeof detail.error==='string') message=detail.error;} catch { /* ordinary message */ }
+  if (/quota/i.test(message)&&/read units|read.*quota|quota.*read/i.test(message)) return lang==='en'?'Cloud storage has reached its read quota. Your saved projects could not be loaded; retry after the quota resets.':'雲端儲存已達讀取額度，尚未載入已儲存專案，請於額度重設後重試。';
   if (/quota|resource.exhausted/i.test(message)) return lang==='en'
     ? 'Cloud storage has reached its daily write limit. Your draft remains open. Keep this tab open or download a recovery backup, then retry after the quota resets.'
     : '雲端儲存已達每日寫入上限，已保留目前草稿。請保持此分頁開啟或下載復原備份，額度重設後再重試。';

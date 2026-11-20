@@ -4,7 +4,7 @@ Baseline: `e049d37e7c0a05bd0f432b197e06ade076307c9a` (main, 2026-11-19). The dir
 
 The old journey used inconsistent per-view links and only persisted the four setup stages plus Reference Library. QA's forward action skipped Brand Design and Pricing. Dashboard and sidebar each maintained different next-step rules.
 
-The new visible route is Topic Discovery → Recommended Project Brief → UVZ → Transformation Map → Reference Library → Product Charter → Outline → Content → Workbook → Quality Assurance → Brand Design → Pricing & Launch → Export. There are 13 visible steps because the two original discovery stage IDs share one view; all 14 internal IDs and research services remain compatible.
+The new visible route is Topic Discovery → Recommended Project Brief → UVZ → Transformation Map → Reference Library → Product Charter → Outline → Content → Workbook → Quality Assurance → Brand Design → Pricing & Launch → Export. There are 13 consecutively numbered visible steps because the two original discovery stage IDs share one view; all 14 internal IDs and research services remain compatible. Both translations, metadata, the dashboard and sidebar follow that sequence.
 
 ## Interactions
 
@@ -31,16 +31,20 @@ The journey visualization shows four phases with actual completed counts and cur
 
 The existing serialized Firestore queue saves the completed stage and destination before navigation. The handoff snapshot suppresses a redundant debounced save. Failure keeps the current view and editable draft with retry; a different project, navigation or newer edit cancels the late navigation. No timer, polling completion guess or status-only observer moves a user on hydration. The active stage now persists throughout the route, including later stages.
 
+One runner prevents duplicate saves/navigation. Revisiting an unchanged decision skips already completed steps and resumes at the next incomplete or review-required stage. Meaningful upstream edits retain downstream output but mark affected completed/partial stages for review. Editing a chapter's outline context retains its manuscript text and removes stale chapter completion. Existing gate revocation and evidence checks still apply.
+
+Existing-profile startup now reads without requiring a profile metadata write. Changed profile values avoid redundant writes; new profile creation and denied reads remain security boundaries. A workspace that has not hydrated shows loading/unavailable and retry instead of an empty project labelled Cloud Synced. Mobile header actions wrap and keep save status visible.
+
 No Gate A/B/C or source review is automatically approved. Generated suggestions are not selected by this feature. Existing evidence validation, upstream approval invalidation, provenance, manual research and author-review export checks remain intact.
 
 AI generation uses existing per-stage services. The job API only stores metadata and is not a background executor; no unattended generation, pause/resume executor, fabricated progress or extra provider requests were added.
 
 ## Validation
 
-- 128 tests passed, zero failed, including eight new focused journey tests: ordered links, approval boundaries, preserved selections/context, unsupported source records, delayed/failed save and retry, superseded handoffs, readable quota errors without account metadata, bilingual accessible markup.
+- 137 tests passed, zero failed, including 17 new focused journey/profile tests: ordered links and translated numbering, approval boundaries, preserved selections and blank creator facts, unsupported source records, delayed/failed save and retry, superseded/duplicate handoffs, review invalidation, retained manuscript text, skipping unchanged completed decisions, readable quota errors, no-op profile writes and truthful hydration status.
 - TypeScript (`npm run lint`), production build and `git diff --check` passed. Existing Vite configuration and large-chunk warnings remain.
 - The first sandbox test run could not reach loopback integration servers (EACCES); the same suite passed with approved loopback access. This was an environment restriction, not a product regression.
 - No browser/E2E test runner is configured. Hosted desktop/mobile observations and actual save/handoff results must be reported separately in the delivery handoff; unit tests do not establish a live cloud save.
-- Hosted testing of the accepted Transformation Map's forward action exposed Firestore's exhausted free daily write quota. The UI stayed on the current stage and exposed retry, as required; successful live advancement is blocked by that external quota. Raw wrapped database errors were replaced with readable recovery guidance and a sanitized JSON recovery-backup action. No gates or selections were changed for this test.
+- Hosted testing of the accepted Transformation Map's forward action exposed Firestore's exhausted free daily write quota. The UI stayed on the current stage and exposed retry, as required; at that check successful live advancement was blocked by the external quota. Raw wrapped database errors were replaced with readable recovery guidance and a sanitized JSON recovery-backup action. No gates or selections were changed for this test. Final hosted observations belong in the delivery handoff.
 
 Delivery requires a normal non-force main push, Studio pull, reload and hosted verification. Firebase/provider quotas and network errors can still block saving or generation; the UI must retain their true status.

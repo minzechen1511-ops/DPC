@@ -220,11 +220,11 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
               <strong className="block">
                 {lang === 'en'
                   ? 'Gate B Strategy Approval Required Before Editing Outline'
-                  : '編輯章節大綱前需先完成 Stage 7 Gate B 產品憲章核准'}
+                  : '編輯章節大綱前需先完成 Stage 6 Gate B 產品憲章核准'}
               </strong>
               <span className="text-xs text-amber-900">
                 {lang === 'en'
-                  ? 'Approve Stage 7 Product Charter (Gate B) first to unlock outline editing and AI synthesis. Chapter relevance and citations are audited at Gate C.'
+                  ? 'Approve Stage 6 Product Charter (Gate B) first to unlock outline editing and AI synthesis. Chapter relevance and citations are audited at Gate C.'
                   : prereq.reason || '需先在 Gate B 核准 Product Charter (產品憲章)，才能解鎖大綱編輯與章節撰寫。'}
               </span>
             </div>
@@ -234,7 +234,7 @@ export const OutlineBuilderView: React.FC<OutlineBuilderViewProps> = ({
             onClick={() => setActiveView('product_charter')}
             className="px-4 py-2 rounded-xl bg-amber-900 hover:bg-amber-950 text-white text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
-            <span>{lang === 'en' ? 'Go to Stage 7 (Gate B)' : '前往 Stage 7 產品憲章 (Gate B)'}</span>
+            <span>{lang === 'en' ? 'Go to Stage 6 (Gate B)' : '前往 Stage 6 產品憲章 (Gate B)'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

@@ -1,6 +1,4 @@
-import {recommendedJourneyStage, stageName} from '../utils/stageJourney.ts';
-import { GATE_A_STEPS, gateAJourney } from '../utils/gateAJourney.ts';
-import { gateAJourneyText } from '../utils/i18n.ts';
+import {recommendedJourneyStage, stageName, journeyStepState} from '../utils/stageJourney.ts';
 import { isRetrievedSource } from '../utils/sourceEvidence.ts';
 import React, { useState } from 'react';
 import {
@@ -76,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [query, setQuery] = useState('');
 
   const getStageStatusIcon = (stageId: StageId) => {
-    const status =
+    const status = journeyStepState(project,stageId)==='needs_review'?'NEEDS_REVIEW':
       stageId === 'topic_selection' && project.workflow.gates.gateA.isApproved
         ? 'COMPLETED'
         : project.workflow.stageStatuses[stageId];

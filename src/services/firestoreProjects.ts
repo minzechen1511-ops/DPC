@@ -1,4 +1,5 @@
 import type { User } from 'firebase/auth';
+import {ensureProfileRecord} from '../utils/userProfileSync.ts';
 import {
   collection,
   deleteDoc,
@@ -80,7 +81,8 @@ function toIsoString(value: unknown): string {
 export async function ensureUserProfile(
   user: User,
   preferredLang: Language = 'en',
-  activeProjectId = ''
+  activeProjectId = '',
+  options:{readOnlyIfExists?:boolean}={}
 ): Promise<void> {
   const path = `users/${user.uid}`;
   const ref = doc(db, 'users', user.uid);
@@ -90,29 +92,22 @@ export async function ensureUserProfile(
   const safeActiveId = activeProjectId ? normalizeId(activeProjectId).slice(0, 128) : '';
 
   try {
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, {
+    await ensureProfileRecord({
+      read:async()=>{const snap=await getDoc(ref);return snap.exists()?snap.data():null;},
+      values:{email:safeEmail,displayName:safeDisplayName,photoURL:safePhoto,preferredLang,...(safeActiveId?{activeProjectId:safeActiveId}:{})},
+      readOnlyIfExists:options.readOnlyIfExists,
+      create:async values=>{await setDoc(ref, {
         uid: user.uid,
-        email: safeEmail,
-        displayName: safeDisplayName,
-        photoURL: safePhoto,
-        activeProjectId: safeActiveId,
-        preferredLang,
+        activeProjectId:'',
+        ...values,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
-    } else {
-      const existing = snap.data();
-      await updateDoc(ref, {
-        email: safeEmail,
-        displayName: safeDisplayName,
-        photoURL: safePhoto,
-        activeProjectId: safeActiveId || String(existing?.activeProjectId || '').slice(0, 128),
-        preferredLang,
+      });},
+      update:async values=>{await updateDoc(ref, {
+        ...values,
         updatedAt: serverTimestamp(),
-      });
-    }
+      });},
+    });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

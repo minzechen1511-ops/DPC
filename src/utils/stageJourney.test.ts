@@ -6,8 +6,10 @@ import {journeyFixture} from '../../tests/gateAJourneyFixture.ts';
 import {approveGate,revokeApprovals} from './gatePolicy.ts';
 import {selectJourneyTopic} from './gateAJourney.ts';
 import {sanitizeProjectForStorage} from './projectStorage.ts';
-import {JOURNEY_STAGES, handoffContextCurrent, journeyStage,nextJourneyStage,prepareStageHandoff,recommendedJourneyStage,saveStageHandoff,stageRequirements,workflowSaveError} from './stageJourney.ts';
+import {JOURNEY_STAGES, handoffContextCurrent, journeyStage,nextJourneyStage,prepareStageHandoff,recommendedJourneyStage,saveStageHandoff,stageRequirements,workflowSaveError,StageHandoffRunner,markLaterStagesForReview,journeyStepState,nextActionableStage,preserveChapterDraftsOnOutlineEdit} from './stageJourney.ts';
 import {WorkflowJourney,WorkflowHandoff} from '../components/WorkflowJourney.tsx';
+import {getStageMetadata} from './workflowEngine.ts';
+import {translations} from './i18n.ts';
 
 function approvedTopic() {
   const p=journeyFixture();
@@ -19,6 +21,13 @@ test('one visible journey links all stages, including QA → brand → pricing �
   for(let i=0;i<JOURNEY_STAGES.length-1;i++) assert.equal(nextJourneyStage(JOURNEY_STAGES[i]),JOURNEY_STAGES[i+1]);
   assert.equal(nextJourneyStage('export_center'),undefined);
   assert.equal(journeyStage('ai_settings'),undefined);
+});
+test('visible metadata and translated navigation use one uninterrupted 13-step sequence',()=>{
+  const navKeys=['navTopicSelection','navProjectBrief','navUvz','navTransformationMap','navReferenceLibrary','navProductCharter','navOutlineBuilder','navContentStudio','navWorkbookStudio','navQualityAssurance','navBrandDesign','navPricingLaunch','navExportCenter'];
+  for(const lang of ['en','zh'] as const) JOURNEY_STAGES.forEach((stage,index)=>{
+    assert.ok(getStageMetadata(stage,lang).title.startsWith(`${index+1}. `));
+    assert.ok((translations[lang] as any)[navKeys[index]].startsWith(`${index+1}. `));
+  });
 });
 test('fresh discovery and drafts cannot silently approve gates, choose positioning, or advance through missing decisions',()=>{
   const p=journeyFixture();
@@ -44,7 +53,7 @@ test('acceptance carries context and persists selections; revising upstream deci
   const restored=sanitizeProjectForStorage(JSON.parse(JSON.stringify(next)));
   assert.equal(restored.uvz.selectedOptionId,'TEST-ONLY-position');
   assert.equal(restored.workflow.activeStage,'transformation_map');
-  for(const key of ['creatorName','relevantExperience','expertise','interests'] as const) assert.equal(restored.intake[key],p.intake[key]);
+  for(const key of ['creatorName','experienceLevel','relevantExperience','expertise','interests'] as const) assert.equal(restored.intake[key],'');
   assert.equal(prepareStageHandoff(revokeApprovals(p,'gateA'),'uvz'),null);
   assert.equal(prepareStageHandoff({...p,workflow:{...p.workflow,stageStatuses:{...p.workflow.stageStatuses,uvz:'NEEDS_REVIEW'}}},'uvz'),null);
 });
@@ -85,6 +94,54 @@ test('navigation, a different project, or edits during a save suppress the late 
     const result=await saveStageHandoff(p,async()=>{current=false;return true;},()=>current);
     assert.equal(result,false,reason);
   }
+});
+test('a pending handoff cannot save or navigate twice and a failed attempt releases the runner for retry',async()=>{
+  const runner=new StageHandoffRunner();
+  const p=prepareStageHandoff(approvedTopic(),'topic_selection')!;
+  let release!:(saved:boolean)=>void;
+  let writes=0;
+  const persist=()=>{writes++;return new Promise<boolean>(resolve=>{release=resolve;});};
+  const first=runner.run(p,persist,()=>true);
+  assert.equal(runner.busy,true);
+  assert.equal(await runner.run(p,persist,()=>true),false);
+  assert.equal(writes,1);
+  release(false);assert.equal(await first,false);assert.equal(runner.busy,false);
+  assert.equal(await runner.run(p,async()=>true,()=>true),true);
+  assert.equal(runner.busy,false);
+});
+test('upstream edits preserve downstream drafts while marking completed stages for explicit review',()=>{
+  const p=approvedTopic();
+  p.workflow.stageStatuses.project_brief='COMPLETED';
+  p.workflow.stageStatuses.uvz='COMPLETED';
+  p.workflow.stageStatuses.content_studio='COMPLETED';
+  p.outline=[{id:'TEST-ONLY-chapter',contentMarkdown:'Retained manuscript fixture'} as any];
+  const changed=markLaterStagesForReview(revokeApprovals(p,'gateB'),'project_brief');
+  assert.equal(changed.workflow.stageStatuses.uvz,'NEEDS_REVIEW');
+  assert.equal(changed.workflow.stageStatuses.content_studio,'NEEDS_REVIEW');
+  assert.equal(journeyStepState(changed,'content_studio'),'needs_review');
+  assert.equal(changed.outline[0].contentMarkdown,p.outline[0].contentMarkdown);
+  assert.equal(changed.workflow.gates.gateB.isApproved,false);
+  assert.equal(changed.workflow.gates.gateC.isApproved,false);
+  assert.equal(changed.workflow.stageStatuses.brand_design,p.workflow.stageStatuses.brand_design);
+});
+test('editing chapter objectives preserves manuscript text but removes stale completion',()=>{
+  const old={id:'TEST-ONLY-ch',title:'Test chapter',objective:'Original objective',subtopics:['Original step'],targetWordCount:200,mappedReferenceIds:[],contentMarkdown:'Test-only manuscript to retain',isCompleted:true} as any;
+  const [edited]=preserveChapterDraftsOnOutlineEdit([old],[{...old,objective:'Revised objective',contentMarkdown:''}]);
+  assert.equal(edited.contentMarkdown,old.contentMarkdown);assert.equal(edited.isCompleted,false);
+  assert.equal(preserveChapterDraftsOnOutlineEdit([old],[{...old}])[0].isCompleted,true);
+});
+test('revisiting an unchanged decision continues to the next incomplete step rather than repeating completed setup',()=>{
+  const p=approvedTopic();
+  p.workflow.stageStatuses.project_brief='COMPLETED';
+  p.uvz.positioningOptions=[{id:'TEST-ONLY-option'} as any];p.uvz.selectedOptionId='TEST-ONLY-option';p.workflow.stageStatuses.uvz='COMPLETED';
+  p.transformationMap.beforeState.currentPains=['Test-only pain'];
+  p.transformationMap.bridgeProcess.keyMilestones=['Test-only action'];
+  p.transformationMap.afterState.tangibleOutcomes=['Test-only outcome'];
+  p.transformationMap.titleOptions=[{id:'TEST-ONLY-title',title:'Test-only title'} as any];p.transformationMap.selectedTitleId='TEST-ONLY-title';p.workflow.stageStatuses.transformation_map='COMPLETED';
+  assert.equal(nextActionableStage(p,'project_brief'),'reference_library');
+  assert.equal(prepareStageHandoff(p,'project_brief')?.workflow.activeStage,'reference_library');
+  p.workflow.stageStatuses.transformation_map='NEEDS_REVIEW';
+  assert.equal(nextActionableStage(p,'project_brief'),'transformation_map');
 });
 test('journey and finish controls expose real blocked/current states and bilingual handoffs without a timer',()=>{
   const p=journeyFixture();

@@ -1,5 +1,5 @@
-import {recommendedJourneyStage, stageName, stageHandoffCopy} from '../../utils/stageJourney.ts';
-import { GATE_A_STEPS, gateAJourney } from '../../utils/gateAJourney.ts';
+import {recommendedJourneyStage, stageName, stageHandoffCopy,journeyStepState} from '../../utils/stageJourney.ts';
+import {getStageMetadata} from '../../utils/workflowEngine.ts';
 import { gateAJourneyText } from '../../utils/i18n.ts';
 import { isRetrievedSource } from '../../utils/sourceEvidence.ts';
 import { gateIssues } from '../../utils/gatePolicy.ts';
@@ -329,14 +329,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               { id: 'project_brief', title: `2. ${gateAJourneyText[lang].steps[1]}`, icon: Feather },
               { id: 'uvz', title: `3. ${gateAJourneyText[lang].steps[2]}`, icon: Sparkles },
               { id: 'transformation_map', title: `4. ${gateAJourneyText[lang].steps[3]}`, icon: TrendingUp },
-              { id: 'reference_library', title: lang === 'en' ? '6. Reference Library' : '6. 來源研究與知識庫', icon: BookOpen },
-              { id: 'product_charter', title: lang === 'en' ? '7. Product Charter (Gate B)' : '7. 產品憲章 (Gate B)', icon: Award },
-              { id: 'content_studio', title: lang === 'en' ? '9. Content Studio' : '9. 長篇內容工廠', icon: Feather },
-              { id: 'quality_assurance', title: lang === 'en' ? '11. Quality Audit (Gate C)' : '11. 品質審查 (Gate C)', icon: CheckCircle2 },
-              { id: 'export_center', title: lang === 'en' ? '14. Export Bundle' : '14. 匯出下載中心', icon: Download },
+              { id: 'reference_library', title: lang === 'en' ? '5. Reference Library' : '5. 來源研究與知識庫', icon: BookOpen },
+              { id: 'product_charter', title: lang === 'en' ? '6. Product Charter (Gate B)' : '6. 產品憲章 (Gate B)', icon: Award },
+              { id: 'outline_builder', title:'', icon: Layers },
+              { id: 'content_studio', title: lang === 'en' ? '8. Content Studio' : '8. 長篇內容工廠', icon: Feather },
+              { id: 'workbook_studio', title:'', icon: Layers },
+              { id: 'quality_assurance', title: lang === 'en' ? '10. Quality Audit (Gate C)' : '10. 品質審查 (Gate C)', icon: CheckCircle2 },
+              { id: 'brand_design', title:'', icon: Sparkles },
+              { id: 'pricing_launch', title:'', icon: Tag },
+              { id: 'export_center', title: lang === 'en' ? '13. Export Bundle' : '13. 匯出下載中心', icon: Download },
             ].map((stage) => {
               const Icon = stage.icon;
-              const status = project.workflow?.stageStatuses?.[stage.id as StageId];
+              const status = journeyStepState(project,stage.id as StageId);
               return (
                 <button
                   key={stage.id}
@@ -347,11 +351,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div className="w-9 h-9 rounded-lg bg-slate-100 group-hover:bg-sky-100 flex items-center justify-center shrink-0">
                       <Icon className="w-4 h-4 text-slate-600 group-hover:text-sky-700" />
                     </div>
-                    <span className="text-sm font-semibold text-slate-800 truncate">{stage.title}</span>
+                    <span className="text-sm font-semibold text-slate-800 truncate">{getStageMetadata(stage.id,lang)?.title || stage.title}</span>
                   </div>
-                  {status === 'COMPLETED' ? (
+                  {status === 'completed' ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  ) : (
+                  ) : status==='needs_review' ? <span className="text-xs text-amber-900 shrink-0">{lang==='en'?'Needs review':'需要覆核'}</span> : (
                     <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 shrink-0" />
                   )}
                 </button>
